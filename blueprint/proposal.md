@@ -1,0 +1,53 @@
+# TicketBox — Project Proposal
+
+## Luồng nghiệp vụ
+### Xem thông tin concert
+| Thành phần | Nội dung mô tả chi tiết |
+| :--- | :--- |
+| **Actor** | Khán giả (Primary Actor), Khán giả, Hệ thống (Web/App, Backend, Cache Layer, Database). |
+| **Pre-condition** | Concert đã được Ban tổ chức (BTC) tạo |
+| **Result** | Khán giả xem được chi tiết concert, sơ đồ khu vực (SVG) và trạng thái vé (còn vé, sắp hết, hết vé).|
+| **Main Scenario** | **1.** Khán giả truy cập vào trang chủ hoặc trang danh sách của TicketBox.<br>**2.** Hệ thống hiển thị danh sách các concert sắp diễn ra (Dữ liệu được lấy từ Cache; nếu Cache lỡ (miss), hệ thống sẽ truy vấn Database, cập nhật vào Cache và trả về giao diện).<br>**3.** Khán giả chọn một concert cụ thể để xem chi tiết.<br>**4.** Hệ thống tải trang chi tiết concert bao gồm: Thông tin nghệ sĩ (đã được AI tóm tắt từ file PDF/Press Kit), địa điểm, thời gian, sơ đồ chỗ ngồi tương tác dạng SVG (GA, SVIP, VIP, CAT1, CAT2) và số lượng vé còn lại theo thời gian thực (Real-time). |
+| **Alternative Scenario** | **Trường hợp A: Database hoặc Cache gặp sự cố (Tải quá cao)**<br>- *A1.* Hệ thống kích hoạt cơ chế hạ cấp tính năng (Graceful Degradation - Khi một phần hệ thống bị lỗi, hệ thống vẫn hoạt động ở mức tối thiểu thay vì sập hoàn toàn).<br>- *A2.* Hệ thống hiển thị dữ liệu tĩnh được lưu tại Browser Cache hoặc CDN thay vì báo lỗi sập trang.<br>- *A3.* Số lượng vé còn lại có thể tạm thời không hiển thị hoặc hiển thị trạng thái "Đang cập nhật" để giảm tải cho database.<br><br>**Trường hợp B: Sơ đồ SVG của Concert quá nặng không tải được**<br>- *B1.* Hệ thống không thể render sơ đồ SVG tương tác.<br>- *B2.* Hệ thống chuyển sang hiển thị một hình ảnh tĩnh (PNG/JPEG) thay thế của sơ đồ để Khán giả vẫn có khái niệm về vị trí chỗ ngồi. |
+
+### Đặt vé (Mua vé & Thanh toán)
+
+| Thành phần | Nội dung mô tả chi tiết |
+| :--- | :--- |
+| **Actor** | KKhán giả, Hệ thống TicketBox, Cổng thanh toán (VNPAY/MoMo) |
+| **Pre-condition** | Khán giả đã đăng nhập. Thời gian hiện tại nằm trong khung giờ mở bán của loại vé được chọn. |
+| **Result** | (Thành công) Khán giả nhận e-ticket, database trừ đi kho vé tổng. (Thất bại) Hủy giao dịch, hoàn trả vé về kho, không trừ tiền khán giả.|
+| **Main Scenario** | **1.** Tại trang chi tiết Concert, Khán giả chọn khu vực vé (ví dụ: SVIP) và số lượng vé muốn mua.<br>**2.** Khán giả nhấn nút "Tiến hành đặt vé". Hệ thống tự động sinh một **Idempotency Key** - Một cơ chế giúp request gửi nhiều lần nhưng chỉ được xử lý một lần duy nhất cho phiên giao dịch này để chống trùng lặp.<br>**3.** Hệ thống kiểm tra điều kiện ràng buộc: Số lượng vé còn lại trong hệ thống và Giới hạn số vé tối đa của tài khoản (Per-user limit) đã cấu hình.<br>**4.** Hệ thống thực hiện giữ vé tạm thời (Hold ticket) trong một khoảng thời gian nhất định (ví dụ: 10 phút) và điều hướng Khán giả sang cổng thanh toán (VNPAY/MoMo).<br>**5.** Khán giả thực hiện thanh toán thành công trên giao diện của bên thứ ba.<br>**6.** Cổng thanh toán gửi cấu hình phản hồi (IPN/Webhook - Hệ thống A chủ động gọi sang hệ thống B để báo có sự kiện xảy ra.) về cho TicketBox để xác nhận dòng tiền.<br>**7.** Hệ thống TicketBox chuyển trạng thái vé từ "Đang giữ" sang "Đã bán thành công", trừ số lượng vé trong kho và ghi nhận quyền sở hữu cho tài khoản. |
+| **Alternative Scenario** | **Trường hợp A: Tài khoản mua vượt quá số lượng vé quy định (Per-user limit)**<br>- *A1.* Tại bước 3, hệ thống phát hiện tài khoản đã mua hoặc đang giữ số lượng vé vượt mức cho phép của Concert này (ví dụ: Đã mua 2 vé SVIP trước đó, giờ mua thêm).<br>- *A2.* Hệ thống chặn request, hủy lệnh đặt vé và hiển thị thông báo lỗi: *"Bạn đã đạt giới hạn mua tối đa cho loại vé này"*.<br><br>**Trường hợp B: Hết vé ngay khi bấm đặt (Tranh chấp vé dưới tải cao)**<br>- *B1.* Tại bước 3, số lượng vé còn lại trong kho nhỏ hơn số lượng khách hàng yêu cầu (do hàng nghìn người cùng bấm một lúc).<br>- *B2.* Hệ thống trả về thông báo: *"Loại vé này đã được bán hết, vui lòng chọn khu vực khác"*. Kho vé không bị âm.<br><br>**Trường hợp C: Cổng thanh toán (VNPAY/MoMo) gặp sự cố hoặc Timeout**<br>- *C1.* Tại bước 4 hoặc 5, cổng thanh toán không phản hồi hoặc báo lỗi hệ thống. Cơ chế **Circuit Breaker** (khi một service đang lỗi liên tục, hệ thống sẽ tạm ngừng gọi service đó để tránh kéo sập toàn bộ hệ thống) của TicketBox chuyển sang trạng thái Open để bảo vệ backend.<br>- *C2.* Hệ thống thông báo cho Khán giả: *"Cổng thanh toán đang bận, vui lòng thử lại sau ít phút hoặc đổi phương thức khác"*. Vé đang giữ tạm thời sẽ được giải phóng (Release) lại vào kho sau khi hết hạn 10 phút.<br><br>**Trường hợp D: Khán giả bấm thanh toán nhiều lần hoặc mất mạng giữa chừng**<br>- *D1.* Hệ thống nhận được nhiều request trùng lặp từ một client. Nhờ có **Idempotency Key** lưu ở Redis, hệ thống nhận diện đây là request xử lý lại.<br>- *D2.* Hệ thống không tạo đơn hàng mới, không trừ tiền hai lần mà chỉ trả về trạng thái của đơn hàng hiện tại đang xử lý. |
+
+---
+### Thông báo
+
+| Thành phần | Nội dung mô tả chi tiết |
+| :--- | :--- |
+| **Actor** | Hệ thống TicketBox (Automated Actor/System), Khán giả (Recipient Actor), Các nhà cung cấp dịch vụ thông báo thứ ba - Email Service, Zalo OA, SMS Gateway (Supporting Actors). |
+| **Pre-condition** | Một sự kiện nghiệp vụ xảy ra: Thanh toán vé thành công và hệ thống chạy Job tự động nhắc nhở trước 24h. |
+| **Result** | Thông điệp được đẩy đến người dùng qua các kênh được cấu hình. Trạng thái gửi (thành công/thất bại) được ghi log.|
+| **Main Scenario** | **Luồng 1: Thông báo xác nhận ngay sau khi mua vé**<br>**1.** Ngay khi luồng "Đặt vé" thành công, hệ thống gửi một sự kiện (Event) `Ticket_Purchased_Success` vào Message Broker.<br>**2.** Notification Service tiêu thụ (consume) tin nhắn này, sinh mã QR định danh cho e-ticket.<br>**3.** Hệ thống kích hoạt đồng thời việc đẩy thông báo (Push Notification) qua ứng dụng Mobile và gửi một Email xác nhận kèm file/mã QR e-ticket đến Khán giả.<br><br>**Luồng 2: Nhắc nhở tự động trước sự kiện**<br>**1.** Một dịch vụ lập lịch (Cron Job / Worker) quét cơ sở dữ liệu định kỳ.<br>**2.** Phát hiện các concert sẽ diễn ra trong vòng 24 giờ tới.<br>**3.** Hệ thống tự động gom danh sách Khán giả đã mua vé hợp lệ và gửi thông báo nhắc nhở tự động (thời gian, địa điểm, lưu ý check-in) qua App và Email. |
+| **Alternative Scenario** | **Trường hợp A: Nhà cung cấp dịch vụ Email/SMS bên thứ ba bị sập**<br>- *A1.* Notification Service cố gắng gửi email/tin nhắn nhưng nhận về mã lỗi kết nối từ đối tác thứ ba.<br>- *A2.* Tin nhắn thông báo không bị mất mà được đẩy vào một hàng đợi lỗi (Dead Letter Queue - DLQ) hoặc kích hoạt cơ chế thử lại (Retry Pattern với Exponential Backoff).<br>- *A3.* Khán giả vẫn có thể chủ động xem được mã QR e-ticket trực tiếp trong mục "Vé của tôi" trên ứng dụng TicketBox mà không bị phụ thuộc hoàn toàn vào email.<br><br>**Trường hợp B: Hệ thống tích hợp thêm kênh thông báo mới (ví dụ: Zalo OA)**<br>- *B1.* Ban tổ chức muốn cấu hình gửi thêm tin nhắn qua Zalo OA.<br>- *B2.* Nhờ thiết kế theo dạng Interface/Plugin (Strategy Pattern), hệ thống chỉ cần cắm thêm một module `ZaloNotificationProvider` lắng nghe sự kiện từ Message Broker mà không cần sửa đổi code của luồng đặt vé hay luồng gửi Email cũ. |
+
+## Vấn đề
+<!-- Mô tả vấn đề hiện tại mà hệ thống cần giải quyết.
+     Tại sao các kênh bán vé hiện tại (Zalo OA, Google Form, chuyển khoản) không còn đủ?
+     Hậu quả cụ thể: website sập, trừ tiền không ra vé, scalper bot vét hết vé. -->
+     
+
+## Mục tiêu
+<!-- Hệ thống cần đạt được gì? Định lượng nếu có thể.
+     Ví dụ: hỗ trợ 80.000 người truy cập trong 5 phút đầu mở bán mà không sập. -->
+
+## Người dùng và nhu cầu
+<!-- Ai dùng hệ thống? Họ cần làm gì? Điều gì quan trọng nhất với họ? -->
+
+## Phạm vi
+<!-- Những gì thuộc phạm vi đồ án này.
+     Những gì KHÔNG thuộc phạm vi (ví dụ: tích hợp payment gateway thật, hạ tầng production). -->
+
+## Rủi ro và ràng buộc
+<!-- Các vấn đề kỹ thuật đã biết trước: tranh chấp vé, tải đột biến,
+     cổng thanh toán không ổn định, soát vé offline, tích hợp một chiều CSV. -->
