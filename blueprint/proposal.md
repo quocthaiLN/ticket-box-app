@@ -1,73 +1,73 @@
 # TicketBox — Project Proposal
 
-## Luồng nghiệp vụ
-### Xem thông tin concert
-| Thành phần | Nội dung mô tả chi tiết |
-| :--- | :--- |
-| **Actor** | Khán giả (Primary Actor), Khán giả, Hệ thống (Web/App, Backend, Cache Layer, Database). |
-| **Pre-condition** | Concert đã được Ban tổ chức (BTC) tạo |
-| **Result** | Khán giả xem được chi tiết concert, sơ đồ khu vực (SVG) và trạng thái vé (còn vé, sắp hết, hết vé).|
-| **Main Scenario** | **1.** Khán giả truy cập vào trang chủ hoặc trang danh sách của TicketBox.<br>**2.** Hệ thống hiển thị danh sách các concert sắp diễn ra (Dữ liệu được lấy từ Cache; nếu Cache lỡ (miss), hệ thống sẽ truy vấn Database, cập nhật vào Cache và trả về giao diện).<br>**3.** Khán giả chọn một concert cụ thể để xem chi tiết.<br>**4.** Hệ thống tải trang chi tiết concert bao gồm: Thông tin nghệ sĩ (đã được AI tóm tắt từ file PDF/Press Kit), địa điểm, thời gian, sơ đồ chỗ ngồi tương tác dạng SVG (GA, SVIP, VIP, CAT1, CAT2) và số lượng vé còn lại theo thời gian thực (Real-time). |
-| **Alternative Scenario** | **Trường hợp A: Database hoặc Cache gặp sự cố (Tải quá cao)**<br>- *A1.* Hệ thống kích hoạt cơ chế hạ cấp tính năng (Graceful Degradation - Khi một phần hệ thống bị lỗi, hệ thống vẫn hoạt động ở mức tối thiểu thay vì sập hoàn toàn).<br>- *A2.* Hệ thống hiển thị dữ liệu tĩnh được lưu tại Browser Cache hoặc CDN thay vì báo lỗi sập trang.<br>- *A3.* Số lượng vé còn lại có thể tạm thời không hiển thị hoặc hiển thị trạng thái "Đang cập nhật" để giảm tải cho database.<br><br>**Trường hợp B: Sơ đồ SVG của Concert quá nặng không tải được**<br>- *B1.* Hệ thống không thể render sơ đồ SVG tương tác.<br>- *B2.* Hệ thống chuyển sang hiển thị một hình ảnh tĩnh (PNG/JPEG) thay thế của sơ đồ để Khán giả vẫn có khái niệm về vị trí chỗ ngồi. |
-
-### Đặt vé (Mua vé & Thanh toán)
-
-| Thành phần | Nội dung mô tả chi tiết |
-| :--- | :--- |
-| **Actor** | KKhán giả, Hệ thống TicketBox, Cổng thanh toán (VNPAY/MoMo) |
-| **Pre-condition** | Khán giả đã đăng nhập. Thời gian hiện tại nằm trong khung giờ mở bán của loại vé được chọn. |
-| **Result** | (Thành công) Khán giả nhận e-ticket, database trừ đi kho vé tổng. (Thất bại) Hủy giao dịch, hoàn trả vé về kho, không trừ tiền khán giả.|
-| **Main Scenario** | **1.** Tại trang chi tiết Concert, Khán giả chọn khu vực vé (ví dụ: SVIP) và số lượng vé muốn mua.<br>**2.** Khán giả nhấn nút "Tiến hành đặt vé". Hệ thống tự động sinh một **Idempotency Key** - Một cơ chế giúp request gửi nhiều lần nhưng chỉ được xử lý một lần duy nhất cho phiên giao dịch này để chống trùng lặp.<br>**3.** Hệ thống kiểm tra điều kiện ràng buộc: Số lượng vé còn lại trong hệ thống và Giới hạn số vé tối đa của tài khoản (Per-user limit) đã cấu hình.<br>**4.** Hệ thống thực hiện giữ vé tạm thời (Hold ticket) trong một khoảng thời gian nhất định (ví dụ: 10 phút) và điều hướng Khán giả sang cổng thanh toán (VNPAY/MoMo).<br>**5.** Khán giả thực hiện thanh toán thành công trên giao diện của bên thứ ba.<br>**6.** Cổng thanh toán gửi cấu hình phản hồi (IPN/Webhook - Hệ thống A chủ động gọi sang hệ thống B để báo có sự kiện xảy ra.) về cho TicketBox để xác nhận dòng tiền.<br>**7.** Hệ thống TicketBox chuyển trạng thái vé từ "Đang giữ" sang "Đã bán thành công", trừ số lượng vé trong kho và ghi nhận quyền sở hữu cho tài khoản. |
-| **Alternative Scenario** | **Trường hợp A: Tài khoản mua vượt quá số lượng vé quy định (Per-user limit)**<br>- *A1.* Tại bước 3, hệ thống phát hiện tài khoản đã mua hoặc đang giữ số lượng vé vượt mức cho phép của Concert này (ví dụ: Đã mua 2 vé SVIP trước đó, giờ mua thêm).<br>- *A2.* Hệ thống chặn request, hủy lệnh đặt vé và hiển thị thông báo lỗi: *"Bạn đã đạt giới hạn mua tối đa cho loại vé này"*.<br><br>**Trường hợp B: Hết vé ngay khi bấm đặt (Tranh chấp vé dưới tải cao)**<br>- *B1.* Tại bước 3, số lượng vé còn lại trong kho nhỏ hơn số lượng khách hàng yêu cầu (do hàng nghìn người cùng bấm một lúc).<br>- *B2.* Hệ thống trả về thông báo: *"Loại vé này đã được bán hết, vui lòng chọn khu vực khác"*. Kho vé không bị âm.<br><br>**Trường hợp C: Cổng thanh toán (VNPAY/MoMo) gặp sự cố hoặc Timeout**<br>- *C1.* Tại bước 4 hoặc 5, cổng thanh toán không phản hồi hoặc báo lỗi hệ thống. Cơ chế **Circuit Breaker** (khi một service đang lỗi liên tục, hệ thống sẽ tạm ngừng gọi service đó để tránh kéo sập toàn bộ hệ thống) của TicketBox chuyển sang trạng thái Open để bảo vệ backend.<br>- *C2.* Hệ thống thông báo cho Khán giả: *"Cổng thanh toán đang bận, vui lòng thử lại sau ít phút hoặc đổi phương thức khác"*. Vé đang giữ tạm thời sẽ được giải phóng (Release) lại vào kho sau khi hết hạn 10 phút.<br><br>**Trường hợp D: Khán giả bấm thanh toán nhiều lần hoặc mất mạng giữa chừng**<br>- *D1.* Hệ thống nhận được nhiều request trùng lặp từ một client. Nhờ có **Idempotency Key** lưu ở Redis, hệ thống nhận diện đây là request xử lý lại.<br>- *D2.* Hệ thống không tạo đơn hàng mới, không trừ tiền hai lần mà chỉ trả về trạng thái của đơn hàng hiện tại đang xử lý. |
-
----
-### Thông báo
-
-| Thành phần | Nội dung mô tả chi tiết |
-| :--- | :--- |
-| **Actor** | Hệ thống TicketBox (Automated Actor/System), Khán giả (Recipient Actor), Các nhà cung cấp dịch vụ thông báo thứ ba - Email Service, Zalo OA, SMS Gateway (Supporting Actors). |
-| **Pre-condition** | Một sự kiện nghiệp vụ xảy ra: Thanh toán vé thành công và hệ thống chạy Job tự động nhắc nhở trước 24h. |
-| **Result** | Thông điệp được đẩy đến người dùng qua các kênh được cấu hình. Trạng thái gửi (thành công/thất bại) được ghi log.|
-| **Main Scenario** | **Luồng 1: Thông báo xác nhận ngay sau khi mua vé**<br>**1.** Ngay khi luồng "Đặt vé" thành công, hệ thống gửi một sự kiện (Event) `Ticket_Purchased_Success` vào Message Broker.<br>**2.** Notification Service tiêu thụ (consume) tin nhắn này, sinh mã QR định danh cho e-ticket.<br>**3.** Hệ thống kích hoạt đồng thời việc đẩy thông báo (Push Notification) qua ứng dụng Mobile và gửi một Email xác nhận kèm file/mã QR e-ticket đến Khán giả.<br><br>**Luồng 2: Nhắc nhở tự động trước sự kiện**<br>**1.** Một dịch vụ lập lịch (Cron Job / Worker) quét cơ sở dữ liệu định kỳ.<br>**2.** Phát hiện các concert sẽ diễn ra trong vòng 24 giờ tới.<br>**3.** Hệ thống tự động gom danh sách Khán giả đã mua vé hợp lệ và gửi thông báo nhắc nhở tự động (thời gian, địa điểm, lưu ý check-in) qua App và Email. |
-| **Alternative Scenario** | **Trường hợp A: Nhà cung cấp dịch vụ Email/SMS bên thứ ba bị sập**<br>- *A1.* Notification Service cố gắng gửi email/tin nhắn nhưng nhận về mã lỗi kết nối từ đối tác thứ ba.<br>- *A2.* Tin nhắn thông báo không bị mất mà được đẩy vào một hàng đợi lỗi (Dead Letter Queue - DLQ) hoặc kích hoạt cơ chế thử lại (Retry Pattern với Exponential Backoff).<br>- *A3.* Khán giả vẫn có thể chủ động xem được mã QR e-ticket trực tiếp trong mục "Vé của tôi" trên ứng dụng TicketBox mà không bị phụ thuộc hoàn toàn vào email.<br><br>**Trường hợp B: Hệ thống tích hợp thêm kênh thông báo mới (ví dụ: Zalo OA)**<br>- *B1.* Ban tổ chức muốn cấu hình gửi thêm tin nhắn qua Zalo OA.<br>- *B2.* Nhờ thiết kế theo dạng Interface/Plugin (Strategy Pattern), hệ thống chỉ cần cắm thêm một module `ZaloNotificationProvider` lắng nghe sự kiện từ Message Broker mà không cần sửa đổi code của luồng đặt vé hay luồng gửi Email cũ. |
-
-### Quản trị
-
-| Thành phần | Nội dung mô tả chi tiết |
-| :--- | :--- |
-| **Actor** | Ban tổ chức (Primary Actor), Hệ thống TicketBox. |
-| **Pre-condition** | Tài khoản của Ban tổ chức đã được cấp quyền quản trị và đăng nhập thành công vào trang admin nội bộ. |
-| **Result** | Concert được tạo/cập nhật/hủy thành công; cấu hình loại vé được lưu; Ban tổ chức xem được thống kê doanh thu và lượng bán. |
-| **Main Scenario** | **1.** Ban tổ chức truy cập trang quản trị nội bộ của TicketBox.<br>**2.** Hệ thống kiểm tra quyền truy cập (Dựa trên Role-Based Access Control - RBAC).<br>**3.** Ban tổ chức chọn chức năng: Tạo mới concert, Cập nhật thông tin, Hủy concert hoặc Xem thống kê.<br>**4.** (Trường hợp tạo mới/cập nhật) Ban tổ chức nhập thông tin: Tên concert, địa điểm, thời gian, và cấu hình các loại vé (Tên, giá, số lượng, thời điểm mở bán, giới hạn vé mua mỗi tài khoản). Ban tổ chức tải lên file PDF/Press Kit để hệ thống tự động gọi sang AI tạo bản tóm tắt tiểu sử nghệ sĩ.<br>**5.** Hệ thống xác thực dữ liệu và lưu vào cơ sở dữ liệu.<br>**6.** Hệ thống hiển thị thông báo thành công và cập nhật Dashboard thống kê doanh thu/lượng vé bán ra. |
-| **Alternative Scenario** | **Trường hợp A: Khán giả hoặc người không có quyền cố gắng truy cập (Security)**<br>- *A1.* Một tài khoản khán giả cố gắng truy cập URL trang admin hoặc gọi API quản trị.<br>- *A2.* Hệ thống chặn request ở tầng Gateway hoặc API, trả về lỗi 403 Forbidden.<br><br>**Trường hợp B: Luồng AI xử lý Artist Bio gặp sự cố**<br>- *B1.* Ban tổ chức tải file PDF lên nhưng nội dung bị hỏng hoặc mô hình AI đang quá tải không phản hồi.<br>- *B2.* Quá trình xử lý AI bị gián đoạn.<br>- *B3.* Hệ thống thông báo lỗi AI tạm thời và cho phép Ban tổ chức nhập tay (manual fallback) nội dung giới thiệu ngắn gọn để không làm gián đoạn việc tạo Concert. |
-
-### Soát vé tại sự kiện (Check-in)
-
-| Thành phần | Nội dung mô tả chi tiết |
-| :--- | :--- |
-| **Actor** | Nhân sự soát vé (Primary Actor), Khán giả (Supporting Actor), Hệ thống TicketBox (Mobile App, Backend, Database). |
-| **Pre-condition** | Nhân sự soát vé đã cài đặt Mobile App và đăng nhập. Khán giả có e-ticket (mã QR) hoặc có tên trong danh sách khách mời. |
-| **Result** | Vé được xác thực, trạng thái vé chuyển thành "Đã vào cổng" (Checked-in). Khán giả vào cổng thành công. |
-| **Main Scenario** | **1.** Khán giả đến cổng và xuất trình mã QR e-ticket (hoặc báo danh khu vực VIP).<br>**2.** Nhân sự soát vé dùng Mobile App quét mã QR trên màn hình điện thoại/giấy in của khán giả.<br>**3.** App gửi request lên Backend API để kiểm tra tính hợp lệ của vé.<br>**4.** Backend xác thực mã QR, đảm bảo vé tồn tại, đúng concert và chưa được sử dụng.<br>**5.** Backend phản hồi hợp lệ, App hiển thị thông báo xanh (Thành công). Hệ thống cập nhật trạng thái vé thành "Đã soát". |
-| **Alternative Scenario** | **Trường hợp A: Sân vận động mất sóng (Offline Check-in)**<br>- *A1.* Sân vận động có lượng người quá lớn gây mất sóng, App không gọi được Backend API.<br>- *A2.* App tự động chuyển sang chế độ soát vé Offline. App tự xác thực tính nguyên vẹn của vé dựa trên chữ ký số được mã hóa trong QR code và kiểm tra chống trùng lặp cục bộ.<br>- *A3.* App cho phép qua cổng, ghi nhận trạng thái check-in tạm thời vào Local Database (SQLite).<br>- *A4.* Khi mạng ổn định lại, App tự động đồng bộ (sync) toàn bộ lịch sử vé đã quét lên Server mà không để thất thoát dữ liệu.<br><br>**Trường hợp B: Phát hiện vé giả hoặc vé đã được quét (Chống dùng lại)**<br>- *B1.* Khán giả dùng mã QR giả mạo, hoặc đưa mã QR đã quét thành công cho người khác quét lại.<br>- *B2.* Hệ thống Backend (khi có mạng) hoặc Local Database (khi offline) phát hiện trạng thái vé đã check-in hoặc không tồn tại.<br>- *B3.* App báo lỗi màu đỏ kèm cảnh báo: *"Vé không hợp lệ"* hoặc *"Vé đã được sử dụng"*. Khán giả không được vào cổng.<br><br>**Trường hợp C: Xử lý danh sách khách mời VIP (Guest List từ CSV)**<br>- *C1.* Hệ thống cần nhập danh sách CSV từ nhãn hàng. Có dòng dữ liệu bị lỗi hoặc trùng lặp.<br>- *C2.* Hệ thống xử lý dữ liệu một chiều (ETL/Worker), bỏ qua dòng lỗi, tự động deduplicate (xóa trùng lặp) và nhập dòng đúng mà không làm hỏng ứng dụng.<br>- *C3.* Nhân sự soát vé tại cổng VIP xem và xác nhận trực tiếp khách mời trên App. |
-
 ## Vấn đề
 <!-- Mô tả vấn đề hiện tại mà hệ thống cần giải quyết.
      Tại sao các kênh bán vé hiện tại (Zalo OA, Google Form, chuyển khoản) không còn đủ?
      Hậu quả cụ thể: website sập, trừ tiền không ra vé, scalper bot vét hết vé. -->
-     
+
+| Vấn đề | Nguyên nhân | Hậu quả |
+| --- | --- | --- |
+| **Hệ thống sập khi mở bán vé** | Lượng truy cập đồng thời quá lớn và tải trọng đột biến (ví dụ: 80.000 người trong 5 phút đầu, dồn 70% vào phút đầu tiên). | Website không hoạt động. Khán giả không mua được vé. |
+| **Tranh chấp vé và trừ tiền lỗi** | Khán giả cố mua cùng lúc một lượng vé giới hạn ngay khi mở bán. Cổng thanh toán (VNPAY/MoMo) không ổn định hoặc gặp sự cố. | Khán giả bị trừ tiền nhưng không nhận được vé. Hệ thống có thể gây trừ tiền hai lần hoặc cấp vé cuối cùng cho hai khán giả khác nhau. |
+| **Đầu cơ vé (Scalping)** | Các scalper sử dụng bot để mua hết vé trong vài giây. | Khán giả thật không thể tiếp cận vé. Vé bị bán lại với giá gấp nhiều lần. |
+| **Quy trình bán vé thiếu đồng bộ** | Hiện tại vé được bán qua các kênh rời rạc như Zalo OA, Google Form, và chuyển khoản thủ công. | Không đảm bảo tính công bằng và rất dễ xảy ra gian lận. |
+| **Lách giới hạn vé mỗi tài khoản** | Khán giả gửi nhiều request đồng thời dưới mức tải cao để cố gắng vượt rào cản hệ thống. | Một người có thể mua vượt quá giới hạn cấu hình (ví dụ: hơn 2 vé SVIP/tài khoản), phá vỡ tính công bằng. |
+| **Quá tải Database ở các trang xem thông tin** | Trang chủ và trang chi tiết concert bị đọc với tần suất rất cao (hàng nghìn lần/giây) nhưng hệ thống lại truy vấn trực tiếp vào cơ sở dữ liệu. | Cơ sở dữ liệu bị quá tải, kéo theo việc sập toàn bộ hệ thống. |
+| **Khó khăn khi soát vé tại sự kiện** | Các địa điểm tổ chức đông người (sân vận động, nhà thi đấu) thường có vùng sóng mạng yếu, không ổn định hoặc mất kết nối. | Nhân sự không thể quét mã QR xác nhận. Rủi ro mất dữ liệu hoặc để lọt một vé vào cổng hai lần khi offline. |
+| **Rủi ro khi đồng bộ danh sách khách mời (VIP)** | Hệ thống của nhãn hàng tài trợ không có API, việc đồng bộ hoàn toàn phụ thuộc vào việc đọc file CSV được gửi thủ công. | File import có thể chứa dữ liệu lỗi hoặc trùng lặp, có nguy cơ làm gián đoạn hệ thống đang vận hành. |
+
+---
 
 ## Mục tiêu
 <!-- Hệ thống cần đạt được gì? Định lượng nếu có thể.
      Ví dụ: hỗ trợ 80.000 người truy cập trong 5 phút đầu mở bán mà không sập. -->
 
+| Mục tiêu | Mô tả / Yêu cầu cụ thể |
+| --- | --- |
+| **Số hóa toàn diện** | Số hóa toàn bộ quy trình bán vé sự kiện, từ giai đoạn mở bán ban đầu cho đến khi khán giả check-in vào cổng. |
+| **Đảm bảo hiệu suất dưới tải đột biến** | Hệ thống phải chịu được lượng truy cập khổng lồ (dự kiến 80.000 người trong 5 phút đầu) mà không bị sập. Cần có cơ chế bảo vệ backend API, ngăn chặn bot và chặn các client spam request. |
+| **Giải quyết triệt để tranh chấp vé** | Đảm bảo tuyệt đối không có hai khán giả nào cùng nhận được chiếc vé cuối cùng. Enforce (áp dụng) chính xác giới hạn số lượng vé tối đa cho mỗi tài khoản, không để người dùng lách luật bằng cách gửi nhiều request đồng thời. |
+| **Tối ưu hóa Database (Caching)** | Áp dụng chiến lược cache hợp lý để trang danh sách và trang chi tiết concert chịu được hàng nghìn request/giây mà không làm quá tải database. Đồng thời, số vé còn lại hiển thị phải phản ánh gần đúng với thực tế. |
+| **Xử lý thanh toán an toàn, linh hoạt** | Không để xảy ra tình trạng khán giả bị trừ tiền hai lần dù mạng bị ngắt giữa chừng hay bấm mua nhiều lần. Các tính năng xem thông tin và danh sách vé vẫn phải hoạt động bình thường kể cả khi cổng thanh toán (VNPAY/MoMo) gặp sự cố. |
+| **Hỗ trợ soát vé ngoại tuyến (Offline)** | Ứng dụng mobile phải cho phép nhân sự soát vé tạm thời khi mất mạng và tự động đồng bộ lại khi kết nối phục hồi. Tuyệt đối không cho phép một vé được dùng để vào cổng hai lần. |
+| **Tự động hóa bằng AI** | Hệ thống tự động trích xuất, làm sạch văn bản từ file PDF/Press kit và gửi sang mô hình AI để sinh bản giới thiệu nghệ sĩ (Artist Bio) ngắn gọn. |
+| **Đồng bộ dữ liệu khách mời an toàn** | Có khả năng định kỳ đọc và nhập danh sách khách mời (Guest List) từ file CSV. Quá trình này phải tự động xử lý được các file lỗi hoặc dữ liệu trùng lặp mà không làm gián đoạn hệ thống đang chạy. |
+
+--- 
+
 ## Người dùng và nhu cầu
 <!-- Ai dùng hệ thống? Họ cần làm gì? Điều gì quan trọng nhất với họ? -->
+
+| Người dùng          | Hoạt động                                                                                                                                                                                                                                                                                                                                                                                                                                        | Điều quan trọng nhất đối với họ                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Khán giả**        | • Xem danh sách concert, thông tin nghệ sĩ, địa điểm và sơ đồ chỗ ngồi SVG tương tác theo từng khu.<br><br>• Chọn loại vé, số lượng và thực hiện thanh toán qua VNPAY hoặc MoMo.<br><br>• Nhận thông báo xác nhận kèm e-ticket qua ứng dụng hoặc email; nhận nhắc nhở trước sự kiện 24 giờ.<br><br>• Thực hiện check-in tại cổng sự kiện bằng mã QR.                                                                                             | • **Tính công bằng và ổn định:** Hệ thống không bị sập khi mở bán, có cơ chế chống bot và scalper đầu cơ vé.<br><br>• **Giao dịch an toàn:** Không gặp lỗi bị trừ tiền nhưng không nhận được vé, hoặc bị trừ tiền hai lần khi mạng lỗi.<br><br>• **Thông tin chính xác:** Số lượng vé còn lại hiển thị đúng theo thời gian thực.                                                                                                                                                             |
+| **Ban tổ chức**     | • Sử dụng trang web admin để tạo, cập nhật thông tin hoặc hủy concert.<br><br>• Cấu hình chi tiết các loại vé (tên, giá, số lượng, thời điểm mở bán, giới hạn số vé tối đa trên mỗi tài khoản).<br><br>• Theo dõi, thống kê doanh thu và lượng vé bán ra.<br><br>• Tải lên hồ sơ nghệ sĩ/press kit để hệ thống tự động xử lý và dùng AI sinh bản giới thiệu.<br><br>• Định kỳ nhập danh sách khách mời VIP từ file CSV do nhãn hàng tài trợ gửi. | • **An toàn hệ thống và bảo mật:** Trang admin được kiểm soát truy cập chặt chẽ, phân quyền đúng vai trò. Hệ thống tự bảo vệ tốt trước tải đột biến.<br><br>• **Tính chính xác của dữ liệu:** Giới hạn vé trên mỗi tài khoản phải được thực thi chính xác tuyệt đối, không cho phép lách luật.<br><br>• **Khả năng chống chịu lỗi (Fault tolerance):** Các sự cố từ cổng thanh toán hoặc việc đồng bộ file CSV bị lỗi không được làm ảnh hưởng hay gián đoạn đến toàn bộ hệ thống đang chạy. |
+| **Nhân sự soát vé** | • Sử dụng mobile app tại cổng vào để quét mã QR trên e-ticket của khán giả nhằm xác nhận lượt vào cổng.<br><br>• Xác nhận và kiểm soát nhóm khách mời tại cổng VIP dựa trên dữ liệu danh sách khách mời đã đồng bộ.                                                                                                                                                                                                                              | • **Khả năng hoạt động ngoại tuyến (Offline):** Ứng dụng phải quét và ghi nhận soát vé tạm thời mượt mà ngay cả khi mất kết nối hoặc sóng yếu tại các sân vận động, nhà thi đấu đông người.<br><br>• **Nhất quán dữ liệu:** Tự động đồng bộ lại chính xác khi có mạng và tuyệt đối không để xảy ra tình trạng một vé được gian lận vào cổng hai lần.                                                                                                                                         |
+
+---
 
 ## Phạm vi
 <!-- Những gì thuộc phạm vi đồ án này.
      Những gì KHÔNG thuộc phạm vi (ví dụ: tích hợp payment gateway thật, hạ tầng production). -->
 
+| Thuộc phạm vi (In Scope) | Không thuộc phạm vi (Out of Scope) |
+| --- | --- |
+| **Tài liệu thiết kế (Blueprint):** Viết tài liệu kiến trúc tổng thể, C4 Diagram (Level 1, Level 2), High-Level Architecture Diagram, thiết kế cơ sở dữ liệu và phân quyền truy cập. | **Hạ tầng triển khai:** Triển khai hệ thống trên hạ tầng production thực tế. |
+| **Thiết kế giải pháp kỹ thuật:** Lên phương án xử lý tải đột biến (Rate Limiting), xử lý sự cố cổng thanh toán (Circuit Breaker), chống trừ tiền hai lần (Idempotency Key) và chiến lược Caching. | **Tích hợp thanh toán thật:** Tích hợp môi trường thật (live) của các cổng thanh toán như VNPAY hay MoMo (chỉ dừng ở mức mô phỏng/sandbox). |
+| **Cài đặt phần mềm:** Xây dựng hệ thống hoàn chỉnh, chạy được với đầy đủ các tính năng: xem và mua vé, thông báo, quản trị admin, soát vé (hỗ trợ offline), sinh AI Artist Bio và đồng bộ CSV khách mời. | **Tích hợp API đối tác ngoại:** Gọi API trực tiếp đến hệ thống quản lý khách mời của nhãn hàng tài trợ (bắt buộc phải dùng phương thức đọc file CSV). |
+| **Hướng dẫn và Dữ liệu:** Cung cấp file README hướng dẫn khởi chạy chi tiết và script tạo dữ liệu mẫu (Seed data) cho ít nhất 4 concert cùng sơ đồ chỗ ngồi. |  |
+
+---
+
 ## Rủi ro và ràng buộc
 <!-- Các vấn đề kỹ thuật đã biết trước: tranh chấp vé, tải đột biến,
      cổng thanh toán không ổn định, soát vé offline, tích hợp một chiều CSV. -->
+
+| Loại | Mô tả chi tiết | Hướng giảm thiểu (Mitigation) |
+| --- | --- | --- |
+| **Rủi ro kỹ thuật** | **Tải trọng đột biến (Burst Traffic):** Rủi ro sập hệ thống (đặc biệt là Database) khi 80.000 người dùng dội request mua vé và xem thông tin cùng lúc. | Thiết kế hệ thống tách biệt Read/Write. Tối đa hóa việc dùng Caching (Redis) và Rate Limiting tại API Gateway. |
+| **Rủi ro kỹ thuật** | **Tranh chấp dữ liệu (Race Condition):** Rủi ro cấp 1 vé cho 2 người, hoặc một người dùng spam request để mua lố số lượng cho phép. | Sử dụng Message Broker (Hàng đợi) để xử lý tuần tự kết hợp cơ chế Locking tại Database. |
+| **Rủi ro phụ thuộc** | **Đối tác thứ 3 không ổn định:** Cổng thanh toán (VNPAY/MoMo) hoặc dịch vụ gửi Email bị nghẽn/timeout kéo theo hệ thống bị treo. | Áp dụng Circuit Breaker, Idempotency Key (chống trừ tiền 2 lần) và Queue/Retry pattern cho thông báo. |
+| **Rủi ro vận hành** | **Xung đột dữ liệu ngoại tuyến (Offline Check-in):** Đồng bộ dữ liệu quét mã QR từ Local DB của điện thoại lên Server khi có mạng trở lại có thể xảy ra độ trễ hoặc trùng lặp. | Thiết kế thuật toán đồng bộ Idempotent, ưu tiên tính hợp lệ của Local DB trong thời gian mất kết nối. |
+| **Ràng buộc tích hợp** | **Tích hợp một chiều CSV:** Dữ liệu đầu vào từ nhãn hàng có thể sai định dạng, thiếu trường hoặc chứa mã độc. | Viết Background Worker chạy ngầm, áp dụng strict validation, tự động loại bỏ dòng lỗi mà không làm gián đoạn toàn bộ batch. |
+| **Ràng buộc hệ thống** | Đồ án mô phỏng môi trường thực tế nhưng không yêu cầu tích hợp cổng thanh toán live (chỉ dùng sandbox). | Thiết kế module thanh toán theo chuẩn Interface/Adapter để dễ mường tượng việc thay thế cổng thanh toán thật sau này. |
