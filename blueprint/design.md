@@ -21,11 +21,11 @@ Hệ thống được chia thành các lớp (layers) và dịch vụ (services)
 * **API Gateway:** Chịu trách nhiệm điều phối request, kiểm tra quyền truy cập, và đóng vai trò như một chốt chặn bảo vệ backend bằng cơ chế Rate Limiting (chống bot, chặn spam).
 
 
-**Lớp Dịch vụ cốt lõi (Core Services / Backend API):**
-* **Catalog Service:** Quản lý thông tin concert, nghệ sĩ, sơ đồ chỗ ngồi. Dịch vụ này chịu tải đọc cực cao.
-* **Ticketing & Order Service:** Xử lý logic đặt vé, kiểm soát giới hạn số vé tối đa cho mỗi tài khoản và chống tranh chấp vé (Race condition).
-* **Payment Service:** Tích hợp với VNPAY/MoMo, xử lý webhook và sinh Idempotency Key để chống trừ tiền hai lần.
-* **Check-in Service:** Quản lý logic soát vé, đồng bộ dữ liệu vé ngoại tuyến từ Mobile App khi có mạng trở lại.
+**Lớp Module cốt lõi (Core Modules / Backend API):**
+* **Catalog Module:** Quản lý thông tin concert, nghệ sĩ, sơ đồ chỗ ngồi. Module này chịu tải đọc cực cao.
+* **Ticketing & Order Module:** Xử lý logic đặt vé, kiểm soát giới hạn số vé tối đa cho mỗi tài khoản và chống tranh chấp vé (Race condition).
+* **Payment Module:** Tích hợp với VNPAY/MoMo, xử lý webhook và sinh Idempotency Key để chống trừ tiền hai lần.
+* **Check-in Module:** Quản lý logic soát vé, đồng bộ dữ liệu vé ngoại tuyến từ Mobile App khi có mạng trở lại.
 
 
 **Lớp Dữ liệu và Hàng đợi (Data & Queue Layer):**
@@ -44,16 +44,16 @@ Hệ thống được chia thành các lớp (layers) và dịch vụ (services)
 Hệ thống kết hợp cả hai mô hình giao tiếp để cân bằng giữa hiệu suất và trải nghiệm người dùng:
 
 * **Giao tiếp đồng bộ (Synchronous):** Sử dụng RESTful API hoặc gRPC cho các luồng cần phản hồi ngay lập tức như: Khán giả truy vấn danh sách concert, đăng nhập, hoặc lấy thông tin vé cá nhân. Các request này sẽ đi qua API Gateway, kiểm tra Cache, nếu miss sẽ chọc xuống Database và cập nhật lại Cache.
-* **Giao tiếp bất đồng bộ (Asynchronous):** Sử dụng Message Broker. Trong 5 phút đầu mở bán với 80.000 lượt truy cập, request mua vé sẽ được API Gateway tiếp nhận, đi qua Ticketing Service để đẩy vào một hàng đợi (Queue). Ticketing Service xử lý dần để trừ vé và khóa chỗ, sau đó phát ra một sự kiện (Event) tới Payment Service và Notification Service để tiếp tục quy trình thanh toán và gửi email/app push.
+* **Giao tiếp bất đồng bộ (Asynchronous):** Sử dụng Message Broker. Trong 5 phút đầu mở bán với 80.000 lượt truy cập, request mua vé sẽ được API Gateway tiếp nhận, đi qua Ticketing Module để đẩy vào một hàng đợi (Queue). Ticketing Module xử lý dần để trừ vé và khóa chỗ, sau đó phát ra một sự kiện (Event) tới Payment Module và Notification Module để tiếp tục quy trình thanh toán và gửi email/app push.
 
 **Bảng mô tả tác động khi một thành phần gặp sự cố:**
 
 | Thành phần gặp sự cố | Hậu quả trực tiếp | Ảnh hưởng đến các thành phần khác | Trạng thái hệ thống tổng thể |
 | --- | --- | --- | --- |
-| **Cổng thanh toán (VNPAY/MoMo) lỗi/timeout** | Không thể xử lý giao dịch hoặc sinh webhook trả về. | Dịch vụ Payment bị treo. Các luồng tạo đơn hàng có phí bị kẹt. | **Graceful Degradation:** Hệ thống vẫn sống. Khán giả vẫn xem được thông tin concert và số vé còn lại bình thường. Các tính năng không liên quan đến thanh toán hoạt động tốt. |
+| **Cổng thanh toán (VNPAY/MoMo) lỗi/timeout** | Không thể xử lý giao dịch hoặc sinh webhook trả về. | Payment Module bị kẹt luồng xử lý. Các đơn hàng có phí bị kẹt. | **Graceful Degradation:** Hệ thống vẫn sống. Khán giả vẫn xem được thông tin concert và số vé còn lại bình thường. Các tính năng không liên quan đến thanh toán hoạt động tốt. |
 | **Caching (Redis) sập** | Mất dữ liệu cache về số vé và thông tin concert. Mất cơ chế Rate Limiting. | Hàng nghìn request/giây sẽ dội thẳng trực tiếp vào Primary Database. | Rủi ro sập toàn bộ hệ thống nếu DB bị quá tải. (Cần có cơ chế Circuit Breaker chặn request tự động nếu Cache sập). |
-| **Mất kết nối Internet tại cổng soát vé** | Mobile App không thể gọi API lên Check-in Service. | Ticketing Service và Database không nhận được trạng thái vé đã sử dụng theo thời gian thực. | Ứng dụng chuyển sang chế độ offline, ghi nhận soát vé tạm vào bộ nhớ cục bộ. Hệ thống trung tâm không bị ảnh hưởng, tự đồng bộ khi kết nối phục hồi. |
-| **Message Broker sập** | Không thể đẩy request mua vé hoặc thông báo vào hàng đợi. | Ticketing Service không thể xử lý đơn đặt vé mới dưới tải cao. Notification Service không nhận được lệnh gửi email. | Luồng mua vé bị gián đoạn, khán giả nhận thông báo lỗi. Tuy nhiên, luồng xem thông tin concert và soát vé tại cổng vẫn hoạt động bình thường. |
+| **Mất kết nối Internet tại cổng soát vé** | Mobile App không thể gọi API lên Check-in Module. | Ticketing Module và Database không nhận được trạng thái vé đã sử dụng theo thời gian thực. | Ứng dụng chuyển sang chế độ offline, ghi nhận soát vé tạm vào bộ nhớ cục bộ. Hệ thống trung tâm không bị ảnh hưởng, tự đồng bộ khi kết nối phục hồi. |
+| **Message Broker sập** | Không thể đẩy request mua vé hoặc thông báo vào hàng đợi. | Ticketing Module không thể xử lý đơn đặt vé mới dưới tải cao. Notification Module không nhận được lệnh gửi email. | Luồng mua vé bị gián đoạn, khán giả nhận thông báo lỗi. Tuy nhiên, luồng xem thông tin concert và soát vé tại cổng vẫn hoạt động bình thường. |
 | **CSV Sync Worker / AI Worker lỗi** | Không đọc được file danh sách VIP hoặc không sinh được Artist Bio. | Hệ thống không có danh sách khách mời mới nhất hoặc thông tin mô tả bị trống. | **Không gián đoạn:** Toàn bộ hệ thống lõi (mua vé, xem concert, soát vé thường) vẫn hoạt động bình thường. |
 
 ### Lý do lựa chọn kiến trúc đề xuất
@@ -61,8 +61,8 @@ Hệ thống kết hợp cả hai mô hình giao tiếp để cân bằng giữa
 Việc lựa chọn kiến trúc trên giải quyết trực tiếp các vấn đề kỹ thuật trọng tâm:
 
 1. **Phân tách luồng Đọc/Ghi giúp giải quyết Tải đột biến:** Tách biệt rõ ràng việc đọc dữ liệu (phục vụ bằng Redis Cache để chịu hàng nghìn request/giây) và ghi dữ liệu (mua vé). Điều này giúp bảo vệ Database không bị quá tải khi trang chủ hoặc trang chi tiết bị truy cập mật độ cao.
-2. **Đảm bảo tính toàn vẹn (Race Condition & Per-user limit):** Với đặc thù dự án yêu cầu xử lý đồng thời cực cao, hàng đợi (Message Broker) sẽ đóng vai trò như một bộ đệm (buffer) để xếp hàng tuần tự các request đặt vé. Điều này, kết hợp với cơ chế Database Locking (Pessimistic Locking) ở Ticketing Service, giúp hệ thống enforce chính xác giới hạn vé tối đa/tài khoản và không bao giờ cấp vé cuối cùng cho hai người.
-3. **Khả năng chịu lỗi và tính độc lập (Fault Tolerance):** Thiết kế chia cắt các service cho phép áp dụng Circuit Breaker (ngắt mạch) hiệu quả. Nếu Payment Service hoặc hệ thống VNPAY sập, nó không kéo theo sự sụp đổ của Catalog Service, đảm bảo yêu cầu nghiệp vụ: thông tin concert và danh sách vé còn lại vẫn hiển thị bình thường.
+2. **Đảm bảo tính toàn vẹn (Race Condition & Per-user limit):** Với đặc thù dự án yêu cầu xử lý đồng thời cực cao, hàng đợi (Message Broker) đóng vai trò như một bộ đệm (buffer) để xếp hàng tuần tự các request đặt vé. Điều này, kết hợp với cơ chế Database Locking (Pessimistic Locking) ở Ticketing Module, giúp hệ thống enforce chính xác giới hạn vé tối đa/tài khoản và không bao giờ cấp vé cuối cùng cho hai người.
+3. **Khả năng chịu lỗi và cô lập sự cố (Fault Isolation):** Trong kiến trúc Modular Monolith, cô lập sự cố đến từ việc thiết lập ranh giới logic vững chắc (module boundaries) và kiểm soát ngoại lệ. Nếu đối tác VNPAY gặp sự cố mạng, cơ chế Circuit Breaker ở Payment Module sẽ chủ động ngắt kết nối (fail-fast) thay vì chờ đợi. Điều này ngăn chặn việc cạn kiệt tài nguyên hệ thống (thread pool/connection pool exhaustion) của toàn bộ tiến trình monolith, đảm bảo Catalog Module chạy trong cùng tiến trình vẫn có đủ tài nguyên để xử lý mượt mà luồng I/O đọc dữ liệu, giúp khán giả vẫn xem được thông tin concert bình thường.
 4. **Hỗ trợ kiến trúc bảo mật chặt chẽ:** API Gateway tập trung giúp dễ dàng triển khai xác thực (Authentication), cấp quyền (RBAC cho admin) và bảo vệ hệ thống thông qua Rate Limiting (Token Bucket, Sliding Window) chặn bot spam request ngay từ vòng ngoài. Tận dụng tư duy về an toàn thông tin để đảm bảo endpoint nội bộ.
 5. **Đáp ứng nghiệp vụ ngoại tuyến an toàn:** Việc tách bạch Check-in Service với API rõ ràng giúp Mobile App dễ dàng triển khai logic lưu trạng thái mã QR offline vào thiết bị (LocalDB/SQLite) và retry (thử lại) việc đồng bộ một cách an toàn mà không để lọt một vé vào cổng hai lần.
 
@@ -118,9 +118,11 @@ graph TD
     Organizer([Ban tổ chức])
     Checker([Nhân sự soát vé])
 
+    %% External Services
+    CDN["CDN (Managed Service)<br>Cloudflare/AWS"]
+
     subgraph Hệ thống TicketBox
         %% Lớp Client
-        CDN["CDN - Cloudflare/AWS"]
         WebApp["Web App & Admin Panel<br>React/Next.js"]
         MobileApp["Mobile App<br>Flutter/Swift - Tích hợp SQLite"]
 
@@ -141,7 +143,8 @@ graph TD
     end
 
     %% Tương tác Client
-    Audience -->|"Tải ảnh, SVG sơ đồ"| CDN
+    Audience -.->|"Tải tĩnh (JS/CSS, Ảnh, SVG)"| CDN
+    CDN -.->|"Origin Pull (Cache Miss)"| WebApp
     Audience -->|"Thao tác giao diện"| WebApp
     Organizer -->|"Quản trị"| WebApp
     Checker -->|"Quét QR"| MobileApp
@@ -411,6 +414,7 @@ erDiagram
         string status "PENDING, PAID, FAILED, CANCELLED"
         string idempotency_key UK "Khóa chống trùng lặp"
         datetime created_at
+        datetime held_until "Hết hạn giữ vé (10 phút)"
     }
     TICKETS {
         uuid id PK
@@ -443,6 +447,7 @@ erDiagram
 #### 3. Bảng `orders` (Đơn hàng)
 *   `status`: Có các trạng thái `PENDING` (Đang thanh toán), `PAID` (Đã trả tiền), `FAILED/CANCELLED` (Lỗi/Hết hạn).
 *   `idempotency_key` (Unique): **Vũ khí chống trừ tiền và xuất vé 2 lần**. Khóa này sinh ra 1 lần duy nhất từ Client khi khán giả bấm nút "Thanh toán". Nếu Client bấm 2 lần do lag mạng, hoặc VNPAY gửi Webhook về 2 lần, thao tác Insert/Update vào DB sẽ bị dội ngược (Conflict Unique Constraint), giúp ngắt ngay luồng xử lý trùng lặp.
+*   `held_until`: Đóng vai trò là TTL (Time-To-Live). Một Background Worker sẽ định kỳ quét các đơn `PENDING` có `held_until` nhỏ hơn thời gian hiện tại. Khi phát hiện, hệ thống tự động cập nhật trạng thái đơn thành `CANCELLED`, thu hồi các `TICKETS` liên quan, và hoàn trả số lượng vé về `available_quantity` ở bảng `TICKET_TYPES`.
 
 #### 4. Bảng `tickets` (Vé thực tế)
 *   Đại diện cho 1 chiếc vé vật lý/e-ticket. 
