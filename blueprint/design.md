@@ -352,10 +352,140 @@ sequenceDiagram
 ## Thiết kế cơ sở dữ liệu
 <!-- Loại database, lý do lựa chọn, schema các entity chính -->
 
+Để đáp ứng cả hai yêu cầu khắt khe là **tính nhất quán tuyệt đối (chống bán lố vé)** và **hiệu năng cực cao (đáp ứng 80.000 users/5 phút)**, TicketBox áp dụng chiến lược đa cơ sở dữ liệu (Polyglot Persistence).
+
+### 1. Phân tích đặc điểm dữ liệu và Lựa chọn Database
+
+| Loại dữ liệu | Đặc điểm & Yêu cầu | Loại Database đề xuất | Công nghệ cụ thể |
+| --- | --- | --- | --- |
+| **Dữ liệu Cốt lõi & Giao dịch**<br>(Tài khoản, Concert, Đơn hàng, Vé thực tế, Thanh toán) | Đòi hỏi tính toàn vẹn dữ liệu cực cao (chuẩn ACID). Cần tính cấu trúc và quan hệ chặt chẽ (Relational). Đặc biệt yêu cầu hỗ trợ **Locking (Pessimistic Lock)** cấp độ dòng (Row-level) để giải quyết triệt để tranh chấp vé (Race Condition). | Cơ sở dữ liệu quan hệ (RDBMS) | **PostgreSQL** |
+| **Dữ liệu Truy xuất tốc độ cao**<br>(Số lượng vé còn lại real-time, Caching thông tin Concert, Rate Limit, Idempotency Key) | Tốc độ đọc/ghi phải cực thấp (tính bằng mili-giây). Dữ liệu có thể mang tính tạm thời (TTL). Phải chịu được hàng chục nghìn request truy vấn cùng lúc mà không làm sập DB chính. | Cơ sở dữ liệu Key-Value (In-memory) | **Redis** |
+| **Dữ liệu Ngoại tuyến (Offline)**<br>(Danh sách mã vé hợp lệ tải trước, Lịch sử check-in tạm thời) | Lưu trữ trực tiếp trên thiết bị di động của nhân viên soát vé. Hỗ trợ truy vấn và ghi nhận dữ liệu độc lập không cần mạng Internet. | Cơ sở dữ liệu cục bộ (Embedded/Local DB) | **SQLite**  |
+| **Dữ liệu File tĩnh (Blob)**<br>(Ảnh nghệ sĩ, File PDF Press Kit, File CSV Khách mời, Sơ đồ chỗ ngồi SVG) | Kích thước file lớn, dữ liệu phi cấu trúc. Cần kết hợp chặt chẽ với CDN để phân phối đến hàng chục nghìn khán giả cùng lúc mà không nghẽn băng thông máy chủ. | Object Storage | **AWS S3** / **MinIO** |
+
+*(Lưu ý: Vì hệ thống áp dụng kiến trúc Modular Monolith, tất cả các module nội bộ (Catalog, Ticketing, Payment, Check-in) sẽ dùng chung cơ sở dữ liệu PostgreSQL. Tuy nhiên, các bảng (Tables) sẽ được thiết kế phân tách rõ ràng theo ranh giới Domain (Schema) để giữ tính độc lập cao nhất có thể).*
+
+### 2. Database Schema (Các Entity chính)
+<!-- Schema các entity chính -->
+
+Sơ đồ dưới đây tập trung vào cơ sở dữ liệu **PostgreSQL** (chứa dữ liệu cốt lõi). 
+
+```mermaid
+erDiagram
+    USERS ||--o{ ORDERS : places
+    USERS ||--o{ TICKETS : owns
+    CONCERTS ||--o{ TICKET_TYPES : has
+    CONCERTS ||--o{ GUEST_LIST : invites
+    ORDERS ||--|{ TICKETS : contains
+    TICKET_TYPES ||--o{ TICKETS : defines
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        string full_name
+        string role "ADMIN, AUDIENCE, CHECKER"
+    }
+    CONCERTS {
+        uuid id PK
+        string title
+        text artist_bio "Được sinh tự động bởi AI"
+        datetime start_time
+        string svg_map_url "Lưu trên S3/CDN"
+        string status "DRAFT, PUBLISHED, CANCELLED"
+    }
+    TICKET_TYPES {
+        uuid id PK
+        uuid concert_id FK
+        string name "VD: SVIP, GA"
+        decimal price
+        int total_quantity
+        int available_quantity "Trường quan trọng để Lock DB"
+        int max_per_user "Giới hạn mua mỗi tài khoản"
+    }
+    ORDERS {
+        uuid id PK
+        uuid user_id FK
+        uuid concert_id FK
+        decimal total_amount
+        string status "PENDING, PAID, FAILED, CANCELLED"
+        string idempotency_key UK "Khóa chống trùng lặp"
+        datetime created_at
+    }
+    TICKETS {
+        uuid id PK
+        uuid order_id FK
+        uuid ticket_type_id FK
+        uuid user_id FK
+        string qr_code UK "Mã định danh duy nhất"
+        string status "HELD, PURCHASED, CHECKED_IN"
+    }
+    GUEST_LIST {
+        uuid id PK
+        uuid concert_id FK
+        string email
+        string full_name
+        string qr_code UK
+        string status "PENDING, CHECKED_IN"
+    }
+```
+
+**Mô tả chi tiết các bảng và Thiết kế giải quyết rủi ro:**
+
+#### 1. Bảng `users` (Tài khoản)
+*   Lưu trữ thông tin người dùng. Phân quyền thông qua trường `role` (`ADMIN`, `AUDIENCE`, `CHECKER`).
+
+#### 2. Bảng `concerts` (Sự kiện) và `ticket_types` (Loại vé)
+*   `concerts.artist_bio`: Lưu trữ đoạn văn bản giới thiệu nghệ sĩ do Background Worker (gọi AI) trả về.
+*   `ticket_types.available_quantity`: **Đóng vai trò then chốt trong việc chống bán lố vé.** Khi có request đặt vé, Ticketing Module sẽ sử dụng truy vấn `SELECT ... FOR UPDATE` (Pessimistic Locking) trên dòng dữ liệu này. Hệ thống sẽ kiểm tra xem `available_quantity >= request_quantity` không, sau đó trừ thẳng và `COMMIT`. Database đảm bảo các request đến cùng mili-giây sẽ được xếp hàng tuần tự.
+*   `ticket_types.max_per_user`: Cấu hình giới hạn để Ticketing Module đếm tổng số vé người dùng đã sở hữu trước khi cho phép tạo `ORDERS` mới.
+
+#### 3. Bảng `orders` (Đơn hàng)
+*   `status`: Có các trạng thái `PENDING` (Đang thanh toán), `PAID` (Đã trả tiền), `FAILED/CANCELLED` (Lỗi/Hết hạn).
+*   `idempotency_key` (Unique): **Vũ khí chống trừ tiền và xuất vé 2 lần**. Khóa này sinh ra 1 lần duy nhất từ Client khi khán giả bấm nút "Thanh toán". Nếu Client bấm 2 lần do lag mạng, hoặc VNPAY gửi Webhook về 2 lần, thao tác Insert/Update vào DB sẽ bị dội ngược (Conflict Unique Constraint), giúp ngắt ngay luồng xử lý trùng lặp.
+
+#### 4. Bảng `tickets` (Vé thực tế)
+*   Đại diện cho 1 chiếc vé vật lý/e-ticket. 
+*   `status` chuyển từ `HELD` (Đang giữ chỗ - có thể bị thu hồi nếu Order timeout 10 phút) sang `PURCHASED` (Khi thanh toán xong) và `CHECKED_IN` (Khi soát vé thành công).
+*   Trường `qr_code` là duy nhất và được mã hóa (Signature) để Mobile App có thể xác thực tính nguyên vẹn (Integrity) khi làm việc hoàn toàn Offline mà không sợ vé giả.
+
+#### 5. Bảng `guest_list` (Khách mời VIP)
+*   Bảng này được tách biệt hoàn toàn khỏi `tickets` và `orders` để đảm bảo luồng Worker đọc file CSV và thực hiện Bulk Upsert ban đêm sẽ **không gây Deadlock** hay ảnh hưởng đến hiệu năng của các bảng bán vé lõi đang phục vụ khán giả trực tiếp.
+
 ---
 
 ## Thiết kế kiểm soát truy cập
 <!-- Mô hình phân quyền, các nhóm người dùng, cách kiểm tra quyền tại từng điểm truy cập -->
+
+Hệ thống TicketBox sử dụng mô hình **Role-Based Access Control (RBAC)** kết hợp với **JSON Web Token (JWT)** để quản lý định danh và phân quyền. Việc sử dụng JWT (Stateless) giúp API Gateway dễ dàng xác thực người dùng dựa trên chữ ký mà không cần truy vấn Database liên tục, đáp ứng tốt yêu cầu chịu tải cao của hệ thống.
+
+### 1. Phân định các nhóm người dùng (Roles) và Quyền hạn (Permissions)
+
+| Nhóm người dùng (Role) | Mô tả vai trò | Quyền hạn tương ứng (Permissions) |
+| --- | --- | --- |
+| **GUEST** *(Chưa đăng nhập)* | Khách vãng lai truy cập Web/App | • Xem danh sách Concert.<br>• Xem chi tiết Concert và sơ đồ SVG.<br>• Xem số lượng vé còn lại. |
+| **AUDIENCE** *(Khán giả)* | Người dùng đã đăng ký tài khoản | • Tất cả quyền của GUEST.<br>• Đặt vé và thực hiện Thanh toán.<br>• Xem lịch sử giao dịch và E-ticket cá nhân. |
+| **CHECKER** *(Nhân sự soát vé)* | Nhân viên làm việc tại cổng sự kiện | • Đăng nhập vào Mobile App Soát vé.<br>• Tải trước danh sách mã QR vé hợp lệ (Offline Mode).<br>• Quét QR và gọi API Check-in vé trực tiếp (Online Mode).<br>• Thực hiện đồng bộ dữ liệu soát vé từ Local DB lên Server. |
+| **ADMIN** *(Ban tổ chức)* | Quản trị viên hệ thống nội bộ | • Đăng nhập vào Admin Dashboard.<br>• Tạo mới, cập nhật, hủy Concert.<br>• Cấu hình các Loại vé (Giá, số lượng mở bán, giới hạn trên mỗi user).<br>• Upload file PDF AI để sinh Artist Bio.<br>• Tải lên file CSV danh sách khách VIP.<br>• Xem thống kê dashboard doanh thu và lượng vé bán ra. |
+
+### 2. Luồng kiểm tra quyền tại từng điểm truy cập
+
+Để đảm bảo bảo mật nhiều lớp, hệ thống thực hiện kiểm tra phân quyền chặt chẽ tại 3 cấp độ khác nhau:
+
+#### Cấp độ 1: API Gateway
+*   **Cơ chế:** Bất kỳ request nào nhắm đến các route được bảo vệ đều phải đính kèm chuỗi JWT trong Header (`Authorization: Bearer <token>`). API Gateway sẽ tự động xác thực chữ ký (Signature) và thời hạn (Expiration) của Token.
+*   **Thực thi:** Gateway sẽ giải mã Payload của JWT để đọc trường `role`. Dựa vào file cấu hình định tuyến (Routing Rule / ACL), nó sẽ cho qua hoặc chặn lại.
+
+#### Cấp độ 2: Module Backend 
+*   **Cơ chế:** Khi request vượt qua Gateway, Module nội bộ không chỉ tin vào `role` mà còn tiến hành kiểm tra **Quyền sở hữu dữ liệu (Data Ownership)**.
+*   **Thực thi:** 
+    *   *Ví dụ:* Một Khán giả gọi API lấy chi tiết E-ticket `/api/v1/tickets/{ticket_id}`. Ticketing Module sẽ trích xuất `user_id` từ Token và so sánh với trường `user_id` thực tế được gán cho chiếc vé đó trong Database. Nếu không khớp, trả về `403 Forbidden`. Việc này ngăn chặn tuyệt đối tình trạng một tài khoản `AUDIENCE` đi mò mẫm tham số ID để đánh cắp mã QR của người khác.
+
+#### Cấp độ 3: Ứng dụng Frontend Web & Mobile (UI/UX)
+*   **Cơ chế:** Máy khách (Browser / Mobile App) sẽ decode JWT (không cần private key) để biết user đang giữ `role` gì và tiến hành ẩn/hiện chức năng phù hợp.
+*   **Thực thi:**
+    *   **Web Khán giả:** Giao diện chỉ cho phép bấm nút "Tiến hành thanh toán" nếu JWT hợp lệ (Đã đăng nhập). Nếu Token hết hạn (Hết phiên session), UI tự động chuyển hướng về trang đăng nhập.
+    *   **Mobile App Check-in:** Ứng dụng kiểm tra xem `role` của người đăng nhập có phải là `CHECKER` hay không. Nếu nhập tài khoản của khán giả thông thường, ứng dụng sẽ báo lỗi "Tài khoản không được hỗ trợ trên thiết bị này". Khi tải được vé offline, Token cũng được lưu cục bộ để Checker không bị văng ra ngoài màn hình login khi mất mạng.
 
 ---
 
@@ -364,19 +494,117 @@ sequenceDiagram
 ### Kiểm soát tải đột biến
 <!-- Giải pháp, thuật toán, ngưỡng, hành vi khi vượt ngưỡng -->
 
+Để giải quyết bài toán 80.000 khán giả truy cập trong 5 phút đầu (70% dồn vào phút đầu tiên), hệ thống cần triệt tiêu các request rác (do spam click hoặc bot đầu cơ) ngay từ vòng ngoài cùng.
+
+*   **Giải pháp:** Triển khai cơ chế **Rate Limiting** tại tầng API Gateway, sử dụng **Redis** làm nơi lưu trữ bộ đếm (counter) siêu tốc.
+*   **Thuật toán lựa chọn:** **Token Bucket**.
+    *   *Lý do:* Khác với Fixed Window (dễ bị nghẽn ở khoảng giao thời giữa 2 chu kỳ) hay Leaky Bucket (xử lý đều đặn nhưng chậm), Token Bucket cho phép "tải đột biến cục bộ" (burst traffic). Nếu một người dùng bấm F5 liên tục 3 lần trong 1 giây, hệ thống vẫn cho qua nếu xô vẫn còn token, nhưng sẽ chặn đứng nếu họ dùng tool spam 50 lần/giây. Điều này rất phù hợp với hành vi cuống cuồng bấm "Mua vé" của khán giả thật.
+*   **Cấu hình Ngưỡng (Thresholds) đa cấp độ:**
+    1.  **Cấp độ Global (Chống DDoS/Bot theo IP):** Giới hạn tối đa `200 requests / 1 phút / 1 IP` đối với các luồng xem trang chủ và xem chi tiết Concert.
+    2.  **Cấp độ Nghiệp vụ lõi (Chống đầu cơ vé theo User ID):** Giới hạn khắt khe tối đa `3 requests / 1 phút / 1 User ID` đối với API `/api/v1/orders` (Nút bấm Tiến hành thanh toán).
+*   **Hành vi hệ thống khi vượt ngưỡng:**
+    *   API Gateway lập tức từ chối request, trả về mã lỗi HTTP `429 Too Many Requests` mà không cần gọi xuống Backend Module.
+    *   Trong Response Header sẽ trả về `Retry-After: <số giây>` để báo cho Frontend biết khi nào được gọi lại.
+
 ### Xử lý cổng thanh toán không ổn định
 <!-- Giải pháp, các trạng thái, ngưỡng kích hoạt, hành vi khi lỗi -->
 
+Hệ thống thanh toán của bên thứ ba (VNPAY/MoMo) có thể bị nghẽn mạng, phản hồi chậm (timeout) hoặc sập hoàn toàn. Nếu TicketBox tiếp tục gửi request và chờ đợi, các luồng xử lý (threads) của hệ thống sẽ bị treo, dẫn đến cạn kiệt tài nguyên và sập toàn bộ trang web.
+
+*   **Giải pháp:** Áp dụng mẫu thiết kế **Circuit Breaker** tại lớp Payment Module để cắt đứt liên kết với dịch vụ đang bị lỗi, áp dụng cơ chế **Fail Fast** (Báo lỗi ngay lập tức thay vì chờ).
+*   **Cách hoạt động (3 trạng thái):**
+    1.  **Closed:** Mạch đóng, request tạo thanh toán được chuyển tiếp đến VNPAY/MoMo bình thường.
+    2.  **Open:** Khi lỗi vượt ngưỡng, mạch mở. Hệ thống lập tức trả về lỗi cho người dùng mỗi khi họ bấm thanh toán mà không cần chọc gọi sang API của đối tác.
+    3.  **Half-Open:** Sau một khoảng thời gian chờ nhất định (vd: 30s), mạch cho phép một số lượng nhỏ request lọt qua để "thăm dò". Nếu các request này thành công, cổng thanh toán đã ổn định, mạch quay về *Closed*. Nếu vẫn lỗi, mạch bật lại *Open*.
+*   **Ngưỡng kích hoạt cấu hình (Ví dụ):**
+    *   Thời gian chờ tối đa (Timeout): `5 giây` cho mỗi request gọi sang cổng.
+    *   Tỷ lệ lỗi (Failure Rate Threshold): `> 50%` request bị lỗi hoặc timeout trong một khung thời gian (Sliding Window) 10 giây (với tối thiểu 20 request được ghi nhận).
+*   **Hành vi hệ thống khi lỗi (Graceful Degradation):**
+    *   **Cách ly sự cố:** Việc thanh toán lỗi không làm sập Database. Người dùng khác vẫn truy cập xem thông tin Concert và Soát vé bình thường.
+    *   **Trải nghiệm người dùng:** Khán giả đang đặt vé sẽ nhận được thông báo lịch sự: *"Cổng thanh toán đối tác hiện đang bảo trì hoặc quá tải. Vui lòng thử lại sau ít phút hoặc đổi phương thức thanh toán."*
+    *   **Hoàn trả vé:** Lệnh giữ vé (`HELD`) của những khán giả không thể thanh toán do Circuit Breaker sẽ không bị giam vĩnh viễn, mà sẽ được tự động trả lại kho (`available_quantity`) khi hết TTL 10 phút.
+
 ### Chống trừ tiền hai lần
 <!-- Cơ chế, nơi lưu trữ, TTL, luồng xử lý khi phát hiện trùng lặp -->
+
+Vấn đề phổ biến trong thanh toán là người dùng bấm nút "Xác nhận mua" 2-3 lần do lag mạng, hoặc VNPAY/MoMo gọi Webhook báo thành công nhiều lần cho cùng một giao dịch. Nếu không kiểm soát, khán giả sẽ bị tạo 2 đơn hàng, trừ tiền 2 lần hoặc hệ thống cấp 2 vé cho 1 lần trả tiền.
+
+*   **Giải pháp:** Áp dụng cơ chế **Idempotency Key**. Cơ chế này đảm bảo một API dù bị gọi bao nhiêu lần với cùng một tham số thì kết quả hệ thống (trạng thái DB, số dư) chỉ thay đổi đúng một lần duy nhất.
+*   **Cơ chế sinh khóa (Key Generation):**
+    *   **Luồng tạo đơn:** Frontend tự động sinh một mã UUID (Idempotency-Key) khi khán giả bắt đầu vào màn hình thanh toán. Khóa này được đính kèm vào Header của request API `/orders`.
+    *   **Luồng nhận Webhook:** Khóa sẽ là sự kết hợp giữa `OrderID` của TicketBox và `TransactionID` do cổng thanh toán trả về.
+*   **Nơi lưu trữ và TTL:**
+    *   **Lớp 1 (Truy xuất nhanh):** Lưu tại **Redis** với TTL là **24 giờ** (đủ để bao phủ mọi thời gian chờ và vòng lặp retry Webhook của đối tác). Giá trị lưu trữ bao gồm trạng thái xử lý (IN_PROGRESS, COMPLETED) và payload response cũ.
+    *   **Lớp 2 (Tuyệt đối):** Cấu hình ràng buộc `UNIQUE` trên cột `idempotency_key` ở bảng `orders` và bảng lưu log Webhook trong **PostgreSQL**.
+*   **Luồng xử lý khi phát hiện trùng lặp:**
+    1.  Khi request tới, Payment Module kiểm tra khóa trong Redis.
+    2.  Nếu khóa **chưa tồn tại**: Tạo khóa trên Redis với trạng thái `IN_PROGRESS`. Thực hiện logic giữ vé, gọi API thanh toán. Thành công thì cập nhật Redis thành `COMPLETED` kèm dữ liệu hóa đơn.
+    3.  Nếu khóa **đã tồn tại** và trạng thái là `IN_PROGRESS`: Hệ thống lập tức trả về lỗi HTTP 409 Conflict hoặc 400 Bad Request: *"Giao dịch của bạn đang được xử lý, vui lòng không gửi lại"*. Ngăn chặn việc chạy logic 2 lần song song.
+    4.  Nếu khóa **đã tồn tại** và trạng thái là `COMPLETED`: Hệ thống bỏ qua toàn bộ logic ghi DB, không gọi cổng thanh toán nữa, mà lấy trực tiếp kết quả đã lưu trong Redis để trả về ngay HTTP 200 OK cho Client (Client không hề biết request của mình là request thừa).
+    5.  **Fallback (Dự phòng):** Nếu Redis bị trôi dữ liệu, thao tác Insert vào PostgreSQL với cùng `idempotency_key` sẽ văng lỗi `Unique Constraint Violation`. Database sẽ tự động Rollback Transaction, tiền không bị trừ và vé không bị mất.
 
 ### Caching
 <!-- Xác định các đối tượng cần cache (danh sách concert, chi tiết concert, số vé còn lại).
      Chiến lược: Cache-aside, Write-through hay Write-back?
      TTL cho từng loại. Cách invalidate khi dữ liệu thay đổi (đặc biệt: số vé sau mỗi giao dịch). -->
 
+Trong thời điểm mở bán, 80.000 người dùng liên tục tải lại trang chủ và trang chi tiết Concert. Nếu toàn bộ lưu lượng này đi thẳng xuống PostgreSQL, cơ sở dữ liệu sẽ sập ngay lập tức do quá tải tác vụ đọc (Read-heavy). Redis được sử dụng với các chiến lược linh hoạt:
+
+*   **1. Dữ liệu tĩnh (Danh sách Concert, Chi tiết, Sơ đồ SVG):**
+    *   **Chiến lược:** **Cache-aside (Lazy Loading)**. Request đọc sẽ tìm trong Redis trước; nếu Cache Miss (không có), hệ thống mới truy vấn Database lấy dữ liệu, sau đó ghi ngược lên Redis cho các request sau.
+    *   **TTL (Thời gian tồn tại):** Dài (1 - 24 giờ).
+    *   **Cơ chế Invalidate (Làm mới):** Chủ động (Active Invalidation). Bất cứ khi nào Ban tổ chức cập nhật thông tin Concert từ trang Admin, hệ thống sẽ tự động xóa (Evict) key tương ứng trong Redis để dữ liệu được làm mới ngay lập tức.
+
+*   **2. Dữ liệu động (Số lượng vé còn lại):**
+    *   **Thách thức:** Con số này thay đổi liên tục nhưng lại bị hàng chục nghìn người xem cùng một lúc.
+    *   **Chiến lược:** Chấp nhận tính nhất quán cuối (Eventual Consistency) ở phần hiển thị giao diện. (Lưu ý: Tính toàn vẹn nghiệp vụ chống mua lố vé đã được Pessimistic Lock ở DB bảo vệ tuyệt đối, nên việc UI có thể hiển thị sai lệch vài giây không gây lỗi bán lố vé).
+    *   **TTL (Thời gian tồn tại):** Rất ngắn (5 - 10 giây). Nhờ vậy, dù có 10.000 người F5 trang xem số vé trong 10 giây, Database cũng chỉ phải xử lý đúng 1 câu lệnh `SELECT`.
+    *   **Cơ chế Invalidate & Tối ưu (Cập nhật chủ động):** Để giao diện nhảy số nhanh (Real-time) hơn thay vì đợi hết TTL 10 giây, Ticketing Module sau khi thực hiện chốt đơn thành công ở Database có thể gửi thêm một lệnh `DECRBY <số_lượng_vé_đã_mua>` vào Redis. Điều này giúp đồng bộ số liệu gần như tức thời về mặt thị giác cho những người đang đứng đợi.
+
+*   **3. Phiên đăng nhập (Session/JWT Denylist):**
+    *   Mặc dù hệ thống dùng JWT (Stateless), Redis vẫn được dùng để lưu trữ danh sách các Token bị thu hồi (Denylist) khi người dùng chủ động Đăng xuất (Logout) hoặc khi Admin cấm (Ban) một tài khoản gian lận. Token sẽ bị lưu trữ tại đây với mức TTL bằng chính thời gian sống còn lại của JWT đó.
+
 ---
 
 ## Các quyết định kỹ thuật quan trọng (ADR)
-<!-- Với mỗi quyết định lớn: lựa chọn gì, tại sao, đánh đổi gì.
-     Ví dụ: SQL vs NoSQL, JWT vs Session, Kafka vs RabbitMQ, optimistic vs pessimistic locking, ... -->
+
+Dưới đây là các tài liệu ghi nhận quyết định kiến trúc (Architecture Decision Records) lý giải tại sao hệ thống lại được thiết kế như hiện tại:
+
+### ADR 1: Kiến trúc Event-Driven Modular Monolith (Thay vì Microservices)
+*   **Lựa chọn:** Xây dựng hệ thống trong 1 khối code (Monolith) nhưng chia module cực kỳ nghiêm ngặt, kết hợp với Message Broker.
+*   **Lý do:** Giữ được ranh giới rõ ràng của các Domain (Catalog, Ticketing, Payment) như Microservices, nhưng tránh được độ phức tạp về hạ tầng DevOps và quản trị Giao dịch phân tán (Distributed Transactions).
+*   **Đánh đổi:** Không thể scale rạch ròi từng module một cách độc lập (Ví dụ: scale riêng mỗi Ticketing khi tải cao) mà phải scale toàn bộ cục Monolith.
+
+### ADR 2: Cơ sở dữ liệu quan hệ & Pessimistic Locking (Thay vì NoSQL / Optimistic Locking)
+*   **Lựa chọn:** Dùng **PostgreSQL** và **Pessimistic Locking**  (`SELECT ... FOR UPDATE`).
+*   **Lý do:** Yêu cầu tiên quyết của việc bán vé là **tuyệt đối không bán lố vé**. Optimistic Locking sẽ sinh ra quá nhiều lỗi văng ra cho khán giả (bắt họ thử lại) khi có chục nghìn người cùng mua một loại vé. Pessimistic Locking xếp hàng giao dịch ngay tại DB, xử lý tuần tự và chính xác 100%. NoSQL không hỗ trợ transaction/locking đủ mạnh cho nghiệp vụ này.
+*   **Đánh đổi:** Hiệu năng ghi (Write Performance) của DB sẽ bị giảm do phải chờ lock. Điều này được bù đắp bằng cách dùng Message Broker để làm bộ đệm (buffer) nhốt traffic lại ở hàng đợi.
+
+### ADR 3: Quản lý phiên bằng JWT Stateless (Thay vì Stateful Session)
+*   **Lựa chọn:** Sử dụng **JSON Web Token (JWT)** để định danh và phân quyền.
+*   **Lý do:** Hệ thống yêu cầu tốc độ xử lý ở API Gateway phải cực nhanh để cản traffic rác. JWT cho phép API Gateway xác thực chữ ký và vai trò (Role) cục bộ mà không cần phải mở kết nối xuống Database hay Cache liên tục.
+*   **Đánh đổi:** Không thể thu hồi (revoke) token ngay lập tức nếu chỉ dựa vào JWT. Khắc phục bằng cách duy trì một Denylist nhỏ trên Redis cho các trường hợp logout/ban tài khoản.
+
+### ADR 4: Tích hợp Background Workers (Thay vì gọi API đồng bộ)
+*   **Lựa chọn:** Xử lý AI, gửi Email và import CSV bằng các tiến trình chạy ngầm (Workers) đọc từ Message Broker thay vì xử lý trực tiếp trên request của người dùng.
+*   **Lý do:** Các tác vụ này nặng, phụ thuộc vào bên thứ 3 (OpenAI, Email Gateway) và dễ bị timeout. Đẩy ra Worker giúp API trả về phản hồi tính bằng mili-giây, cô lập hoàn toàn sự cố (AI lỗi thì web vẫn bán vé bình thường).
+*   **Đánh đổi:** Tăng độ phức tạp của hệ thống (phải dựng thêm worker, theo dõi trạng thái bất đồng bộ).
+
+---
+
+### Bảng tổng hợp Công nghệ sử dụng
+
+Dựa trên các quyết định kiến trúc, dưới đây là danh sách công nghệ (Tech Stack) đề xuất để cài đặt hệ thống:
+
+| Lớp (Layer) / Thành phần | Công nghệ đề xuất | Vai trò & Lý do lựa chọn |
+| --- | --- | --- |
+| **Frontend (Web)** | **Next.js/React (App Router)** | Phát triển trang chủ, chi tiết Concert và Admin Dashboard. Hỗ trợ SSR (Server-Side Rendering) tốt cho SEO và chịu tải. |
+| **Frontend (Mobile)** | **React Native (Expo)** | Phù hợp với kiến thức của các thành viên  |
+| **API Gateway** | **Nginx** | Chịu trách nhiệm Rate Limiting (Token Bucket), Routing và Verify JWT. Nginx đơn giản hơn cho reverse proxy. Kong mạnh nhưng cần setup riêng, thêm một service phải quản lý. |
+| **Backend Framework** | **NestJS (Node.js/TypeScript)** | Xây dựng các Module nghiệp vụ. Phù hợp cực tốt cho các luồng I/O-intensive bất đồng bộ. NestJS có Module system built-in, decorator-based, rất phù hợp để implement Modular Monolith một cách có cấu trúc. TypeScript giúp bắt lỗi sớm. |
+| **Primary Database** | **PostgreSQL** | Lưu trữ toàn bộ dữ liệu cốt lõi, đảm bảo ACID, hỗ trợ Row-level locking cực mạnh. |
+| **In-memory Cache** | **Redis** | Xử lý Rate Limiting, Idempotency Key, Cache thông tin Concert và đếm số vé Real-time để giảm tải cho DB. |
+| **Local Database** | **SQLite** | Nhúng trực tiếp vào Mobile App, cho phép truy vấn và soát vé ngay cả khi điện thoại hoàn toàn mất mạng (Offline mode). |
+| **Message Broker** | **RabbitMQ** | Hàng đợi sự kiện. Giảm xóc cho hệ thống dưới tải đột biến, tách bạch các luồng thanh toán và thông báo. RabbitMQ đơn giản hơn, dễ setup, dễ debug, phù hợp với task queue (gửi email, xử lý CSV). Trong khi Kafka được thiết kế cho throughput hàng triệu message/giây và event streaming lâu dài. overkill cho đồ án|
+| **Object Storage / CDN** | **MinIO** + **Cloudflare** | Lưu trữ và phân phối siêu tốc các file tĩnh (Ảnh nghệ sĩ, SVG sơ đồ, Press Kit, CSV) với băng thông lớn. AWS S3 yêu cầu account và billing. MinIO chạy local/Docker, API tương thích S3, dễ demo. AWS CloudFront phức tạp hơn và có chi phí. Cloudflare free tier đủ cho demo.|
+| **AI Model** | **OpenAI API(gpt-4o-mini)** | Tích hợp theo luồng Worker chạy ngầm để sinh văn bản tóm tắt Artist Bio. Rẻ hơn GPT-4, OpenAI SDK thuần thục hơn, ít config hơn.|
