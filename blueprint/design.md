@@ -2,7 +2,7 @@
 
 ## Kiến trúc tổng thể
 
-Để đáp ứng các yêu cầu khắt khe về tải trọng, tính nhất quán dữ liệu và khả năng chịu lỗi, kiến trúc phù hợp nhất cho TicketBox là **Kiến trúc Hướng sự kiện kết hợp Modular Monlith (Event-Driven Modular Monolith*)**.
+Để đáp ứng các yêu cầu khắt khe về tải trọng, tính nhất quán dữ liệu và khả năng chịu lỗi, kiến trúc phù hợp nhất cho TicketBox là **Kiến trúc Hướng sự kiện kết hợp Modular Monlith (Event-Driven Modular Monolith)**.
 
 Dưới đây là đề xuất chi tiết cho kiến trúc hệ thống:
 
