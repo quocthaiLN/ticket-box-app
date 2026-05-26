@@ -315,7 +315,7 @@ sequenceDiagram
     end
 ```
 
-### Luồng Đồng bộ danh sách khách mời VIP từ CSV (Batch Processing) (Draft)
+### Luồng Đồng bộ danh sách khách mời VIP từ CSV (Batch Processing) 
 Thiết kế luồng ETL (Extract, Transform, Load) một chiều. Đảm bảo một dòng lỗi trong file CSV sẽ không làm chết toàn bộ tiến trình. 
 
 ```mermaid
@@ -329,6 +329,8 @@ sequenceDiagram
     Worker->>Storage: Tải file danh sách từ thư mục Nhãn hàng
     Storage-->>Worker: GuestList.csv
 
+    Worker->>Worker: Khởi tạo mảng ValidData = []
+
     loop Từng dòng trong file CSV
         Worker->>Worker: Validate định dạng & kiểm tra trùng lặp
 
@@ -336,9 +338,11 @@ sequenceDiagram
             Worker->>Worker: Ghi log lỗi (Bỏ qua dòng này)
 
         else Dữ liệu hợp lệ
-            Worker->>DB: Upsert khách mời / cập nhật dữ liệu
+            Worker->>Worker: Đẩy record vào mảng ValidData
         end
     end
+
+    Worker->>DB: Bulk Upsert(ValidData)<br/>Tối ưu hiệu năng, tránh N+1 Query
 
     Worker->>Worker: Gửi cảnh báo Admin nếu tỷ lệ lỗi > 10%
 ```
