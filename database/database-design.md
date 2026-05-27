@@ -987,4 +987,144 @@ erDiagram
 - Bao gồm role mặc định và dữ liệu mẫu cho 4 concert: Anh Trai Say Hi, Anh Trai Vượt Ngàn Chông Gai, Em Xinh Say Hi, Chị Đẹp Đạp Gió Rẽ Sóng.
 - Mỗi concert có venue, zone GA/SVIP/VIP/CAT1/CAT2 và ticket types có giá, số lượng, `max_per_user`, `sale_start_at`, `sale_end_at`.
 
+# PHẦN I — CHECKLIST KIỂM TRA
 
+- [x] Có đủ bảng chính cho TicketBox
+- [x] Có mô tả mục đích từng bảng
+- [x] Có mô tả từng field
+- [x] Có PK/FK/Unique/Check
+- [x] Có mô tả quan hệ bảng
+- [x] Có ERD Mermaid
+- [x] Có giải thích chống oversell
+- [x] Có giải thích per-user ticket limit
+- [x] Có giải thích idempotency
+- [x] Có giải thích offline check-in
+- [x] Có giải thích import CSV
+- [x] Có schema.sql
+- [x] Có seed.sql
+- [x] SQL chạy được trên PostgreSQL database rỗng
+
+
+# PHẦN J — BỔ SUNG THEO REVIEW DATABASE
+
+## J.1. Lý do bổ sung
+
+Sau khi đối chiếu với yêu cầu triển khai các giải pháp kỹ thuật, schema được bổ sung thêm các thành phần sau:
+
+| Bổ sung | Mục tiêu | Nghiệp vụ/giải pháp được hỗ trợ |
+|---|---|---|
+| `user_ticket_type_counters` | Enforce giới hạn vé theo user dưới tải cao | Per-user ticket limit, chống user gửi request song song để vượt `max_per_user` |
+| `ticket_inventory_events` | Ghi audit mọi biến động tồn kho vé | Chống oversell, hold/release vé, đối soát refund/admin adjust |
+| `payment_webhook_events` | Lưu raw webhook/IPN từ VNPAY/MoMo | Chống xử lý webhook trùng, verify chữ ký, debug payment timeout |
+| `checkin_devices` | Quản lý thiết bị mobile soát vé | Offline check-in, revoke thiết bị, gắn staff/concert, last sync |
+| `notification_dead_letters` | Lưu notification thất bại sau retry | Retry/DLQ cho Email/App/SMS/Zalo OA |
+
+## J.2. Bảng `user_ticket_type_counters`
+
+### Mục đích
+
+Bảng counter theo từng cặp `(user_id, ticket_type_id)` để backend có thể khóa đúng một dòng bằng transaction khi kiểm tra `max_per_user`. Bảng này làm rõ cách chống lách giới hạn vé khi một user gửi nhiều request đặt vé đồng thời.
+
+### Trường chính
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Ý nghĩa | Mục đích sử dụng |
+|---|---|---|---|---|
+| `user_id` | `UUID` | `PK, FK users(id)` | User bị áp giới hạn | Xác định chủ thể mua vé |
+| `ticket_type_id` | `UUID` | `PK, FK ticket_types(id)` | Loại vé bị giới hạn | Xác định loại vé cần đếm |
+| `held_quantity` | `INTEGER` | `NOT NULL, DEFAULT 0, CHECK >= 0` | Số vé đang giữ tạm | Tính tổng vé đang giữ để không vượt limit |
+| `paid_quantity` | `INTEGER` | `NOT NULL, DEFAULT 0, CHECK >= 0` | Số vé đã thanh toán | Tính tổng vé đã mua thành công |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT now()` | Thời điểm cập nhật | Debug race condition và audit |
+
+### Cách dùng trong transaction
+
+1. `SELECT ... FOR UPDATE` dòng `ticket_types` để khóa tồn kho.
+2. `SELECT ... FOR UPDATE` dòng `user_ticket_type_counters` tương ứng với `(user_id, ticket_type_id)`.
+3. Kiểm tra `held_quantity + paid_quantity + requested_quantity <= ticket_types.max_per_user`.
+4. Nếu hợp lệ: tăng `held_quantity`, giảm `available_quantity`, tăng `held_quantity` ở `ticket_types`.
+5. Khi payment thành công: giảm `held_quantity`, tăng `paid_quantity`.
+6. Khi order hết hạn/hủy: giảm `held_quantity`.
+
+## J.3. Bảng `ticket_inventory_events`
+
+### Mục đích
+
+Ghi lại mọi thay đổi tồn kho vé để truy vết vì sao số lượng `available_quantity`, `held_quantity`, `sold_quantity` thay đổi. Bảng này không thay thế `ticket_types`, chỉ đóng vai trò audit/event log.
+
+### Event type
+
+| Giá trị | Ý nghĩa |
+|---|---|
+| `HOLD` | Giữ vé tạm khi tạo order |
+| `RELEASE` | Trả vé về kho khi order hết hạn/hủy |
+| `PAYMENT_CONFIRMED` | Chốt vé sau payment success |
+| `REFUND` | Hoàn tiền/hoàn vé |
+| `ADMIN_ADJUST` | Admin điều chỉnh tồn kho thủ công |
+
+## J.4. Bảng `payment_webhook_events`
+
+### Mục đích
+
+Lưu toàn bộ webhook/IPN nhận từ VNPAY/MoMo, bao gồm payload gốc, kết quả verify chữ ký, trạng thái đã xử lý và lỗi nếu có. Bảng này giúp payment idempotency có bằng chứng bền vững trong PostgreSQL, kể cả khi Redis TTL hết hạn.
+
+### Ràng buộc chính
+
+- Unique partial index `(provider, provider_event_id)` khi `provider_event_id IS NOT NULL`.
+- Unique partial index `(provider, provider_transaction_id)` khi `provider_transaction_id IS NOT NULL`.
+- `processed = TRUE` thì `processed_at` phải khác `NULL`.
+
+## J.5. Bảng `checkin_devices`
+
+### Mục đích
+
+Quản lý thiết bị mobile được phép check-in cho từng concert. Thiết bị có thể bị revoke nếu thất lạc hoặc có rủi ro. Bảng này hỗ trợ offline sync tốt hơn so với chỉ lưu `device_id` dạng text.
+
+### Cách liên kết
+
+- `checkin_logs.device_id` tham chiếu `checkin_devices(id)`.
+- `offline_checkin_batches.device_id` tham chiếu `checkin_devices(id)`.
+- `checkin_devices.staff_id` tham chiếu nhân sự đang dùng thiết bị.
+- `checkin_devices.concert_id` giới hạn thiết bị theo concert.
+
+## J.6. Bảng `notification_dead_letters`
+
+### Mục đích
+
+Lưu các notification thất bại sau nhiều lần retry. Admin hoặc worker có thể xử lý lại, đánh dấu `resolved_at`, hoặc dùng dữ liệu để kiểm tra lỗi provider.
+
+## J.7. ERD bổ sung
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_TICKET_TYPE_COUNTERS : has_limit_counter
+    TICKET_TYPES ||--o{ USER_TICKET_TYPE_COUNTERS : counted_by
+    TICKET_TYPES ||--o{ TICKET_INVENTORY_EVENTS : records
+    ORDERS ||--o{ TICKET_INVENTORY_EVENTS : causes
+    ORDERS ||--o{ PAYMENT_WEBHOOK_EVENTS : receives
+    PAYMENTS ||--o{ PAYMENT_WEBHOOK_EVENTS : verified_by
+    USERS ||--o{ CHECKIN_DEVICES : uses
+    CONCERTS ||--o{ CHECKIN_DEVICES : authorizes
+    CHECKIN_DEVICES ||--o{ CHECKIN_LOGS : scans
+    CHECKIN_DEVICES ||--o{ OFFLINE_CHECKIN_BATCHES : syncs
+    NOTIFICATION_LOGS ||--o{ NOTIFICATION_DEAD_LETTERS : dead_lettered
+```
+
+## J.8. Specs được tạo kèm
+
+Các đặc tả được viết theo thứ tự ưu tiên triển khai:
+
+1. `ticket-inventory.md`
+2. `per-user-ticket-limit.md`
+3. `payment-idempotency.md`
+4. `offline-checkin-sync.md`
+5. `guest-list-import.md`
+6. `artist-bio-ai.md`
+7. `notification.md`
+8. `auth-rbac.md`
+9. `concert-catalog.md`
+10. `order-checkout.md`
+11. `e-ticket-qr.md`
+12. `checkin-online.md`
+13. `guest-checkin.md`
+14. `caching.md`
+15. `rate-limiting-anti-bot.md`
+16. `audit-logging.md`
