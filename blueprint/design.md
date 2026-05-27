@@ -11,9 +11,8 @@ Dưới đây là đề xuất chi tiết cho kiến trúc hệ thống:
 Hệ thống được chia thành các lớp (layers) và dịch vụ (services) độc lập để dễ dàng mở rộng và bảo trì:
 
 **Lớp Ứng dụng khách (Client Layer):**
-* **CDN (Content Delivery Network):** Đóng vai trò cực kỳ quan trọng trong việc phục vụ các tài nguyên tĩnh (Ảnh nghệ sĩ, Sơ đồ SVG, CSS/JS). Giúp giảm tải băng thông mạng cho server chính khi có 80.000 users truy cập đồng thời.
 * **Web App (Khán giả):** Ứng dụng dành cho khán giả xem thông tin và mua vé.
-* **Admin Dashboard:** Cổng quản trị nội bộ dành cho Ban tổ chức tạo concert, cấu hình vé và xem thống kê.
+* **Web App Admin Dashboard:** Cổng quản trị nội bộ dành cho Ban tổ chức tạo concert, cấu hình vé và xem thống kê.
 * **Mobile App (Nhân sự soát vé):** Ứng dụng di động dùng để quét mã QR tại cổng, tích hợp Local DB (SQLite/Room/CoreData) để lưu trữ cục bộ và hoạt động offline.
 
 
@@ -30,8 +29,8 @@ Hệ thống được chia thành các lớp (layers) và dịch vụ (services)
 
 **Lớp Dữ liệu và Hàng đợi (Data & Queue Layer):**
 * **Primary Database (RDBMS):** Đảm bảo tính toàn vẹn (ACID) cho dữ liệu đơn hàng và giao dịch thanh toán.
-* **Caching (Redis):** Áp dụng Cache-aside để lưu trữ danh sách concert, chi tiết concert và số lượng vé còn lại nhằm giảm tải cho Database.
-* **Message Broker (Kafka / RabbitMQ):** Đóng vai trò hàng đợi xử lý bất đồng bộ trong lúc tải đột biến (ví dụ: xếp hàng request đặt vé, gửi thông báo).
+* **Caching (Redis):** Áp dụng bóc tách API (phân chia dữ liệu tĩnh/động) + Multi-level In-Memory Caching + SingleFlight Pattern để lưu trữ danh sách concert, chi tiết concert và số lượng vé còn lại nhằm giảm tải cho Database.
+* **Message Broker (BullMQ):** Đóng vai trò hàng đợi xử lý bất đồng bộ trong lúc tải đột biến (ví dụ: xếp hàng request đặt vé, gửi thông báo).
 
 
 **Lớp Xử lý ngầm (Background Workers):**
@@ -43,8 +42,8 @@ Hệ thống được chia thành các lớp (layers) và dịch vụ (services)
 
 Hệ thống kết hợp cả hai mô hình giao tiếp để cân bằng giữa hiệu suất và trải nghiệm người dùng:
 
-* **Giao tiếp đồng bộ (Synchronous):** Sử dụng RESTful API hoặc gRPC cho các luồng cần phản hồi ngay lập tức như: Khán giả truy vấn danh sách concert, đăng nhập, hoặc lấy thông tin vé cá nhân. Các request này sẽ đi qua API Gateway, kiểm tra Cache, nếu miss sẽ chọc xuống Database và cập nhật lại Cache.
-* **Giao tiếp bất đồng bộ (Asynchronous):** Sử dụng Message Broker. Trong 5 phút đầu mở bán với 80.000 lượt truy cập, request mua vé sẽ được API Gateway tiếp nhận, đi qua Ticketing Module để đẩy vào một hàng đợi (Queue). Ticketing Module xử lý dần để trừ vé và khóa chỗ, sau đó phát ra một sự kiện (Event) tới Payment Module và Notification Module để tiếp tục quy trình thanh toán và gửi email/app push.
+* **Giao tiếp đồng bộ (Synchronous):** Sử dụng RESTful API cho các luồng cần phản hồi ngay lập tức như: Khán giả truy vấn danh sách concert, đăng nhập, hoặc lấy thông tin vé cá nhân. Các request này sẽ đi qua API Gateway, kiểm tra Cache, nếu miss sẽ chọc xuống Database và cập nhật lại Cache.
+* **Giao tiếp bất đồng bộ (Asynchronous):** Sử dụng Message Broker (BullMQ). Trong 5 phút đầu mở bán với 80.000 lượt truy cập, request mua vé sẽ được API Gateway tiếp nhận, đi qua Ticketing Module để đẩy vào một hàng đợi (Queue). Ticketing Module xử lý dần để trừ vé và khóa chỗ, sau đó phát ra một sự kiện (Event) tới Payment Module và Notification Module để tiếp tục quy trình thanh toán và gửi email/app push.
 
 **Bảng mô tả tác động khi một thành phần gặp sự cố:**
 
@@ -127,7 +126,7 @@ graph TD
         MobileApp["Mobile App<br>Flutter/Swift - Tích hợp SQLite"]
 
         %% Lớp Gateway
-        Gateway["API Gateway<br>Kong/Nginx"]
+        Gateway["API Gateway<br>Nginx"]
 
         %% Lớp Services
         Catalog["Catalog Service"]
@@ -603,13 +602,13 @@ Dựa trên các quyết định kiến trúc, dưới đây là danh sách côn
 
 | Lớp (Layer) / Thành phần | Công nghệ đề xuất | Vai trò & Lý do lựa chọn |
 | --- | --- | --- |
-| **Frontend (Web)** | **Next.js/React (App Router)** | Phát triển trang chủ, chi tiết Concert và Admin Dashboard. Hỗ trợ SSR (Server-Side Rendering) tốt cho SEO và chịu tải. |
+| **Frontend (Web)** | **Express.js/React (App Router)** | Phát triển trang chủ, chi tiết Concert và Admin Dashboard. Hỗ trợ SSR (Server-Side Rendering) tốt cho SEO và chịu tải. |
 | **Frontend (Mobile)** | **React Native (Expo)** | Phù hợp với kiến thức của các thành viên  |
-| **API Gateway** | **Nginx** | Chịu trách nhiệm Rate Limiting (Token Bucket), Routing và Verify JWT. Nginx đơn giản hơn cho reverse proxy. Kong mạnh nhưng cần setup riêng, thêm một service phải quản lý. |
-| **Backend Framework** | **NestJS (Node.js/TypeScript)** | Xây dựng các Module nghiệp vụ. Phù hợp cực tốt cho các luồng I/O-intensive bất đồng bộ. NestJS có Module system built-in, decorator-based, rất phù hợp để implement Modular Monolith một cách có cấu trúc. TypeScript giúp bắt lỗi sớm. |
+| **API Gateway** | **Nginx** | Chịu trách nhiệm Rate Limiting (Token Bucket), Routing và Verify JWT. Nginx đơn giản hơn cho reverse proxy.|
+| **Backend Framework** | **Express.js (Node.js/TypeScript)** | Xây dựng các Module nghiệp vụ. Phù hợp cực tốt cho các luồng I/O-intensive bất đồng bộ. Express.js có Module system built-in, decorator-based, rất phù hợp để implement Modular Monolith một cách có cấu trúc. TypeScript giúp bắt lỗi sớm. |
 | **Primary Database** | **PostgreSQL** | Lưu trữ toàn bộ dữ liệu cốt lõi, đảm bảo ACID, hỗ trợ Row-level locking cực mạnh. |
 | **In-memory Cache** | **Redis** | Xử lý Rate Limiting, Idempotency Key, Cache thông tin Concert và đếm số vé Real-time để giảm tải cho DB. |
 | **Local Database** | **SQLite** | Nhúng trực tiếp vào Mobile App, cho phép truy vấn và soát vé ngay cả khi điện thoại hoàn toàn mất mạng (Offline mode). |
-| **Message Broker** | **RabbitMQ** | Hàng đợi sự kiện. Giảm xóc cho hệ thống dưới tải đột biến, tách bạch các luồng thanh toán và thông báo. RabbitMQ đơn giản hơn, dễ setup, dễ debug, phù hợp với task queue (gửi email, xử lý CSV). Trong khi Kafka được thiết kế cho throughput hàng triệu message/giây và event streaming lâu dài. overkill cho đồ án|
-| **Object Storage / CDN** | **MinIO** + **Cloudflare** | Lưu trữ và phân phối siêu tốc các file tĩnh (Ảnh nghệ sĩ, SVG sơ đồ, Press Kit, CSV) với băng thông lớn. AWS S3 yêu cầu account và billing. MinIO chạy local/Docker, API tương thích S3, dễ demo. AWS CloudFront phức tạp hơn và có chi phí. Cloudflare free tier đủ cho demo.|
+| **Message Broker** | **BullMQ** | Hàng đợi sự kiện. Giảm xóc cho hệ thống dưới tải đột biến, tách bạch các luồng thanh toán và thông báo. RabbitMQ đơn giản hơn, dễ setup, dễ debug, phù hợp với task queue (gửi email, xử lý CSV). Trong khi Kafka được thiết kế cho throughput hàng triệu message/giây và event streaming lâu dài. overkill cho đồ án|
+| **Object Storage** | **MinIO** | Lưu trữ và phân phối siêu tốc các file tĩnh (Ảnh nghệ sĩ, SVG sơ đồ, Press Kit, CSV) với băng thông lớn. AWS S3 yêu cầu account và billing. MinIO chạy local/Docker, API tương thích S3, dễ demo. AWS CloudFront phức tạp hơn và có chi phí.|
 | **AI Model** | **OpenAI API(gpt-4o-mini)** | Tích hợp theo luồng Worker chạy ngầm để sinh văn bản tóm tắt Artist Bio. Rẻ hơn GPT-4, OpenAI SDK thuần thục hơn, ít config hơn.|
