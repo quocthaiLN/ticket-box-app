@@ -56,6 +56,51 @@ JOIN (VALUES
 ON c.slug = v.slug
 ON CONFLICT (concert_id, code) DO NOTHING;
 
+
+INSERT INTO checkin_gates (concert_id, gate_code, gate_name, description, is_active)
+SELECT c.id, v.gate_code, v.gate_name, v.description, TRUE
+FROM concerts c
+JOIN (VALUES
+    ('anh-trai-say-hi', 'GA_GATE', 'Cổng GA', 'Cổng dành cho khu GA.'),
+    ('anh-trai-say-hi', 'SVIP_GATE', 'Cổng SVIP', 'Cổng dành cho khu SVIP.'),
+    ('anh-trai-say-hi', 'VIP_GATE', 'Cổng VIP', 'Cổng dành cho khu VIP.'),
+    ('anh-trai-say-hi', 'CAT1_GATE', 'Cổng CAT1', 'Cổng dành cho khu CAT1.'),
+    ('anh-trai-say-hi', 'CAT2_GATE', 'Cổng CAT2', 'Cổng dành cho khu CAT2.'),
+
+    ('anh-trai-vuot-ngan-chong-gai', 'GA_GATE', 'Cổng GA', 'Cổng dành cho khu GA.'),
+    ('anh-trai-vuot-ngan-chong-gai', 'SVIP_GATE', 'Cổng SVIP', 'Cổng dành cho khu SVIP.'),
+    ('anh-trai-vuot-ngan-chong-gai', 'VIP_GATE', 'Cổng VIP', 'Cổng dành cho khu VIP.'),
+    ('anh-trai-vuot-ngan-chong-gai', 'CAT1_GATE', 'Cổng CAT1', 'Cổng dành cho khu CAT1.'),
+    ('anh-trai-vuot-ngan-chong-gai', 'CAT2_GATE', 'Cổng CAT2', 'Cổng dành cho khu CAT2.'),
+
+    ('em-xinh-say-hi', 'GA_GATE', 'Cổng GA', 'Cổng dành cho khu GA.'),
+    ('em-xinh-say-hi', 'SVIP_GATE', 'Cổng SVIP', 'Cổng dành cho khu SVIP.'),
+    ('em-xinh-say-hi', 'VIP_GATE', 'Cổng VIP', 'Cổng dành cho khu VIP.'),
+    ('em-xinh-say-hi', 'CAT1_GATE', 'Cổng CAT1', 'Cổng dành cho khu CAT1.'),
+    ('em-xinh-say-hi', 'CAT2_GATE', 'Cổng CAT2', 'Cổng dành cho khu CAT2.'),
+
+    ('chi-dep-dap-gio-re-song', 'GA_GATE', 'Cổng GA', 'Cổng dành cho khu GA.'),
+    ('chi-dep-dap-gio-re-song', 'SVIP_GATE', 'Cổng SVIP', 'Cổng dành cho khu SVIP.'),
+    ('chi-dep-dap-gio-re-song', 'VIP_GATE', 'Cổng VIP', 'Cổng dành cho khu VIP.'),
+    ('chi-dep-dap-gio-re-song', 'CAT1_GATE', 'Cổng CAT1', 'Cổng dành cho khu CAT1.'),
+    ('chi-dep-dap-gio-re-song', 'CAT2_GATE', 'Cổng CAT2', 'Cổng dành cho khu CAT2.')
+) AS v(slug, gate_code, gate_name, description)
+ON c.slug = v.slug
+ON CONFLICT (concert_id, gate_code) DO NOTHING;
+
+INSERT INTO checkin_gate_zones (gate_id, seat_zone_id)
+SELECT g.id, z.id
+FROM checkin_gates g
+JOIN concerts c ON c.id = g.concert_id
+JOIN seat_zones z ON z.concert_id = c.id
+WHERE
+    (g.gate_code = 'GA_GATE' AND z.code = 'GA') OR
+    (g.gate_code = 'SVIP_GATE' AND z.code = 'SVIP') OR
+    (g.gate_code = 'VIP_GATE' AND z.code = 'VIP') OR
+    (g.gate_code = 'CAT1_GATE' AND z.code = 'CAT1') OR
+    (g.gate_code = 'CAT2_GATE' AND z.code = 'CAT2')
+ON CONFLICT (gate_id, seat_zone_id) DO NOTHING;
+
 INSERT INTO ticket_types (concert_id, seat_zone_id, name, description, price, currency, total_quantity, available_quantity, held_quantity, sold_quantity, max_per_user, sale_start_at, sale_end_at, status)
 SELECT c.id, z.id, v.name, v.description, v.price, 'VND', v.quantity, v.quantity, 0, 0, v.max_per_user, v.sale_start_at::timestamptz, v.sale_end_at::timestamptz, 'ON_SALE'
 FROM concerts c

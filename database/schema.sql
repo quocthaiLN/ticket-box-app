@@ -14,9 +14,9 @@ CREATE TYPE order_status AS ENUM ('PENDING', 'HELD', 'PAID', 'CANCELLED', 'EXPIR
 CREATE TYPE payment_provider AS ENUM ('VNPAY', 'MOMO');
 CREATE TYPE payment_status AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'REFUNDED');
 CREATE TYPE ticket_status AS ENUM ('ISSUED', 'CHECKED_IN', 'CANCELLED', 'REFUNDED');
-CREATE TYPE checkin_result AS ENUM ('SUCCESS', 'ALREADY_CHECKED_IN', 'INVALID_TICKET', 'WRONG_CONCERT', 'CONFLICT', 'ERROR');
+CREATE TYPE checkin_result AS ENUM ('SUCCESS', 'ALREADY_CHECKED_IN', 'INVALID_TICKET', 'WRONG_CONCERT', 'WRONG_GATE', 'CONFLICT', 'ERROR');
 CREATE TYPE offline_batch_status AS ENUM ('PENDING', 'SYNCING', 'DONE', 'FAILED');
-CREATE TYPE offline_item_status AS ENUM ('PENDING', 'ACCEPTED', 'CONFLICT', 'INVALID', 'ERROR');
+CREATE TYPE offline_item_status AS ENUM ('PENDING', 'ACCEPTED', 'CONFLICT', 'INVALID', 'WRONG_GATE', 'ERROR');
 CREATE TYPE notification_channel AS ENUM ('APP', 'EMAIL', 'SMS', 'ZALO_OA');
 CREATE TYPE notification_status AS ENUM ('PENDING', 'SENT', 'FAILED', 'RETRYING');
 CREATE TYPE job_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
@@ -145,17 +145,27 @@ CREATE TABLE ticket_types (
 );
 
 
-CREATE TABLE user_ticket_type_counters (
-    user_id UUID NOT NULL,
-    ticket_type_id UUID NOT NULL,
-    held_quantity INTEGER NOT NULL DEFAULT 0,
-    paid_quantity INTEGER NOT NULL DEFAULT 0,
+CREATE TABLE checkin_gates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    concert_id UUID NOT NULL,
+    gate_code VARCHAR(50) NOT NULL,
+    gate_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, ticket_type_id),
-    CONSTRAINT fk_user_ticket_counters_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_ticket_counters_ticket_type FOREIGN KEY (ticket_type_id) REFERENCES ticket_types(id) ON DELETE CASCADE,
-    CONSTRAINT ck_user_ticket_counters_held_non_negative CHECK (held_quantity >= 0),
-    CONSTRAINT ck_user_ticket_counters_paid_non_negative CHECK (paid_quantity >= 0)
+    CONSTRAINT fk_checkin_gates_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
+    CONSTRAINT uq_checkin_gates_concert_code UNIQUE (concert_id, gate_code),
+    CONSTRAINT ck_checkin_gates_code_not_empty CHECK (length(trim(gate_code)) > 0)
+);
+
+CREATE TABLE checkin_gate_zones (
+    gate_id UUID NOT NULL,
+    seat_zone_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (gate_id, seat_zone_id),
+    CONSTRAINT fk_checkin_gate_zones_gate FOREIGN KEY (gate_id) REFERENCES checkin_gates(id) ON DELETE CASCADE,
+    CONSTRAINT fk_checkin_gate_zones_zone FOREIGN KEY (seat_zone_id) REFERENCES seat_zones(id) ON DELETE CASCADE
 );
 
 CREATE TABLE orders (
@@ -189,6 +199,19 @@ CREATE TABLE order_items (
     CONSTRAINT ck_order_items_unit_price_non_negative CHECK (unit_price >= 0)
 );
 
+
+CREATE TABLE user_ticket_type_counters (
+    user_id UUID NOT NULL,
+    ticket_type_id UUID NOT NULL,
+    held_quantity INTEGER NOT NULL DEFAULT 0,
+    paid_quantity INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, ticket_type_id),
+    CONSTRAINT fk_user_ticket_counters_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_ticket_counters_ticket_type FOREIGN KEY (ticket_type_id) REFERENCES ticket_types(id) ON DELETE CASCADE,
+    CONSTRAINT ck_user_ticket_counters_held_non_negative CHECK (held_quantity >= 0),
+    CONSTRAINT ck_user_ticket_counters_paid_non_negative CHECK (paid_quantity >= 0)
+);
 
 CREATE TABLE ticket_inventory_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -273,6 +296,26 @@ CREATE TABLE idempotency_keys (
     CONSTRAINT ck_idempotency_keys_expires_after_created CHECK (expires_at > created_at)
 );
 
+
+CREATE TABLE checkin_devices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_code VARCHAR(100) NOT NULL,
+    staff_id UUID,
+    concert_id UUID,
+    gate_id UUID,
+    public_key TEXT,
+    status device_status NOT NULL DEFAULT 'ACTIVE',
+    last_sync_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_checkin_devices_code UNIQUE (device_code),
+    CONSTRAINT fk_checkin_devices_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_checkin_devices_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_checkin_devices_gate FOREIGN KEY (gate_id) REFERENCES checkin_gates(id) ON DELETE SET NULL,
+    CONSTRAINT ck_checkin_devices_revoked_at_required CHECK (status <> 'REVOKED' OR revoked_at IS NOT NULL)
+);
+
 CREATE TABLE tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL,
@@ -300,31 +343,17 @@ CREATE TABLE tickets (
     CONSTRAINT ck_tickets_checked_in_at_required CHECK (status <> 'CHECKED_IN' OR checked_in_at IS NOT NULL)
 );
 
-
-CREATE TABLE checkin_devices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_code VARCHAR(100) NOT NULL,
-    staff_id UUID,
-    concert_id UUID,
-    public_key TEXT,
-    status device_status NOT NULL DEFAULT 'ACTIVE',
-    last_sync_at TIMESTAMPTZ,
-    revoked_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_checkin_devices_code UNIQUE (device_code),
-    CONSTRAINT fk_checkin_devices_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT fk_checkin_devices_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
-    CONSTRAINT ck_checkin_devices_revoked_at_required CHECK (status <> 'REVOKED' OR revoked_at IS NOT NULL)
-);
-
 CREATE TABLE checkin_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID,
+    guest_id UUID,
     concert_id UUID NOT NULL,
+    seat_zone_id UUID,
+    gate_id UUID,
+    device_id UUID,
     staff_id UUID,
     gate_code VARCHAR(50),
-    device_id UUID,
+    device_code VARCHAR(100),
     scan_token TEXT NOT NULL,
     result checkin_result NOT NULL,
     reason TEXT,
@@ -334,15 +363,19 @@ CREATE TABLE checkin_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_checkin_logs_ticket FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL,
     CONSTRAINT fk_checkin_logs_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_checkin_logs_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT fk_checkin_logs_device FOREIGN KEY (device_id) REFERENCES checkin_devices(id) ON DELETE SET NULL
+    CONSTRAINT fk_checkin_logs_seat_zone FOREIGN KEY (seat_zone_id) REFERENCES seat_zones(id) ON DELETE SET NULL,
+    CONSTRAINT fk_checkin_logs_gate FOREIGN KEY (gate_id) REFERENCES checkin_gates(id) ON DELETE SET NULL,
+    CONSTRAINT fk_checkin_logs_device FOREIGN KEY (device_id) REFERENCES checkin_devices(id) ON DELETE SET NULL,
+    CONSTRAINT fk_checkin_logs_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
 
 CREATE TABLE offline_checkin_batches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     concert_id UUID NOT NULL,
     staff_id UUID,
     device_id UUID NOT NULL,
+    gate_id UUID,
     batch_token VARCHAR(128) NOT NULL,
     status offline_batch_status NOT NULL DEFAULT 'PENDING',
     item_count INTEGER NOT NULL DEFAULT 0,
@@ -355,14 +388,18 @@ CREATE TABLE offline_checkin_batches (
     CONSTRAINT fk_offline_batches_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE RESTRICT,
     CONSTRAINT fk_offline_batches_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_offline_batches_device FOREIGN KEY (device_id) REFERENCES checkin_devices(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_offline_batches_gate FOREIGN KEY (gate_id) REFERENCES checkin_gates(id) ON DELETE SET NULL,
     CONSTRAINT ck_offline_batches_counts_non_negative CHECK (item_count >= 0 AND conflict_count >= 0)
 );
+
 
 CREATE TABLE offline_checkin_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     batch_id UUID NOT NULL,
     ticket_id UUID,
     guest_id UUID,
+    seat_zone_id UUID,
+    gate_id UUID,
     qr_token TEXT,
     local_scanned_at TIMESTAMPTZ NOT NULL,
     sync_result offline_item_status NOT NULL DEFAULT 'PENDING',
@@ -370,9 +407,12 @@ CREATE TABLE offline_checkin_items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_offline_items_batch FOREIGN KEY (batch_id) REFERENCES offline_checkin_batches(id) ON DELETE CASCADE,
     CONSTRAINT fk_offline_items_ticket FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_offline_items_seat_zone FOREIGN KEY (seat_zone_id) REFERENCES seat_zones(id) ON DELETE SET NULL,
+    CONSTRAINT fk_offline_items_gate FOREIGN KEY (gate_id) REFERENCES checkin_gates(id) ON DELETE SET NULL,
     CONSTRAINT uq_offline_items_batch_qr UNIQUE (batch_id, qr_token),
     CONSTRAINT ck_offline_items_has_target CHECK (qr_token IS NOT NULL OR guest_id IS NOT NULL)
 );
+
 
 CREATE TABLE notification_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -495,6 +535,9 @@ CREATE TABLE guest_list (
     CONSTRAINT ck_guest_list_checked_in_at_required CHECK (status <> 'CHECKED_IN' OR checked_in_at IS NOT NULL)
 );
 
+ALTER TABLE checkin_logs
+    ADD CONSTRAINT fk_checkin_logs_guest FOREIGN KEY (guest_id) REFERENCES guest_list(id) ON DELETE SET NULL;
+
 ALTER TABLE offline_checkin_items
     ADD CONSTRAINT fk_offline_items_guest FOREIGN KEY (guest_id) REFERENCES guest_list(id) ON DELETE SET NULL;
 
@@ -532,6 +575,7 @@ CREATE UNIQUE INDEX uq_artist_bios_one_active_per_concert
     ON artist_bios(concert_id)
     WHERE is_active = TRUE;
 
+
 CREATE UNIQUE INDEX uq_payment_webhook_provider_event
     ON payment_webhook_events(provider, provider_event_id)
     WHERE provider_event_id IS NOT NULL;
@@ -541,6 +585,23 @@ CREATE UNIQUE INDEX uq_payment_webhook_provider_transaction
     WHERE provider_transaction_id IS NOT NULL;
 
 -- Query indexes.
+CREATE INDEX idx_checkin_gates_concert_active ON checkin_gates(concert_id, is_active);
+CREATE INDEX idx_checkin_gate_zones_zone_id ON checkin_gate_zones(seat_zone_id);
+CREATE INDEX idx_user_ticket_counters_ticket_type ON user_ticket_type_counters(ticket_type_id);
+CREATE INDEX idx_inventory_events_ticket_type_created_at ON ticket_inventory_events(ticket_type_id, created_at);
+CREATE INDEX idx_inventory_events_order_id ON ticket_inventory_events(order_id);
+CREATE INDEX idx_payment_webhook_order_received ON payment_webhook_events(order_id, received_at);
+CREATE INDEX idx_payment_webhook_processed_received ON payment_webhook_events(processed, received_at);
+CREATE INDEX idx_checkin_devices_staff_status ON checkin_devices(staff_id, status);
+CREATE INDEX idx_checkin_devices_concert_gate_status ON checkin_devices(concert_id, gate_id, status);
+CREATE INDEX idx_tickets_user_ticket_type_status ON tickets(user_id, ticket_type_id, status);
+CREATE INDEX idx_checkin_logs_gate_scanned_at ON checkin_logs(gate_id, scanned_at);
+CREATE INDEX idx_checkin_logs_device_scanned_at ON checkin_logs(device_id, scanned_at);
+CREATE INDEX idx_offline_batches_device_status ON offline_checkin_batches(device_id, status);
+CREATE INDEX idx_offline_batches_gate_status ON offline_checkin_batches(gate_id, status);
+CREATE INDEX idx_offline_items_gate_result ON offline_checkin_items(gate_id, sync_result);
+CREATE INDEX idx_notification_dlq_failed_at ON notification_dead_letters(failed_at);
+CREATE INDEX idx_notification_dlq_resolved_at ON notification_dead_letters(resolved_at);
 CREATE INDEX idx_users_status ON users(status);
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 CREATE INDEX idx_concerts_status_starts_at ON concerts(status, starts_at);
@@ -548,32 +609,21 @@ CREATE INDEX idx_concerts_venue_id ON concerts(venue_id);
 CREATE INDEX idx_seat_zones_concert_id ON seat_zones(concert_id);
 CREATE INDEX idx_ticket_types_concert_status ON ticket_types(concert_id, status);
 CREATE INDEX idx_ticket_types_sale_window ON ticket_types(sale_start_at, sale_end_at);
-CREATE INDEX idx_user_ticket_counters_ticket_type ON user_ticket_type_counters(ticket_type_id);
 CREATE INDEX idx_orders_user_status_created_at ON orders(user_id, status, created_at);
 CREATE INDEX idx_orders_concert_status ON orders(concert_id, status);
 CREATE INDEX idx_order_items_ticket_type_id ON order_items(ticket_type_id);
-CREATE INDEX idx_order_items_order_ticket_type ON order_items(order_id, ticket_type_id);
-CREATE INDEX idx_inventory_events_ticket_type_created_at ON ticket_inventory_events(ticket_type_id, created_at);
-CREATE INDEX idx_inventory_events_order_id ON ticket_inventory_events(order_id);
 CREATE INDEX idx_payments_order_status ON payments(order_id, status);
-CREATE INDEX idx_payment_webhook_order_received ON payment_webhook_events(order_id, received_at);
-CREATE INDEX idx_payment_webhook_processed_received ON payment_webhook_events(processed, received_at);
 CREATE INDEX idx_idempotency_keys_user_expires ON idempotency_keys(user_id, expires_at);
 CREATE INDEX idx_tickets_order_id ON tickets(order_id);
 CREATE INDEX idx_tickets_user_concert_status ON tickets(user_id, concert_id, status);
-CREATE INDEX idx_tickets_user_ticket_type_status ON tickets(user_id, ticket_type_id, status);
 CREATE INDEX idx_tickets_ticket_type_status ON tickets(ticket_type_id, status);
 CREATE INDEX idx_tickets_checked_in_at ON tickets(checked_in_at);
-CREATE INDEX idx_checkin_devices_staff_status ON checkin_devices(staff_id, status);
-CREATE INDEX idx_checkin_devices_concert_status ON checkin_devices(concert_id, status);
 CREATE INDEX idx_checkin_logs_ticket_scanned_at ON checkin_logs(ticket_id, scanned_at);
 CREATE INDEX idx_checkin_logs_concert_scanned_at ON checkin_logs(concert_id, scanned_at);
 CREATE INDEX idx_offline_batches_concert_status ON offline_checkin_batches(concert_id, status);
 CREATE INDEX idx_offline_items_batch_result ON offline_checkin_items(batch_id, sync_result);
 CREATE INDEX idx_notification_logs_status_scheduled_at ON notification_logs(status, scheduled_at);
 CREATE INDEX idx_notification_logs_user_created_at ON notification_logs(user_id, created_at);
-CREATE INDEX idx_notification_dlq_failed_at ON notification_dead_letters(failed_at);
-CREATE INDEX idx_notification_dlq_resolved_at ON notification_dead_letters(resolved_at);
 CREATE INDEX idx_artist_bio_jobs_concert_status ON artist_bio_jobs(concert_id, status);
 CREATE INDEX idx_guest_import_jobs_concert_status ON guest_import_jobs(concert_id, status);
 CREATE INDEX idx_guest_import_errors_job_id ON guest_import_errors(job_id);
@@ -588,11 +638,11 @@ CREATE TRIGGER trg_venues_set_updated_at BEFORE UPDATE ON venues FOR EACH ROW EX
 CREATE TRIGGER trg_concerts_set_updated_at BEFORE UPDATE ON concerts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_seat_zones_set_updated_at BEFORE UPDATE ON seat_zones FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_ticket_types_set_updated_at BEFORE UPDATE ON ticket_types FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_user_ticket_type_counters_set_updated_at BEFORE UPDATE ON user_ticket_type_counters FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_checkin_gates_set_updated_at BEFORE UPDATE ON checkin_gates FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_checkin_devices_set_updated_at BEFORE UPDATE ON checkin_devices FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_orders_set_updated_at BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_payments_set_updated_at BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_idempotency_keys_set_updated_at BEFORE UPDATE ON idempotency_keys FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_checkin_devices_set_updated_at BEFORE UPDATE ON checkin_devices FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_tickets_set_updated_at BEFORE UPDATE ON tickets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_offline_checkin_batches_set_updated_at BEFORE UPDATE ON offline_checkin_batches FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_notification_templates_set_updated_at BEFORE UPDATE ON notification_templates FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -601,62 +651,6 @@ CREATE TRIGGER trg_artist_bios_set_updated_at BEFORE UPDATE ON artist_bios FOR E
 CREATE TRIGGER trg_guest_import_jobs_set_updated_at BEFORE UPDATE ON guest_import_jobs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_guest_list_set_updated_at BEFORE UPDATE ON guest_list FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-
-
-COMMENT ON TYPE device_status IS 'Trạng thái thiết bị soát vé: ACTIVE dùng được, REVOKED bị thu hồi, LOST thất lạc.';
-COMMENT ON TYPE inventory_event_type IS 'Loại sự kiện làm thay đổi tồn kho vé: hold, release, thanh toán thành công, refund, admin chỉnh tay.';
-
-COMMENT ON TABLE user_ticket_type_counters IS 'Counter theo từng user và loại vé để enforce max_per_user dưới tải cao bằng transaction/row lock.';
-COMMENT ON COLUMN user_ticket_type_counters.user_id IS 'User bị áp giới hạn mua vé.';
-COMMENT ON COLUMN user_ticket_type_counters.ticket_type_id IS 'Loại vé đang được đếm giới hạn.';
-COMMENT ON COLUMN user_ticket_type_counters.held_quantity IS 'Số vé đang giữ tạm cho user ở loại vé này.';
-COMMENT ON COLUMN user_ticket_type_counters.paid_quantity IS 'Số vé đã thanh toán thành công của user ở loại vé này.';
-COMMENT ON COLUMN user_ticket_type_counters.updated_at IS 'Thời điểm cập nhật counter. Dùng để debug/rà soát race condition.';
-
-COMMENT ON TABLE ticket_inventory_events IS 'Nhật ký thay đổi tồn kho vé, phục vụ audit oversell, hold/release và đối soát refund.';
-COMMENT ON COLUMN ticket_inventory_events.ticket_type_id IS 'Loại vé bị thay đổi tồn kho.';
-COMMENT ON COLUMN ticket_inventory_events.order_id IS 'Đơn hàng liên quan đến sự kiện tồn kho nếu có.';
-COMMENT ON COLUMN ticket_inventory_events.event_type IS 'Loại nghiệp vụ làm thay đổi tồn kho.';
-COMMENT ON COLUMN ticket_inventory_events.quantity IS 'Số lượng vé bị tác động.';
-COMMENT ON COLUMN ticket_inventory_events.before_available IS 'Số vé còn trước khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.after_available IS 'Số vé còn sau khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.before_held IS 'Số vé đang giữ trước khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.after_held IS 'Số vé đang giữ sau khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.before_sold IS 'Số vé đã bán trước khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.after_sold IS 'Số vé đã bán sau khi cập nhật.';
-COMMENT ON COLUMN ticket_inventory_events.metadata IS 'Thông tin phụ trợ như request_id, worker_id, lý do admin chỉnh tồn kho.';
-COMMENT ON COLUMN ticket_inventory_events.created_at IS 'Thời điểm ghi nhận sự kiện tồn kho.';
-
-COMMENT ON TABLE payment_webhook_events IS 'Lưu raw webhook/IPN từ VNPAY/MoMo để chống replay, verify chữ ký, debug và xử lý idempotent.';
-COMMENT ON COLUMN payment_webhook_events.provider IS 'Cổng thanh toán gửi webhook.';
-COMMENT ON COLUMN payment_webhook_events.provider_event_id IS 'ID sự kiện từ provider nếu có. Dùng unique để chống xử lý lại.';
-COMMENT ON COLUMN payment_webhook_events.provider_transaction_id IS 'Mã giao dịch provider. Dùng đối soát và chống webhook trùng.';
-COMMENT ON COLUMN payment_webhook_events.order_id IS 'Đơn hàng liên quan nếu ánh xạ được.';
-COMMENT ON COLUMN payment_webhook_events.payment_id IS 'Bản ghi payment liên quan nếu đã tạo.';
-COMMENT ON COLUMN payment_webhook_events.raw_payload IS 'Payload gốc để verify, audit và debug.';
-COMMENT ON COLUMN payment_webhook_events.signature_valid IS 'Kết quả kiểm tra chữ ký webhook.';
-COMMENT ON COLUMN payment_webhook_events.processed IS 'Đánh dấu webhook đã được xử lý nghiệp vụ.';
-COMMENT ON COLUMN payment_webhook_events.processed_at IS 'Thời điểm xử lý webhook thành công.';
-COMMENT ON COLUMN payment_webhook_events.error_message IS 'Lỗi khi verify hoặc xử lý webhook.';
-COMMENT ON COLUMN payment_webhook_events.received_at IS 'Thời điểm hệ thống nhận webhook.';
-
-COMMENT ON TABLE checkin_devices IS 'Thiết bị mobile được cấp quyền check-in cho concert, hỗ trợ revoke, public key và đồng bộ offline.';
-COMMENT ON COLUMN checkin_devices.device_code IS 'Mã định danh thiết bị duy nhất.';
-COMMENT ON COLUMN checkin_devices.staff_id IS 'Nhân sự đang gắn với thiết bị.';
-COMMENT ON COLUMN checkin_devices.concert_id IS 'Concert thiết bị được phép soát vé.';
-COMMENT ON COLUMN checkin_devices.public_key IS 'Public key của thiết bị để xác thực batch offline nếu triển khai ký dữ liệu.';
-COMMENT ON COLUMN checkin_devices.status IS 'Trạng thái thiết bị: ACTIVE/REVOKED/LOST.';
-COMMENT ON COLUMN checkin_devices.last_sync_at IS 'Lần đồng bộ cuối cùng.';
-COMMENT ON COLUMN checkin_devices.revoked_at IS 'Thời điểm thu hồi thiết bị.';
-COMMENT ON COLUMN checkin_devices.created_at IS 'Thời điểm đăng ký thiết bị.';
-COMMENT ON COLUMN checkin_devices.updated_at IS 'Thời điểm cập nhật thiết bị.';
-
-COMMENT ON TABLE notification_dead_letters IS 'Lưu notification thất bại vĩnh viễn sau retry để admin xử lý lại hoặc điều tra.';
-COMMENT ON COLUMN notification_dead_letters.notification_log_id IS 'Notification log gốc nếu có.';
-COMMENT ON COLUMN notification_dead_letters.payload IS 'Payload gửi thông báo bị lỗi.';
-COMMENT ON COLUMN notification_dead_letters.error_message IS 'Thông báo lỗi cuối cùng sau khi retry thất bại.';
-COMMENT ON COLUMN notification_dead_letters.failed_at IS 'Thời điểm chuyển vào DLQ.';
-COMMENT ON COLUMN notification_dead_letters.resolved_at IS 'Thời điểm admin/worker xử lý xong lỗi DLQ.';
 
 COMMENT ON TABLE users IS 'Lưu tài khoản người dùng của TicketBox, bao gồm khán giả, ban tổ chức, nhân sự soát vé và admin.';
 COMMENT ON COLUMN users.id IS 'Định danh duy nhất của user. Dùng làm khóa chính và liên kết sang đơn hàng, vai trò, audit, check-in.';
@@ -918,5 +912,28 @@ COMMENT ON COLUMN audit_logs.after_data IS 'Dữ liệu sau thay đổi. Audit d
 COMMENT ON COLUMN audit_logs.ip_address IS 'IP request. Điều tra bảo mật.';
 COMMENT ON COLUMN audit_logs.user_agent IS 'User agent. Điều tra thiết bị/client.';
 COMMENT ON COLUMN audit_logs.created_at IS 'Thời điểm ghi log. Dòng thời gian audit.';
+
+
+COMMENT ON TABLE checkin_gates IS 'Lưu cổng soát vé thực tế của từng concert, ví dụ SVIP Gate A, GA Gate B.';
+COMMENT ON COLUMN checkin_gates.id IS 'Định danh cổng soát vé. Dùng để gán thiết bị và kiểm tra đúng khu.';
+COMMENT ON COLUMN checkin_gates.concert_id IS 'Concert sở hữu cổng. Không cho dùng cổng của concert khác.';
+COMMENT ON COLUMN checkin_gates.gate_code IS 'Mã cổng. Dùng trong mobile app và vận hành hiện trường.';
+COMMENT ON COLUMN checkin_gates.gate_name IS 'Tên cổng. Hiển thị cho nhân sự soát vé.';
+COMMENT ON COLUMN checkin_gates.is_active IS 'Cho phép bật/tắt cổng khi vận hành.';
+COMMENT ON TABLE checkin_gate_zones IS 'Bảng phân quyền khu vực cho từng cổng; vé thuộc khu nào chỉ được vào cổng có quyền khu đó.';
+COMMENT ON COLUMN checkin_gate_zones.gate_id IS 'Cổng được phép nhận vé của khu.';
+COMMENT ON COLUMN checkin_gate_zones.seat_zone_id IS 'Khu ghế/chỗ đứng được phép qua cổng.';
+COMMENT ON TABLE user_ticket_type_counters IS 'Counter theo user và ticket_type để enforce giới hạn vé mỗi tài khoản dưới tải cao.';
+COMMENT ON TABLE ticket_inventory_events IS 'Audit mọi thay đổi tồn kho vé: hold, release, payment confirmed, refund, admin adjust.';
+COMMENT ON TABLE payment_webhook_events IS 'Lưu webhook/IPN từ VNPAY/MoMo để chống replay và debug thanh toán.';
+COMMENT ON TABLE checkin_devices IS 'Lưu thiết bị soát vé, nhân sự, concert và cổng được gán cho offline/online check-in.';
+COMMENT ON COLUMN checkin_devices.gate_id IS 'Cổng mặc định của thiết bị. Dùng để preload allowed_seat_zone_ids và kiểm tra WRONG_GATE.';
+COMMENT ON TABLE notification_dead_letters IS 'Lưu notification thất bại sau retry tối đa để xử lý lại hoặc audit.';
+COMMENT ON COLUMN checkin_logs.gate_id IS 'Cổng nơi quét vé. Kết hợp checkin_gate_zones để xác định đúng/sai khu.';
+COMMENT ON COLUMN checkin_logs.seat_zone_id IS 'Khu của vé/guest tại thời điểm quét. Dùng audit wrong gate.';
+COMMENT ON COLUMN checkin_logs.device_id IS 'Thiết bị quét dạng FK tới checkin_devices.';
+COMMENT ON COLUMN offline_checkin_batches.gate_id IS 'Cổng của batch offline. Server dùng để kiểm tra lại khu được phép khi sync.';
+COMMENT ON COLUMN offline_checkin_items.gate_id IS 'Cổng nơi item được quét offline. Ghi nhận để phát hiện WRONG_GATE khi sync.';
+COMMENT ON COLUMN offline_checkin_items.seat_zone_id IS 'Khu của vé/guest đã resolve hoặc preload local. Dùng kiểm tra gate-zone offline.';
 
 COMMIT;

@@ -2,53 +2,63 @@
 
 ## 1. Mô tả
 
-Đặc tả phát hành vé điện tử sau thanh toán thành công, sinh QR token/signature và kiểm tra vé.
+Đặc tả phát hành e-ticket QR sau khi thanh toán thành công và dữ liệu cần có trong QR để check-in online/offline.
+
+QR phải đủ dữ liệu để mobile app xác thực cục bộ khi offline, bao gồm concert và khu vực vé để kiểm tra đúng cổng/khu.
 
 ## 2. Actor / Thành phần tham gia
 
 - Khán giả
 - Ticketing Module
+- Payment Module
 - Notification Module
-- Check-in Module
-- Mobile App
+- Mobile Check-in App
+- PostgreSQL
 
 ## 3. Bảng dữ liệu liên quan
 
 - `tickets`
-- `orders`
-- `order_items`
 - `ticket_types`
 - `seat_zones`
-- `checkin_logs`
+- `orders`
+- `payments`
+- `notification_logs`
 
 ## 4. Luồng chính
 
-1. Payment success event được Ticketing Module xử lý.
-2. Backend tạo đúng số lượng `tickets` theo từng `order_items.quantity`.
-3. Mỗi ticket có `qr_token` unique và `qr_signature` để chống giả mạo.
-4. Ticket gắn `user_id`, `concert_id`, `ticket_type_id`, `seat_zone_id`.
-5. Ticket trạng thái ban đầu `ISSUED`.
-6. Notification Module gửi email/app push chứa QR hoặc link xem vé.
-7. Check-in Module verify QR token/signature khi quét.
+1. Payment webhook hợp lệ cập nhật `payments.status = SUCCEEDED`.
+2. Order chuyển sang `PAID`.
+3. Ticketing Module phát hành mỗi vé thành một bản ghi `tickets`.
+4. Mỗi ticket có `qr_token` unique và `qr_signature`.
+5. QR payload hoặc dữ liệu resolve cục bộ phải chứa tối thiểu:
+   - `ticket_id`
+   - `concert_id`
+   - `ticket_type_id`
+   - `seat_zone_id`
+   - `issued_at`
+   - `qr_token`
+6. Notification Module gửi email/app notification chứa e-ticket.
+7. Mobile app khi offline dùng QR payload/signature và preload data để kiểm tra đúng concert, đúng gate-zone và chống quét trùng local.
 
 ## 5. Kịch bản lỗi
 
-- Sinh QR trùng token: retry token mới, không commit nếu vẫn lỗi.
-- Payment event trùng: kiểm tra order/tickets đã phát hành, không tạo thêm vé.
-- Ticket bị refund/cancelled: QR không còn hợp lệ.
-- QR signature sai: trả invalid ticket và ghi log.
+- Order chưa `PAID`: không phát hành ticket.
+- QR token trùng: database unique constraint chặn.
+- Không gửi được email: ticket vẫn nằm trong tài khoản, notification retry/DLQ xử lý sau.
+- QR bị chỉnh sửa: verify signature thất bại, check-in trả `INVALID_TICKET`.
 
 ## 6. Ràng buộc nghiệp vụ và kỹ thuật
 
-- `tickets.qr_token` phải unique.
-- Ticket chỉ phát hành cho order đã PAID.
-- QR token không chứa dữ liệu nhạy cảm dạng plain text nếu không cần.
-- Signature phải verify được offline nếu specs offline yêu cầu.
-- Một ticket chỉ check-in thành công một lần.
+- `qr_token` phải unique.
+- `qr_signature` phải được tạo từ payload đã chuẩn hóa.
+- Payload phải bao gồm `seat_zone_id` hoặc app phải resolve được `seat_zone_id` từ local preload.
+- Không lưu dữ liệu nhạy cảm không cần thiết trong QR.
+- Ticket `CANCELLED`/`REFUNDED` không được check-in.
 
 ## 7. Tiêu chí chấp nhận
 
-- Payment success phát hành đúng số lượng vé.
-- Mỗi vé có QR riêng.
-- QR giả không qua verify.
-- Ticket cancelled/refunded không check-in được.
+- Payment success tạo đúng số lượng ticket.
+- Mỗi ticket có QR riêng.
+- QR verify được khi offline.
+- QR chứa hoặc resolve được `seat_zone_id` để chặn sai cổng/khu.
+- QR bị sửa hoặc dùng lại bị từ chối.
