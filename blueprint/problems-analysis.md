@@ -9,3 +9,4 @@
 | Tranh chấp đặt vé giữa nhiều người cùng lúc | Pessimistic Locking (SELECT ... FOR UPDATE) trong ACID Transaction |
 | Nhành phần cung cấp dịch vụ Email/SMS bên thứ ba gặp vấn đề | Asynchronous Event-Driven + Retry Pattern + Dead Letter Queue (DLQ) |
 | Mở rộng thông báo bằng Zalo trong tương lai | Strategy Pattern dựa trên Kiến trúc Hướng sự kiện |
+
