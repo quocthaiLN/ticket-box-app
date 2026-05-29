@@ -1,3 +1,18 @@
+# Bảng tóm tắt vấn đề và cách giải quyết
+| Tình huống / Vấn đề | Kỹ thuật giải quyết cốt lõi |
+|---|---|
+| 80.000 truy cập xem thông tin concert lúc mở đặt vé | Bóc tách API (Metadata vs. Inventory) + Multi-level Caching |
+| Database hoặc Cache gặp sự cố (Tải quá cao) | Graceful Degradation + Circuit Breaker |
+| Tải trọng đột biến (80.000 truy cập/5 phút đầu), spam request và scalper bot lúc mở bán | Distributed Rate Limiting với thuật toán Token Bucket |
+| Khán giả Retry nhiều lần thanh toán do mạng yếu, phòng chống trùng lặp đơn hàng và trừ tiền hai lần | Idempotency Mechanism sử dụng Idempotency Key |
+| Cổng thanh toán VNPAY/MoMo sự cố | Circuit Breaker kết hợp Bulkhead Isolation |
+| Tranh chấp đặt vé giữa nhiều người cùng lúc | Pessimistic Locking (SELECT ... FOR UPDATE) trong ACID Transaction (Tui tìm hiểu có cách kết hợp Opstimistic + Pessimistic Lock để tối ưu hiệu năng, chắc lúc code sẽ có xíu thay đổi chỗ này)|
+| Nhành phần cung cấp dịch vụ Email/SMS bên thứ ba gặp vấn đề | Asynchronous Event-Driven + Retry Pattern + Dead Letter Queue (DLQ) |
+| Mở rộng thông báo bằng Zalo trong tương lai | Strategy Pattern dựa trên Kiến trúc Hướng sự kiện |
+
+---
+
+# Triển khai chi tiết
 ## USECASE: Xem thông tin concert 
 ### 80.000 truy cập xem thông tin concert lúc mở đặt vé
 
@@ -210,58 +225,65 @@ Mỗi khóa `idempotency:tickets_hold:{key}` được lưu trữ dưới dạng 
 
 ---
 
-## Tranh chấp đặt vé → dùng Pesstimistic Lock đảm bảo 100% không có lỗi khi tranh chấp giữa nhiều người.
+## USECASE: Đặt vé & Thanh toán — Cơ chế Giải quyết Tranh chấp Kho vé (Race Condition)
+
 ### 1. Đánh giá và Lựa chọn giải pháp
 
-- **Giải pháp:** Triển khai cơ chế **Pessimistic Locking - `SELECT ... FOR UPDATE`** trực tiếp tại tầng cơ sở dữ liệu quan hệ **PostgreSQL**, kết hợp chặt chẽ với việc bọc toàn bộ chuỗi logic kiểm tra - trừ kho trong một **Database Transaction (Giao dịch ACID)** ở ExpressJS. 
+* **Giải pháp Kiến trúc đề xuất:** Triển khai cơ chế **Khóa bi quan trong Transaction ngắn hạn (Short-lived Transaction)** kết hợp **Quản lý trạng thái phân tán (Distributed State) trên Redis Cluster**. 
 
-  Khi Khán giả bấm nút đặt vé, hệ thống sẽ chủ động khóa cứng dòng dữ liệu cấu hình kho vé của phân khu đó lại ngay từ câu lệnh đọc đầu tiên. Mọi request đồng thời khác cố tình truy cập vào cùng phân khu vé đó sẽ bị ép buộc phải xếp hàng chờ (Block) ở tầng cơ sở dữ liệu cho đến khi transaction của request đầu tiên hoàn tất lệnh `COMMIT` hoặc `ROLLBACK`.
+Hệ thống phân rã nghiệp vụ đặt vé làm hai giai đoạn độc lập: Khóa bi quan PostgreSQL chỉ chịu trách nhiệm bảo vệ thao tác kiểm tra và trừ kho vé tổng diễn ra trong tích tắc (tính bằng mili-giây), sau đó giải phóng khóa lập tức; việc duy trì quyền giữ chỗ tạm thời trong $10$ phút của Khán giả sẽ được ủy thác hoàn toàn cho bộ nhớ đệm Redis gánh vác.
 
+* **Phân tích Trade-off (Đánh đổi kỹ thuật):**
+    * *Ưu điểm (Pros):* Bảo toàn tính toàn vẹn dữ liệu tuyệt đối (chuẩn ACID) của RDBMS, triệt tiêu hoàn toàn lỗi bán lố vé. Thời gian giữ khóa bi quan cực ngắn ($< 10\text{ms}$), giải phóng tài nguyên Connection Pool ngay lập tức, ngăn ngừa triệt để hiện tượng nghẽn mạch request dưới tải cao.
+    * *Nhược điểm (Cons):* Phát sinh rủi ro **Vé ảo (Ghost Tickets)** khi Khán giả đã giữ chỗ thành công trong $10$ phút nhưng sau đó không thanh toán hoặc chủ động hủy, khiến một lượng vé bị giam giữ tạm thời, tước đi cơ hội của người mua khác.
+    * *Khắc phục:* Triển khai tiến trình xử lý ngầm bất đồng bộ (Background Worker / BullMQ Delayed Job) để tự động thu hồi và hoàn trả vé về kho tổng khi phát hiện đơn hàng quá hạn.
+
+---
 
 ### 2. Cơ chế triển khai chi tiết (Implementation Details cho giải pháp được chọn)
 
 #### Luồng xử lý:
 
-- **Bước 1 (Khởi tạo Transaction độc lập):**
-  Khi request đặt vé hợp lệ đi qua lớp màng lọc bảo vệ tầng ngoài (Rate Limiter, Idempotency), Ticket Controller tiếp nhận và mở một phiên giao dịch cơ sở dữ liệu mới (`BEGIN TRANSACTION`) thông qua Connection Pool của PostgreSQL nhằm cô lập phạm vi biến động dữ liệu.
-
-- **Bước 2 (Thực thi truy vấn khóa bi quan - `SELECT ... FOR UPDATE`):**
-  Hệ thống gửi câu lệnh truy vấn đọc số lượng vé tồn kho của phân khu cụ thể (ví dụ: khu SVIP của Concert Anh Trai Say Hi) sang PostgreSQL kèm theo từ khóa chỉ thị khóa cứng:
-  ```sql
-  SELECT id, total_slots, sold_slots 
-  FROM concert_zones 
-  WHERE concert_id = 1 AND zone_name = 'SVIP' 
-  FOR UPDATE;
-  ```
-
-- **Bước 3 (Kiểm tra điều kiện kho vé tại tầng Ứng dụng):**
-  ExpressJS nhận được dữ liệu tồn kho một cách an toàn mà không sợ bị bất kỳ tiến trình song song nào can thiệp thay đổi dữ liệu. Hệ thống thực hiện phép tính toán kiểm tra logic nghiệp vụ:
-  * *Trường hợp A (Hết vé):* Nếu số vé đã bán đạt tối đa (`sold_slots >= total_slots`), hệ thống thực hiện lệnh `ROLLBACK` để giải phóng khóa lập tức và trả về lỗi HTTP 400: *"Loại vé này đã được bán hết"*.
-  * *Trường hợp B (Còn vé):* Hệ thống tiến hành tăng biến đếm số lượng vé đã bán lên dựa trên số lượng khách hàng yêu cầu (`sold_slots = sold_slots + requested_quantity`).
-
-- **Bước 4 (Cập nhật kho vé và giải phóng khóa - `COMMIT`):**
-  Hệ thống gửi lệnh `UPDATE` cập nhật số dư mới xuống cơ sở dữ liệu:
-  ```sql
-  UPDATE concert_zones 
-  SET sold_slots = new_sold_slots 
-  WHERE concert_id = 1 AND zone_name = 'SVIP';
-  ```
-  Sau đó, ExpressJS phát lệnh kết thúc giao dịch: `COMMIT;`. Ngay khi lệnh `COMMIT` thành công, PostgreSQL sẽ thực thi ghi dữ liệu xuống đĩa cứng bền vững và **tự động giải phóng chiếc Khóa độc quyền**. Lúc này, request tiếp theo đang nằm chờ ở hàng đợi của Bước 2 sẽ lập tức thức dậy, chiếm lấy khóa mới và lặp lại chu kỳ xử lý.
-
-- **Bước 5 (Kích hoạt luồng giữ vé tạm thời tầng ngoài):**
-  Sau khi kho vé tổng của Database PostgreSQL đã trừ thành công một cách an toàn tuyệt đối, hệ thống mới tiến hành tạo đơn hàng, nạp trạng thái vé "Đang giữ trong 10 phút" lên bộ nhớ đệm Redis và điều hướng người dùng sang cổng thanh toán VNPAY/MoMo để thực hiện dòng tiền.
+* **Bước 1 (Khởi tạo Transaction ngắn hạn):**
+    Khi request đặt vé vượt qua lớp màng lọc bảo vệ tầng ngoài (Rate Limiter, Idempotency), Ticket Service tiếp nhận và mở một phiên giao dịch cơ sở dữ liệu mới (`BEGIN TRANSACTION`) thông qua Connection Pool của PostgreSQL.
+* **Bước 2 (Thực thi truy vấn khóa bi quan cấp dòng):**
+    Hệ thống gửi câu lệnh truy vấn đọc số lượng vé tồn kho của phân khu cụ thể kèm theo chỉ thị khóa cứng dòng:
+    ```sql
+    SELECT id, total_quantity, available_quantity 
+    FROM ticket_types 
+    WHERE concert_id = 1 AND name = 'SVIP' 
+    FOR UPDATE;
+    ```
+    Lệnh `SELECT` này mang tính nguyên tử.
+* **Bước 3 (Kiểm tra điều kiện kho vé tại tầng Ứng dụng):**
+    ExpressJS nhận được dữ liệu tồn kho an toàn mà không sợ bị bất kỳ tiến trình song song nào can thiệp thay đổi dữ liệu. Hệ thống thực hiện phép tính toán kiểm tra logic nghiệp vụ:
+    * *Trường hợp A (Hết vé):* Nếu số lượng vé khả dụng nhỏ hơn số lượng yêu cầu (`available_quantity < requested_quantity`), hệ thống thực hiện lệnh `ROLLBACK` để giải phóng khóa lập tức và trả về lỗi HTTP `400 Bad Request`: *"Loại vé này đã được bán hết hoặc không đủ số lượng yêu cầu"*.
+    * *Trường hợp B (Còn vé):* Hệ thống tiến hành trừ trực tiếp số lượng vé trong kho tổng dựa trên số lượng khách hàng đặt mua (`available_quantity = available_quantity - requested_quantity`).
+* **Bước 4 (Cập nhật kho vé tổng và Giải phóng khóa - `COMMIT`):**
+    Hệ thống gửi lệnh `UPDATE` cập nhật số dư mới xuống cơ sở dữ liệu:
+    ```sql
+    UPDATE ticket_types 
+    SET available_quantity = :new_available_quantity 
+    WHERE id = :ticket_type_id;
+    ```
+    Tiếp theo, khởi tạo một bản ghi Đơn hàng mới vào bảng `orders` với trạng thái ban đầu là `PENDING` và cấu hình mốc thời gian hết hạn cụ thể (`held_until = NOW() + INTERVAL '10 minutes'`). 
+    
+    Sau đó, ExpressJS phát lệnh kết thúc giao dịch: `COMMIT;`. Ngay khi lệnh `COMMIT` thành công, PostgreSQL thực thi ghi dữ liệu bền vững xuống đĩa, **tự động giải phóng chiếc Khóa độc quyền cấp dòng**. Request tiếp theo đang nằm chờ ở hàng đợi của Bước 2 sẽ lập tức thức dậy, chiếm lấy khóa mới và tái lập chu kỳ xử lý an toàn. Toàn bộ chuỗi thao tác từ Bước 1 đến Bước 4 kết thúc trong vòng dưới $10\text{ms}$.
+* **Bước 5 (Ủy thác trạng thái giữ chỗ sang Redis và Điều hướng thanh toán):**
+    Sau khi Transaction cơ sở dữ liệu đã đóng, hệ thống nạp thông tin đơn hàng tạm thời lên **Redis Cluster** dưới dạng cấu trúc dữ liệu Redis Hash (`order:hold:{order_id}`) thiết lập thời gian sống (TTL) nghiêm ngặt là $10$ phút để thực thi việc giữ chỗ tầng ứng dụng. Sau đó, `Payment Module` tiếp quản luồng xử lý để kết nối mạng (HTTP Request) sang API của đối tác VNPAY/MoMo xin cấu hình URL giao dịch và điều hướng Khán giả đi thanh toán dòng tiền.
 
 #### Thành phần tham gia:
 
-- **Ticket Booking Controller (ExpressJS):** Nơi tiếp nhận điều phối luồng xử lý, chịu trách nhiệm quản lý nghiêm ngặt vòng đời của một Database Transaction (Khai báo tường minh các khối `try-catch`, đảm cảo luôn gọi `ROLLBACK` nếu có bất kỳ lỗi runtime nào xảy ra để tránh treo khóa vĩnh viễn ở Postgres).
-- **PostgreSQL Lock Manager (Bộ quản lý khóa nội bản của DB):** Thành phần cốt lõi chịu trách nhiệm cấp phát Khóa độc quyền trên các hàng dữ liệu (Row-level Locks), quản lý hàng đợi xếp hàng của các tiến trình đồng thời và tự động phát hiện, triệt tiêu lỗi Deadlock.
-- **Concert Zones Database Table (PostgreSQL Entity):** Bảng dữ liệu chứa cấu hình số ghế của từng phân khu, được thiết kế lập chỉ mục (`INDEX`) chặt chẽ trên các cột truy vấn (`concert_id`, `zone_name`) để đảm bảo lệnh `FOR UPDATE` khóa chính xác phạm vi dòng (Row Lock), tuyệt đối không bị nâng cấp nhầm lên khóa toàn bảng (Table Lock).
+* **Ticket Service Controller (ExpressJS):** Nơi tiếp nhận điều phối luồng xử lý, chịu trách nhiệm quản lý nghiêm ngặt vòng đời của một Short-lived Transaction (Đảm bảo bọc trong cấu trúc `try-catch-finally` tường minh, bắt buộc gọi `ROLLBACK` nếu xảy ra lỗi runtime để tránh hiện tượng treo khóa (Lock Hanging) vĩnh viễn ở Postgres).
+* **PostgreSQL Lock Manager (Bộ quản lý khóa nội bản của DB):** Thành phần cốt lõi chịu trách nhiệm cấp phát Khóa độc quyền cấp dòng (Row-level Locks), quản lý hàng đợi xếp hàng tuần tự của các tiến trình đồng thời và tự động triệt tiêu rủi ro nghẽn mạch phần cứng.
+* **Ticket Types Database Table (PostgreSQL Entity):** Bảng dữ liệu chứa cấu hình số ghế của từng phân khu, bắt buộc được thiết kế lập chỉ mục (`INDEX`) chặt chẽ trên các cột truy vấn (`concert_id`, `id`) để đảm bảo lệnh `FOR UPDATE` khóa chính xác phạm vi dòng, tuyệt đối không bị nâng cấp nhầm lên khóa toàn bảng (Table Lock).
+* **Redis Cluster:** Hạ tầng lưu trữ In-memory, đóng vai trò giữ trạng thái đơn hàng tạm thời (`PENDING`) trong khung thời gian $10$ phút của người dùng, cô lập hoàn toàn thời gian chờ thanh toán ra khỏi Database chính.
 
 #### Công nghệ/Dịch Vụ bên thứ 3 được sử dụng hoặc Thư viện của ExpressJS:
 
-- **pg (node-postgres / v8.x):** Thư viện điều khiển kết nối cơ sở dữ liệu PostgreSQL gốc cho nền tảng Node.js, cung cấp khả năng can thiệp sâu để quản lý Client Transaction thủ công một cách chuẩn xác.
-- **TypeORM / Sequelize (ORM Layer):** Sử dụng thuộc tính bọc câu lệnh chuyên dụng để kích hoạt Pessimistic Lock, ví dụ trong TypeORM: `lock: { mode: 'pessimistic_write' }` (Tự động biên dịch sang cú pháp `SELECT ... FOR UPDATE` khi thực thi).
-- **Database Connection Pool Configuration:** Thuộc tính cấu hình `max` của Pool kết nối cơ sở dữ liệu cần được tính toán đồng bộ với thời gian giữ khóa tối đa để tránh hiện tượng cạn kiệt kết nối máy chủ dưới tải cao.
+* **pg (node-postgres / v8.x):** Thư viện điều khiển kết nối cơ sở dữ liệu PostgreSQL gốc cho nền tảng Node.js, cung cấp khả năng can thiệp sâu để quản lý Client Transaction thủ công một cách chuẩn xác.
+* **TypeORM / Sequelize (ORM Layer):** Sử dụng thuộc tính bọc câu lệnh chuyên dụng để kích hoạt Pessimistic Lock, ví dụ trong TypeORM: `lock: { mode: 'pessimistic_write' }` (Tự động biên dịch sang cú pháp `SELECT ... FOR UPDATE` khi thực thi truy vấn).
+* **Database Connection Pool Configuration:** Thuộc tính cấu hình `max` của Pool kết nối cơ sở dữ liệu cần được tính toán đồng bộ với throughput tối đa của hệ thống để đảm bảo việc mượn/trả connection diễn ra liên tục, đáp ứng tốt cho các Short-lived Transactions.
 
 
 ---
