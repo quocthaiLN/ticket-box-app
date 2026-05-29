@@ -1,4 +1,5 @@
 # Bảng tóm tắt vấn đề và cách giải quyết
+### Bảng tóm tắt vấn đề và cách giải quyết
 | Tình huống / Vấn đề | Kỹ thuật giải quyết cốt lõi |
 |---|---|
 | 80.000 truy cập xem thông tin concert lúc mở đặt vé | Bóc tách API (Metadata vs. Inventory) + Multi-level Caching |
@@ -345,3 +346,7 @@ Chỗ này khó hiểu quá chắc để tui tìm hiểu thêm sau =))
 
 ### Mở rộng thông báo bằng Zalo trong tương lai
 - Chỉ cần dùng Design Pattern Strategy -> thuộc về phần implement nhiều hơn
+| Tranh chấp đặt vé giữa nhiều người cùng lúc | Pessimistic Locking (SELECT ... FOR UPDATE) trong ACID Transaction |
+| Nhành phần cung cấp dịch vụ Email/SMS bên thứ ba gặp vấn đề | Asynchronous Event-Driven + Retry Pattern + Dead Letter Queue (DLQ) |
+| Mở rộng thông báo bằng Zalo trong tương lai | Strategy Pattern dựa trên Kiến trúc Hướng sự kiện |
+
