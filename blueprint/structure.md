@@ -1,4 +1,4 @@
-ticketbox/
+ticket-box-app/
 │
 ├── apps/
 │   ├── api-server/                  # Tiến trình chính: HTTP server + API Gateway
