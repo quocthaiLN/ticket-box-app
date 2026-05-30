@@ -1,6 +1,5 @@
 # AI Artist Bio
 
-
 ### Endpoint
 #### `GET /v1/concerts/{concert_id}/bios`
 
