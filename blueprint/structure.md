@@ -1,3 +1,4 @@
+```
 ticket-box-app/
 │
 ├── apps/
@@ -123,3 +124,4 @@ ticket-box-app/
 │
 ├── package.json                     # Root workspace (pnpm/npm workspaces)
 └── turbo.json                       # Turborepo build pipeline (tùy chọn)
+```
