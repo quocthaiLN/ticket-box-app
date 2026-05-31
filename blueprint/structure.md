@@ -260,3 +260,17 @@ ticket-box-app/
 - Không thêm notification template/DLQ table/module riêng; MVP dùng bảng `notifications`.
 - Không thêm `device_status`; check-in device hợp lệ khi record tồn tại và khớp staff/concert/gate.
 - Không tạo microservice độc lập cho từng module; tách package/process chỉ khi có lý do hạ tầng rõ ràng.
+
+## 7. Lưu ý
+- Các thành phần chính trong design.md và cách tổ chức package/module trong structure.md không mâu thuẫn với nhau
+- 4 module trong design.md ở mức kiến trúc logic cấp cao
+  - Catalog
+  - Ticketing & Order
+  - Payment
+  - Checkin
+- Còn structure.md là tổ chức code triển khai specs/api
+  - inventory, orders, tickets thực chất vẫn nằm trong phạm vi lớn của Ticketing & Order Module.
+  - guest-list nằm gần Check-in và worker CSV, vì phục vụ guest VIP/check-in.
+  - artist-bio là phần API/admin để tạo job, còn xử lý nặng nằm ở AI Worker.
+  - notifications là module phụ trợ nhận event, còn gửi thật chạy qua Notification Worker.
+- Tương tự với Background Workers
