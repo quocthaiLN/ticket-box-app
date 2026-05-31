@@ -225,64 +225,245 @@ Mỗi khóa `idempotency:tickets_hold:{key}` được lưu trữ dưới dạng 
 ---
 
 ## USECASE: Đặt vé & Thanh toán — Cơ chế Giải quyết Tranh chấp Kho vé (Race Condition)
-
 ### 1. Đánh giá và Lựa chọn giải pháp
 
-* **Giải pháp Kiến trúc đề xuất:** Triển khai cơ chế **Khóa bi quan trong Transaction ngắn hạn (Short-lived Transaction)** kết hợp **Quản lý trạng thái phân tán (Distributed State) trên Redis Cluster**. 
+#### Giải pháp Kiến trúc tối ưu
 
-Hệ thống phân rã nghiệp vụ đặt vé làm hai giai đoạn độc lập: Khóa bi quan PostgreSQL chỉ chịu trách nhiệm bảo vệ thao tác kiểm tra và trừ kho vé tổng diễn ra trong tích tắc (tính bằng mili-giây), sau đó giải phóng khóa lập tức; việc duy trì quyền giữ chỗ tạm thời trong $10$ phút của Khán giả sẽ được ủy thác hoàn toàn cho bộ nhớ đệm Redis gánh vác.
+Triển khai cơ chế **Khóa bi quan kép (Dual Pessimistic Locking)** trong một **Giao dịch ngắn hạn (Short-lived Transaction)** trên RDBMS (PostgreSQL), kết hợp ủy thác quản lý trạng thái phân tán (Distributed State) sang Redis Cluster và kiểm soát vòng đời đơn hàng bằng Background Worker.
 
-* **Phân tích Trade-off (Đánh đổi kỹ thuật):**
-    * *Ưu điểm (Pros):* Bảo toàn tính toàn vẹn dữ liệu tuyệt đối (chuẩn ACID) của RDBMS, triệt tiêu hoàn toàn lỗi bán lố vé. Thời gian giữ khóa bi quan cực ngắn ($< 10\text{ms}$), giải phóng tài nguyên Connection Pool ngay lập tức, ngăn ngừa triệt để hiện tượng nghẽn mạch request dưới tải cao.
-    * *Nhược điểm (Cons):* Phát sinh rủi ro **Vé ảo (Ghost Tickets)** khi Khán giả đã giữ chỗ thành công trong $10$ phút nhưng sau đó không thanh toán hoặc chủ động hủy, khiến một lượng vé bị giam giữ tạm thời, tước đi cơ hội của người mua khác.
-    * *Khắc phục:* Triển khai tiến trình xử lý ngầm bất đồng bộ (Background Worker / BullMQ Delayed Job) để tự động thu hồi và hoàn trả vé về kho tổng khi phát hiện đơn hàng quá hạn.
+**Bản chất cải tiến:**
+
+Để triệt tiêu hoàn toàn hiện tượng Race Condition dưới tải cao, hệ thống không chỉ khóa kho vé tổng (`ticket_types`) mà phải khóa đồng thời cả bộ đếm giới hạn của người dùng (`user_ticket_type_counters`) trong cùng một phiên giao dịch.
+
+Toàn bộ tiến trình chiếm giữ khóa, kiểm tra điều kiện và trừ kho diễn ra trong một đơn vị thời gian cực ngắn (≤ 10ms), giải phóng Connection Pool ngay lập tức.
+
+Trạng thái giữ chỗ tạm thời trong 10 phút của Khán giả được đồng bộ sang Redis để phục vụ truy vấn nhanh tầng ứng dụng, cách ly hoàn toàn áp lực tải khỏi Database chính.
+
+#### Phân tích Đánh đổi Kỹ thuật (Trade-off)
+
+##### Ưu điểm (Pros)
+
+- Đảm bảo tính toàn vẹn dữ liệu tuyệt đối (chuẩn ACID).
+- Chặn đứng 100% rủi ro bán lố vé (Over-selling).
+- Ngăn chặn hành vi vượt quá giới hạn cấu hình (`max_per_user`) thông qua việc gửi các request đồng thời.
+- Giải phóng kết nối cực nhanh, giảm nguy cơ nghẽn Connection Pool.
+
+##### Nhược điểm (Cons)
+
+- Tồn tại rủi ro "Vé ảo" (Ghost Tickets) do khách hàng giữ chỗ nhưng không thanh toán.
+
+##### Biện pháp khắc phục
+
+Sử dụng **Background Worker (BullMQ Delayed Job)** quét cấu hình `held_until` trong PostgreSQL kết hợp đối chiếu trạng thái giao dịch thực tế qua API cổng thanh toán trước khi đưa ra quyết định tự động hoàn trả kho vé.
 
 ---
 
 ### 2. Cơ chế triển khai chi tiết (Implementation Details cho giải pháp được chọn)
 
-#### Luồng xử lý:
+#### Luồng xử lý
 
-* **Bước 1 (Khởi tạo Transaction ngắn hạn):**
-    Khi request đặt vé vượt qua lớp màng lọc bảo vệ tầng ngoài (Rate Limiter, Idempotency), Ticket Service tiếp nhận và mở một phiên giao dịch cơ sở dữ liệu mới (`BEGIN TRANSACTION`) thông qua Connection Pool của PostgreSQL.
-* **Bước 2 (Thực thi truy vấn khóa bi quan cấp dòng):**
-    Hệ thống gửi câu lệnh truy vấn đọc số lượng vé tồn kho của phân khu cụ thể kèm theo chỉ thị khóa cứng dòng:
-    ```sql
-    SELECT id, total_quantity, available_quantity 
-    FROM ticket_types 
-    WHERE concert_id = 1 AND name = 'SVIP' 
-    FOR UPDATE;
-    ```
-    Lệnh `SELECT` này mang tính nguyên tử.
-* **Bước 3 (Kiểm tra điều kiện kho vé tại tầng Ứng dụng):**
-    ExpressJS nhận được dữ liệu tồn kho an toàn mà không sợ bị bất kỳ tiến trình song song nào can thiệp thay đổi dữ liệu. Hệ thống thực hiện phép tính toán kiểm tra logic nghiệp vụ:
-    * *Trường hợp A (Hết vé):* Nếu số lượng vé khả dụng nhỏ hơn số lượng yêu cầu (`available_quantity < requested_quantity`), hệ thống thực hiện lệnh `ROLLBACK` để giải phóng khóa lập tức và trả về lỗi HTTP `400 Bad Request`: *"Loại vé này đã được bán hết hoặc không đủ số lượng yêu cầu"*.
-    * *Trường hợp B (Còn vé):* Hệ thống tiến hành trừ trực tiếp số lượng vé trong kho tổng dựa trên số lượng khách hàng đặt mua (`available_quantity = available_quantity - requested_quantity`).
-* **Bước 4 (Cập nhật kho vé tổng và Giải phóng khóa - `COMMIT`):**
-    Hệ thống gửi lệnh `UPDATE` cập nhật số dư mới xuống cơ sở dữ liệu:
-    ```sql
-    UPDATE ticket_types 
-    SET available_quantity = :new_available_quantity 
-    WHERE id = :ticket_type_id;
-    ```
-    Tiếp theo, khởi tạo một bản ghi Đơn hàng mới vào bảng `orders` với trạng thái ban đầu là `PENDING` và cấu hình mốc thời gian hết hạn cụ thể (`held_until = NOW() + INTERVAL '10 minutes'`). 
-    
-    Sau đó, ExpressJS phát lệnh kết thúc giao dịch: `COMMIT;`. Ngay khi lệnh `COMMIT` thành công, PostgreSQL thực thi ghi dữ liệu bền vững xuống đĩa, **tự động giải phóng chiếc Khóa độc quyền cấp dòng**. Request tiếp theo đang nằm chờ ở hàng đợi của Bước 2 sẽ lập tức thức dậy, chiếm lấy khóa mới và tái lập chu kỳ xử lý an toàn. Toàn bộ chuỗi thao tác từ Bước 1 đến Bước 4 kết thúc trong vòng dưới $10\text{ms}$.
-* **Bước 5 (Ủy thác trạng thái giữ chỗ sang Redis và Điều hướng thanh toán):**
-    Sau khi Transaction cơ sở dữ liệu đã đóng, hệ thống nạp thông tin đơn hàng tạm thời lên **Redis Cluster** dưới dạng cấu trúc dữ liệu Redis Hash (`order:hold:{order_id}`) thiết lập thời gian sống (TTL) nghiêm ngặt là $10$ phút để thực thi việc giữ chỗ tầng ứng dụng. Sau đó, `Payment Module` tiếp quản luồng xử lý để kết nối mạng (HTTP Request) sang API của đối tác VNPAY/MoMo xin cấu hình URL giao dịch và điều hướng Khán giả đi thanh toán dòng tiền.
+##### Bước 1. Khởi tạo Phiên giao dịch Ngắn hạn
 
-#### Thành phần tham gia:
+Sau khi request đi qua tầng lọc (Rate Limiter, Idempotency), Ticket Service mượn một kết nối từ Connection Pool và phát lệnh:
 
-* **Ticket Service Controller (ExpressJS):** Nơi tiếp nhận điều phối luồng xử lý, chịu trách nhiệm quản lý nghiêm ngặt vòng đời của một Short-lived Transaction (Đảm bảo bọc trong cấu trúc `try-catch-finally` tường minh, bắt buộc gọi `ROLLBACK` nếu xảy ra lỗi runtime để tránh hiện tượng treo khóa (Lock Hanging) vĩnh viễn ở Postgres).
-* **PostgreSQL Lock Manager (Bộ quản lý khóa nội bản của DB):** Thành phần cốt lõi chịu trách nhiệm cấp phát Khóa độc quyền cấp dòng (Row-level Locks), quản lý hàng đợi xếp hàng tuần tự của các tiến trình đồng thời và tự động triệt tiêu rủi ro nghẽn mạch phần cứng.
-* **Ticket Types Database Table (PostgreSQL Entity):** Bảng dữ liệu chứa cấu hình số ghế của từng phân khu, bắt buộc được thiết kế lập chỉ mục (`INDEX`) chặt chẽ trên các cột truy vấn (`concert_id`, `id`) để đảm bảo lệnh `FOR UPDATE` khóa chính xác phạm vi dòng, tuyệt đối không bị nâng cấp nhầm lên khóa toàn bảng (Table Lock).
-* **Redis Cluster:** Hạ tầng lưu trữ In-memory, đóng vai trò giữ trạng thái đơn hàng tạm thời (`PENDING`) trong khung thời gian $10$ phút của người dùng, cô lập hoàn toàn thời gian chờ thanh toán ra khỏi Database chính.
+```sql
+BEGIN TRANSACTION;
+```
 
-#### Công nghệ/Dịch Vụ bên thứ 3 được sử dụng hoặc Thư viện của ExpressJS:
+##### Bước 2. Thực thi Khóa bi quan Tuần tự (Tránh Deadlock)
 
-* **pg (node-postgres / v8.x):** Thư viện điều khiển kết nối cơ sở dữ liệu PostgreSQL gốc cho nền tảng Node.js, cung cấp khả năng can thiệp sâu để quản lý Client Transaction thủ công một cách chuẩn xác.
-* **TypeORM / Sequelize (ORM Layer):** Sử dụng thuộc tính bọc câu lệnh chuyên dụng để kích hoạt Pessimistic Lock, ví dụ trong TypeORM: `lock: { mode: 'pessimistic_write' }` (Tự động biên dịch sang cú pháp `SELECT ... FOR UPDATE` khi thực thi truy vấn).
-* **Database Connection Pool Configuration:** Thuộc tính cấu hình `max` của Pool kết nối cơ sở dữ liệu cần được tính toán đồng bộ với throughput tối đa của hệ thống để đảm bảo việc mượn/trả connection diễn ra liên tục, đáp ứng tốt cho các Short-lived Transactions.
+Để ngăn chặn triệt để Deadlock, hệ thống thực hiện truy vấn khóa dữ liệu theo thứ tự cố định.
+
+**Khóa dòng bộ đếm của người dùng:**
+
+```sql
+SELECT held_quantity, paid_quantity
+FROM user_ticket_type_counters
+WHERE user_id = :userId::uuid
+  AND ticket_type_id = :ticketTypeId::uuid
+FOR UPDATE;
+```
+
+**Khóa dòng cấu hình kho tổng của loại vé:**
+
+```sql
+SELECT total_quantity, available_quantity, max_per_user
+FROM ticket_types
+WHERE id = :ticketTypeId::uuid
+FOR UPDATE;
+```
+
+##### Bước 3. Kiểm tra Điều kiện Kép tại tầng Ứng dụng
+
+Sau khi dữ liệu được cô lập hoàn toàn:
+
+**Điều kiện kho tổng**
+
+```text
+available_quantity >= requested_quantity
+```
+
+**Điều kiện người dùng**
+
+```text
+held_quantity + paid_quantity + requested_quantity <= max_per_user
+```
+
+**Xử lý thất bại**
+
+Nếu bất kỳ điều kiện nào không thỏa mãn:
+
+```sql
+ROLLBACK;
+```
+
+Trả về:
+
+```http
+HTTP 400 Bad Request
+```
+
+##### Bước 4. Cập nhật Dữ liệu Đồng bộ và Giải phóng Khóa (COMMIT)
+
+**Trừ kho tổng**
+
+```sql
+UPDATE ticket_types
+SET available_quantity = available_quantity - :requested_quantity
+WHERE id = :ticketTypeId;
+```
+
+**Cập nhật bộ đếm giữ chỗ của người dùng**
+
+Sử dụng cơ chế Upsert để tăng `held_quantity`.
+
+**Tạo đơn hàng**
+
+```text
+status = PENDING
+held_until = NOW() + INTERVAL '10 minutes'
+```
+
+**Kết thúc giao dịch**
+
+```sql
+COMMIT;
+```
+
+Dữ liệu được ghi bền vững xuống đĩa, các Row-level Lock được giải phóng trong thời gian dưới 10ms.
+
+##### Bước 5. Đồng bộ Bộ đệm Phân tán và Điều hướng Thanh toán
+
+Sau khi Transaction hoàn tất:
+
+1. Đồng bộ đơn hàng tạm thời lên Redis Cluster.
+2. Lưu dưới dạng Redis Hash:
+
+```text
+order:hold:{order_id}
+```
+
+3. Thiết lập TTL chính xác 10 phút bằng Lua Script nguyên tử.
+4. Gọi API thanh toán (VNPAY/MoMo).
+5. Nhận Payment URL và chuyển hướng khách hàng sang cổng thanh toán.
+
+---
+
+#### Thành phần tham gia
+
+##### Ticket Service Controller (Node.js/ExpressJS)
+
+- Điều phối luồng xử lý.
+- Quản lý vòng đời Transaction.
+- Bảo đảm luôn:
+  - COMMIT khi thành công.
+  - ROLLBACK khi lỗi.
+  - Release Connection trong khối `finally`.
+
+##### PostgreSQL Lock Manager
+
+- Cấp phát Row-level Lock.
+- Điều tiết các request đồng thời.
+- Bảo đảm tính tuần tự của giao dịch.
+
+##### Database Entity
+
+**Bảng dữ liệu:**
+
+- `ticket_types`
+- `user_ticket_type_counters`
+
+**Yêu cầu:**
+
+Tạo Index đầy đủ trên:
+
+```text
+id
+user_id
+ticket_type_id
+```
+
+để PostgreSQL khóa chính xác từng dòng dữ liệu thay vì phát sinh Table Lock.
+
+##### Redis Cluster
+
+- Lưu trạng thái giữ vé tạm thời.
+- Hỗ trợ truy vấn trạng thái nhanh.
+- Giảm tải cho PostgreSQL.
+
+##### Background Worker (BullMQ / Cron Job Engine)
+
+- Quét các đơn hàng hết hạn sau 10 phút.
+- Kiểm tra trạng thái thanh toán.
+- Thực hiện hoàn kho nếu:
+  - Thanh toán thất bại.
+  - Hết hạn giữ chỗ.
+  - Không tìm thấy giao dịch hợp lệ.
+
+---
+
+#### Công nghệ/Dịch Vụ bên thứ 3 được sử dụng hoặc Thư viện của NNLT
+
+##### pg (node-postgres)
+
+- PostgreSQL Native Driver cho Node.js.
+- Hỗ trợ quản lý Transaction thủ công.
+- Hỗ trợ UUID và Prepared Statement.
+
+##### Prisma ORM / TypeORM
+
+- Tầng ORM cho mã nguồn sạch hơn.
+- Hỗ trợ:
+  - Raw Query (`$queryRaw`)
+  - Pessimistic Lock (`pessimistic_write`)
+
+##### ioredis
+
+- Redis Client nâng cao cho Node.js.
+- Hỗ trợ Redis Cluster.
+- Hỗ trợ Lua Script nguyên tử.
+
+##### BullMQ (Powered by Redis)
+
+- Message Queue hiệu năng cao.
+- Hỗ trợ Delayed Job.
+- Phục vụ cơ chế thu hồi vé sau thời gian giữ chỗ.
+
+##### Database Connection Pool Configuration
+
+Cấu hình Connection Pool phù hợp với năng lực hệ thống PostgreSQL:
+
+```js
+{
+  max: 100 - 200
+}
+```
+
+Mục tiêu:
+
+- Tối ưu khả năng mượn/trả kết nối.
+- Hạn chế nghẽn Connection Pool.
+- Tăng khả năng chịu tải cho các Short-lived Transaction.
 
 
 ---
