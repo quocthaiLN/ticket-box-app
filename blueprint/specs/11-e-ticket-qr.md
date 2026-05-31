@@ -22,7 +22,7 @@ QR phải đủ dữ liệu để mobile app xác thực cục bộ khi offline,
 - `seat_zones`
 - `orders`
 - `payments`
-- `notification_logs`
+- `notifications`
 
 ## 4. Luồng chính
 
@@ -44,7 +44,7 @@ QR phải đủ dữ liệu để mobile app xác thực cục bộ khi offline,
 
 - Order chưa `PAID`: không phát hành ticket.
 - QR token trùng: database unique constraint chặn.
-- Không gửi được email: ticket vẫn nằm trong tài khoản, notification retry/DLQ xử lý sau.
+- Không gửi được email: ticket vẫn nằm trong tài khoản, notification retry xử lý sau.
 - QR bị chỉnh sửa: verify signature thất bại, check-in trả `INVALID_TICKET`.
 
 ## 6. Ràng buộc nghiệp vụ và kỹ thuật

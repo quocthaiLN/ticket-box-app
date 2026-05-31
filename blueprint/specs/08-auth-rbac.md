@@ -2,7 +2,7 @@
 
 ## 1. Mô tả
 
-Đặc tả đăng nhập, xác thực JWT và phân quyền theo vai trò CUSTOMER, ORGANIZER, CHECKIN_STAFF, ADMIN.
+Đặc tả đăng nhập, xác thực JWT và phân quyền theo một role chính trên `users.role`: `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`.
 
 ## 2. Actor / Thành phần tham gia
 
@@ -16,20 +16,18 @@
 ## 3. Bảng dữ liệu liên quan
 
 - `users`
-- `roles`
-- `user_roles`
 - `audit_logs`
 
 ## 4. Luồng chính
 
 1. User đăng ký hoặc được admin tạo tài khoản.
-2. Backend lưu `password_hash`, email/phone unique.
+2. Backend lưu `password_hash`, email/phone unique và `users.role`.
 3. User đăng nhập bằng email/password, backend kiểm tra `users.status = ACTIVE`.
-4. Backend phát JWT chứa `user_id` và role codes.
+4. Backend phát JWT chứa `user_id` và `role`.
 5. API Gateway kiểm tra JWT signature, expiration và route permission.
 6. Backend module kiểm tra quyền chi tiết và ownership dữ liệu.
-7. Admin gán/bỏ role qua `user_roles`, mọi thay đổi ghi `audit_logs`.
-8. Mobile check-in chỉ cho role `CHECKIN_STAFF` hoặc `ADMIN` truy cập.
+7. Admin đổi `users.role` hoặc `users.status`, mọi thay đổi ghi `audit_logs`.
+8. Mobile check-in chỉ cho role `CHECKER` hoặc `ADMIN` truy cập.
 
 ## 5. Kịch bản lỗi
 
@@ -41,15 +39,15 @@
 
 ## 6. Ràng buộc nghiệp vụ và kỹ thuật
 
-- Role hợp lệ: CUSTOMER, ORGANIZER, CHECKIN_STAFF, ADMIN.
+- Role hợp lệ: `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`.
 - Không hard-code quyền chỉ ở frontend; backend phải enforce.
-- Admin endpoint bắt buộc có role ORGANIZER hoặc ADMIN tùy hành động.
-- Check-in endpoint bắt buộc có role CHECKIN_STAFF hoặc ADMIN.
+- Admin endpoint bắt buộc có role `ORGANIZER` hoặc `ADMIN` tùy hành động.
+- Check-in endpoint bắt buộc có role `CHECKER` hoặc `ADMIN`.
 - Thay đổi quyền phải ghi audit.
 
 ## 7. Tiêu chí chấp nhận
 
-- Customer không truy cập được admin API.
-- Checker không tạo/sửa concert được.
-- Organizer/Admin thao tác concert được audit.
+- AUDIENCE không truy cập được admin API.
+- CHECKER không tạo/sửa concert được.
+- ORGANIZER/Admin thao tác concert được audit.
 - Mobile app từ chối tài khoản không có quyền check-in.

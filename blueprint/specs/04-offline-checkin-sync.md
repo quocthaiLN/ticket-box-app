@@ -49,7 +49,7 @@
 11. Khi có mạng, app tạo `offline_checkin_batches` trên server kèm `device_id`, `gate_id`, `batch_token`.
 12. App gửi từng `offline_checkin_items`, gồm `qr_token`, `ticket_id` nếu có, `seat_zone_id`, `gate_id`, `local_scanned_at`, `sync_result` local.
 13. Server xử lý từng item trong transaction:
-    - verify device active;
+    - verify device tồn tại và khớp `staff_id`, `concert_id`, `gate_id`;
     - verify gate thuộc concert;
     - verify ticket/guest thuộc concert;
     - verify `seat_zone_id` của ticket/guest nằm trong `checkin_gate_zones` của `gate_id`;
@@ -59,7 +59,7 @@
 
 ## 5. Kịch bản lỗi
 
-- Thiết bị bị `REVOKED` hoặc `LOST`: từ chối sync batch.
+- Thiết bị không tồn tại hoặc không khớp staff/concert/gate: từ chối sync batch.
 - Batch token trùng: trả kết quả batch cũ, không xử lý lại.
 - QR giả/sai chữ ký: item `INVALID`, không update ticket.
 - Vé đúng concert nhưng sai cổng/khu: item `WRONG_GATE`, không update ticket.

@@ -31,7 +31,7 @@
 
 1. Checker đăng nhập mobile app và chọn concert/gate hoặc app lấy gate mặc định từ `checkin_devices.gate_id`.
 2. App quét QR và gửi `qr_token`, `device_id`, `gate_id` lên server.
-3. Server kiểm tra device tồn tại, `status = ACTIVE`, staff có quyền check-in.
+3. Server kiểm tra device tồn tại, khớp staff hiện tại và staff có quyền check-in.
 4. Server kiểm tra `checkin_devices.concert_id` trùng concert đang check-in.
 5. Server kiểm tra `checkin_devices.gate_id` hoặc `gate_id` request thuộc `checkin_gates` của concert và `is_active = TRUE`.
 6. Server tìm ticket theo `qr_token` và verify `qr_signature` nếu có.
@@ -47,7 +47,7 @@
 - Ticket đã check-in: log `ALREADY_CHECKED_IN`, không update ticket.
 - Ticket sai concert: log `WRONG_CONCERT`.
 - Ticket đúng concert nhưng sai cổng/khu: log `WRONG_GATE`, không update ticket.
-- Device revoked/lost: từ chối request.
+- Device không tồn tại hoặc không khớp staff/concert/gate: từ chối request.
 - Gate inactive hoặc gate không thuộc concert: từ chối request.
 - Database lock conflict khi 2 cổng quét cùng ticket: một success, một already checked-in/conflict.
 
@@ -55,7 +55,7 @@
 
 - Update ticket và ghi log phải cùng transaction hoặc có cơ chế đảm bảo không mất log.
 - Mọi lần quét phải lưu log, kể cả thất bại.
-- Check-in endpoint chỉ cho `CHECKIN_STAFF` hoặc `ADMIN`.
+- Check-in endpoint chỉ cho `CHECKER` hoặc `ADMIN`.
 - Không cho check-in ticket `CANCELLED`/`REFUNDED`.
 - Không cho check-in ticket có `seat_zone_id` không nằm trong danh sách zone của gate.
 - `status = CHECKED_IN` thì `checked_in_at` bắt buộc khác null.

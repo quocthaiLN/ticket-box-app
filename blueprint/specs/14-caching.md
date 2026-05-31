@@ -20,7 +20,7 @@
 - `venues`
 - `seat_zones`
 - `ticket_types`
-- `artist_bios`
+- `concerts.artist_bio`
 
 ## 4. Luồng chính
 

@@ -1,4 +1,4 @@
-# API Design Report — TicketBox
+# TicketBox — Base API Design
 
 Tài liệu này mô tả quy ước chung cho toàn bộ REST API của TicketBox
 
@@ -49,7 +49,7 @@ TicketBox dùng JWT stateless kết hợp Redis denylist cho token bị thu hồ
 | Guest | Không có JWT | Xem catalog public. |
 | Khán giả | `AUDIENCE` | Xem catalog, đặt vé, xem vé cá nhân. |
 | Ban tổ chức | `ORGANIZER` | Quản lý concert, ticket type, thống kê, upload file. |
-| Nhân sự soát vé | `CHECKIN_STAFF`| Preload dữ liệu, check-in online, sync offline. |
+| Nhân sự soát vé | `CHECKER` | Preload dữ liệu, check-in online, sync offline. |
 | Admin | `ADMIN` | Toàn quyền vận hành và cấu hình. |
 
 API Gateway kiểm tra JWT và role ở vòng ngoài. Backend module tiếp tục kiểm tra quyền sở hữu dữ liệu, ví dụ user chỉ được xem vé của chính mình, checker chỉ được dùng thiết bị/cổng được gán.
