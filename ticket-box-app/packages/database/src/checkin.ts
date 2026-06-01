@@ -8,7 +8,7 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 type TicketAccessRow = {
   id: string;
   concertId: string;
-  zoneId: string;
+  seatZoneId: string;
   qrTokenHash: string;
   status: string;
 };
@@ -16,9 +16,7 @@ type TicketAccessRow = {
 export type GateZoneValidationErrorCode =
   | "GATE_ZONE_NOT_MAPPED"
   | "GATE_INACTIVE"
-  | "GATE_ZONE_VENUE_MISMATCH"
-  | "CONCERT_NOT_FOUND"
-  | "CONCERT_VENUE_MISMATCH"
+  | "GATE_CONCERT_MISMATCH"
   | "TICKET_NOT_FOUND"
   | "WRONG_CONCERT"
   | "TICKET_ALREADY_CHECKED_IN"
@@ -36,40 +34,40 @@ export class GateZoneValidationError extends Error {
 
 export type GateZoneValidationInput = {
   gateId: string;
-  zoneId: string;
+  seatZoneId: string;
   concertId?: string;
 };
 
 export type GateZoneValidationResult = {
   gateId: string;
-  zoneId: string;
-  venueId: string;
-  concertId?: string;
+  seatZoneId: string;
+  concertId: string;
 };
 
 export async function assertGateAllowsZone(
   input: GateZoneValidationInput,
   db: DbClient = prisma,
 ): Promise<GateZoneValidationResult> {
-  const mapping = await db.gateZone.findUnique({
+  const mapping = await db.checkinGateZone.findUnique({
     where: {
-      gateId_zoneId: {
+      gateId_seatZoneId: {
         gateId: input.gateId,
-        zoneId: input.zoneId,
+        seatZoneId: input.seatZoneId,
       },
     },
     select: {
       gateId: true,
-      zoneId: true,
+      seatZoneId: true,
+      concertId: true,
       gate: {
         select: {
-          venueId: true,
+          concertId: true,
           isActive: true,
         },
       },
-      zone: {
+      seatZone: {
         select: {
-          venueId: true,
+          concertId: true,
         },
       },
     },
@@ -78,50 +76,29 @@ export async function assertGateAllowsZone(
   if (!mapping) {
     throw new GateZoneValidationError(
       "GATE_ZONE_NOT_MAPPED",
-      "Gate is not allowed to check in tickets for this zone.",
+      "Gate is not allowed to check in tickets for this seat zone.",
     );
   }
 
   if (!mapping.gate.isActive) {
-    throw new GateZoneValidationError(
-      "GATE_INACTIVE",
-      "Gate is inactive.",
-    );
+    throw new GateZoneValidationError("GATE_INACTIVE", "Gate is inactive.");
   }
 
-  if (mapping.gate.venueId !== mapping.zone.venueId) {
+  if (
+    mapping.gate.concertId !== mapping.concertId ||
+    mapping.seatZone.concertId !== mapping.concertId ||
+    (input.concertId && mapping.concertId !== input.concertId)
+  ) {
     throw new GateZoneValidationError(
-      "GATE_ZONE_VENUE_MISMATCH",
-      "Gate and zone must belong to the same venue.",
+      "GATE_CONCERT_MISMATCH",
+      "Gate, seat zone, and concert must match.",
     );
-  }
-
-  if (input.concertId) {
-    const concert = await db.concert.findUnique({
-      where: { id: input.concertId },
-      select: { venueId: true },
-    });
-
-    if (!concert) {
-      throw new GateZoneValidationError(
-        "CONCERT_NOT_FOUND",
-        "Concert was not found.",
-      );
-    }
-
-    if (concert.venueId !== mapping.gate.venueId) {
-      throw new GateZoneValidationError(
-        "CONCERT_VENUE_MISMATCH",
-        "Gate venue does not match the concert venue.",
-      );
-    }
   }
 
   return {
     gateId: mapping.gateId,
-    zoneId: mapping.zoneId,
-    venueId: mapping.gate.venueId,
-    concertId: input.concertId,
+    seatZoneId: mapping.seatZoneId,
+    concertId: mapping.concertId,
   };
 }
 
@@ -154,7 +131,7 @@ export async function checkInTicketAtGate(
             SELECT
               id AS "id",
               concert_id AS "concertId",
-              zone_id AS "zoneId",
+              seat_zone_id AS "seatZoneId",
               qr_token_hash AS "qrTokenHash",
               status::text AS "status"
             FROM tickets
@@ -165,7 +142,7 @@ export async function checkInTicketAtGate(
             SELECT
               id AS "id",
               concert_id AS "concertId",
-              zone_id AS "zoneId",
+              seat_zone_id AS "seatZoneId",
               qr_token_hash AS "qrTokenHash",
               status::text AS "status"
             FROM tickets
@@ -192,22 +169,20 @@ export async function checkInTicketAtGate(
       await assertGateAllowsZone(
         {
           gateId: input.gateId,
-          zoneId: ticket.zoneId,
+          seatZoneId: ticket.seatZoneId,
           concertId: ticket.concertId,
         },
         tx,
       );
 
-      const status = String(ticket.status).toLowerCase();
-
-      if (status === "checked_in" || ticket.status === TicketStatus.CHECKED_IN) {
+      if (ticket.status === TicketStatus.CHECKED_IN) {
         throw new GateZoneValidationError(
           "TICKET_ALREADY_CHECKED_IN",
           "Ticket has already been checked in.",
         );
       }
 
-      if (status !== "issued" && ticket.status !== TicketStatus.ISSUED) {
+      if (ticket.status !== TicketStatus.ISSUED) {
         throw new GateZoneValidationError(
           "TICKET_NOT_CHECKIN_READY",
           "Ticket is not in an issued state.",
@@ -229,7 +204,7 @@ export async function checkInTicketAtGate(
         data: {
           ticketId: ticket.id,
           concertId: ticket.concertId,
-          zoneId: ticket.zoneId,
+          seatZoneId: ticket.seatZoneId,
           gateId: input.gateId,
           deviceId: input.deviceId,
           staffId: input.staffId,

@@ -1,21 +1,13 @@
-import {
-  InventoryEventType,
-  Prisma,
-  ReservationStatus,
-  TicketStatus,
-  TicketTypeStatus,
-} from "@prisma/client";
-import type { InventoryReservation, PrismaClient, Ticket } from "@prisma/client";
+import { Prisma, TicketStatus, TicketTypeStatus } from "@prisma/client";
+import type { PrismaClient, Ticket } from "@prisma/client";
 
 import { prisma } from "./client.js";
 
 type InventoryRow = {
   ticketTypeId: string;
-  total: number;
-  available: number;
-  reserved: number;
-  sold: number;
-  version: number;
+  totalQuantity: number;
+  heldQuantity: number;
+  soldQuantity: number;
   maxPerUser: number;
   saleStartAt: Date;
   saleEndAt: Date;
@@ -25,7 +17,6 @@ type InventoryRow = {
 type UserTicketCounterRow = {
   heldQuantity: number;
   paidQuantity: number;
-  refundedQuantity: number;
 };
 
 type TicketIssueSourceRow = {
@@ -35,7 +26,7 @@ type TicketIssueSourceRow = {
   orderConcertId: string;
   ticketTypeId: string;
   ticketTypeConcertId: string;
-  zoneId: string;
+  seatZoneId: string;
   quantity: number;
   issuedCount: number;
 };
@@ -86,10 +77,20 @@ export type ReserveTicketInventoryInput = {
   now?: Date;
 };
 
+export type ReserveTicketInventoryResult = {
+  ticketTypeId: string;
+  userId: string;
+  quantity: number;
+  availableQuantity: number;
+  heldQuantity: number;
+  soldQuantity: number;
+  expiresAt: Date;
+};
+
 export async function reserveTicketInventory(
   input: ReserveTicketInventoryInput,
   db: PrismaClient = prisma,
-): Promise<InventoryReservation> {
+): Promise<ReserveTicketInventoryResult> {
   const quantity = Number(input.quantity);
 
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -110,46 +111,29 @@ export async function reserveTicketInventory(
 
   return db.$transaction(
     async (tx) => {
-      if (input.idempotencyKey) {
-        const existing = await tx.inventoryReservation.findUnique({
-          where: { idempotencyKey: input.idempotencyKey },
-        });
-
-        if (existing) {
-          return existing;
-        }
-      }
-
       const [inventory] = await tx.$queryRaw<InventoryRow[]>(Prisma.sql`
         SELECT
-          i.ticket_type_id AS "ticketTypeId",
-          i.total AS "total",
-          i.available AS "available",
-          i.reserved AS "reserved",
-          i.sold AS "sold",
-          i.version AS "version",
-          tt.max_per_user AS "maxPerUser",
-          tt.sale_start_at AS "saleStartAt",
-          tt.sale_end_at AS "saleEndAt",
-          tt.status::text AS "status"
-        FROM ticket_inventories i
-        JOIN ticket_types tt ON tt.id = i.ticket_type_id
-        WHERE i.ticket_type_id = ${input.ticketTypeId}::uuid
-        FOR UPDATE OF i
+          id AS "ticketTypeId",
+          total_quantity AS "totalQuantity",
+          held_quantity AS "heldQuantity",
+          sold_quantity AS "soldQuantity",
+          max_per_user AS "maxPerUser",
+          sale_start_at AS "saleStartAt",
+          sale_end_at AS "saleEndAt",
+          status::text AS "status"
+        FROM ticket_types
+        WHERE id = ${input.ticketTypeId}::uuid
+        FOR UPDATE
       `);
 
       if (!inventory) {
         throw new InventoryReservationError(
           "TICKET_TYPE_NOT_FOUND",
-          "Ticket type inventory was not found.",
+          "Ticket type was not found.",
         );
       }
 
-      const onSaleStatus = String(inventory.status).toLowerCase();
-      if (
-        onSaleStatus !== "on_sale" &&
-        inventory.status !== TicketTypeStatus.ON_SALE
-      ) {
+      if (inventory.status !== TicketTypeStatus.ON_SALE) {
         throw new InventoryReservationError(
           "TICKET_TYPE_NOT_ON_SALE",
           "Ticket type is not open for sale.",
@@ -163,7 +147,10 @@ export async function reserveTicketInventory(
         );
       }
 
-      if (inventory.available < quantity) {
+      const availableQuantity =
+        inventory.totalQuantity - inventory.heldQuantity - inventory.soldQuantity;
+
+      if (availableQuantity < quantity) {
         throw new InventoryReservationError(
           "INSUFFICIENT_INVENTORY",
           "Not enough available tickets to reserve.",
@@ -188,8 +175,7 @@ export async function reserveTicketInventory(
         Prisma.sql`
           SELECT
             held_quantity AS "heldQuantity",
-            paid_quantity AS "paidQuantity",
-            refunded_quantity AS "refundedQuantity"
+            paid_quantity AS "paidQuantity"
           FROM user_ticket_type_counters
           WHERE user_id = ${input.userId}::uuid
             AND ticket_type_id = ${input.ticketTypeId}::uuid
@@ -197,8 +183,7 @@ export async function reserveTicketInventory(
         `,
       );
 
-      const currentUserQuantity =
-        counter.heldQuantity + counter.paidQuantity - counter.refundedQuantity;
+      const currentUserQuantity = counter.heldQuantity + counter.paidQuantity;
 
       if (currentUserQuantity + quantity > inventory.maxPerUser) {
         throw new InventoryReservationError(
@@ -207,12 +192,10 @@ export async function reserveTicketInventory(
         );
       }
 
-      await tx.ticketInventory.update({
-        where: { ticketTypeId: input.ticketTypeId },
+      await tx.ticketType.update({
+        where: { id: input.ticketTypeId },
         data: {
-          available: { decrement: quantity },
-          reserved: { increment: quantity },
-          version: { increment: 1 },
+          heldQuantity: { increment: quantity },
         },
       });
 
@@ -228,37 +211,15 @@ export async function reserveTicketInventory(
         },
       });
 
-      const reservation = await tx.inventoryReservation.create({
-        data: {
-          ticketTypeId: input.ticketTypeId,
-          userId: input.userId,
-          orderId: input.orderId,
-          quantity,
-          status: ReservationStatus.HELD,
-          idempotencyKey: input.idempotencyKey,
-          expiresAt: input.expiresAt,
-        },
-      });
-
-      await tx.ticketInventoryEvent.create({
-        data: {
-          ticketTypeId: input.ticketTypeId,
-          orderId: input.orderId,
-          reservationId: reservation.id,
-          eventType: InventoryEventType.HOLD,
-          quantity,
-          beforeTotal: inventory.total,
-          afterTotal: inventory.total,
-          beforeAvailable: inventory.available,
-          afterAvailable: inventory.available - quantity,
-          beforeReserved: inventory.reserved,
-          afterReserved: inventory.reserved + quantity,
-          beforeSold: inventory.sold,
-          afterSold: inventory.sold,
-        },
-      });
-
-      return reservation;
+      return {
+        ticketTypeId: input.ticketTypeId,
+        userId: input.userId,
+        quantity,
+        availableQuantity: availableQuantity - quantity,
+        heldQuantity: inventory.heldQuantity + quantity,
+        soldQuantity: inventory.soldQuantity,
+        expiresAt: input.expiresAt,
+      };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
@@ -300,7 +261,7 @@ export async function issueTicketsForOrderItem(
           o.concert_id AS "orderConcertId",
           oi.ticket_type_id AS "ticketTypeId",
           tt.concert_id AS "ticketTypeConcertId",
-          tt.zone_id AS "zoneId",
+          tt.seat_zone_id AS "seatZoneId",
           oi.quantity AS "quantity",
           (
             SELECT COUNT(*)::int
@@ -356,7 +317,7 @@ export async function issueTicketsForOrderItem(
               userId: source.userId,
               concertId: source.orderConcertId,
               ticketTypeId: source.ticketTypeId,
-              zoneId: source.zoneId,
+              seatZoneId: source.seatZoneId,
               qrTokenHash: input.qrTokenHashes[index],
               qrPayload: input.qrPayloads?.[index],
               qrSignature: input.qrSignatures?.[index],
