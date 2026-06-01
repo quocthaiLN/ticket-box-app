@@ -1,4 +1,10 @@
-import { Prisma, TicketStatus, TicketTypeStatus } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentStatus,
+  Prisma,
+  TicketStatus,
+  TicketTypeStatus,
+} from "@prisma/client";
 import type { PrismaClient, Ticket } from "@prisma/client";
 
 import { prisma } from "./client.js";
@@ -24,11 +30,13 @@ type TicketIssueSourceRow = {
   orderId: string;
   userId: string;
   orderConcertId: string;
+  orderStatus: string;
   ticketTypeId: string;
   ticketTypeConcertId: string;
   seatZoneId: string;
   quantity: number;
   issuedCount: number;
+  hasSucceededPayment: boolean;
 };
 
 export type InventoryReservationErrorCode =
@@ -54,6 +62,8 @@ export type TicketIssueErrorCode =
   | "INVALID_QR_TOKEN_HASHES"
   | "ORDER_ITEM_NOT_FOUND"
   | "ORDER_ITEM_CONCERT_MISMATCH"
+  | "ORDER_NOT_CONFIRMED"
+  | "PAYMENT_NOT_SUCCEEDED"
   | "TICKETS_ALREADY_ISSUED"
   | "ISSUED_TICKET_COUNT_MISMATCH";
 
@@ -259,6 +269,7 @@ export async function issueTicketsForOrderItem(
           oi.order_id AS "orderId",
           o.user_id AS "userId",
           o.concert_id AS "orderConcertId",
+          o.status::text AS "orderStatus",
           oi.ticket_type_id AS "ticketTypeId",
           tt.concert_id AS "ticketTypeConcertId",
           tt.seat_zone_id AS "seatZoneId",
@@ -267,7 +278,13 @@ export async function issueTicketsForOrderItem(
             SELECT COUNT(*)::int
             FROM tickets t
             WHERE t.order_item_id = oi.id
-          ) AS "issuedCount"
+          ) AS "issuedCount",
+          EXISTS (
+            SELECT 1
+            FROM payments p
+            WHERE p.order_id = o.id
+              AND p.status = ${PaymentStatus.SUCCEEDED}::payment_status
+          ) AS "hasSucceededPayment"
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         JOIN ticket_types tt ON tt.id = oi.ticket_type_id
@@ -286,6 +303,20 @@ export async function issueTicketsForOrderItem(
         throw new TicketIssueError(
           "ORDER_ITEM_CONCERT_MISMATCH",
           "Order item ticket type does not belong to the order concert.",
+        );
+      }
+
+      if (source.orderStatus !== OrderStatus.CONFIRMED) {
+        throw new TicketIssueError(
+          "ORDER_NOT_CONFIRMED",
+          "Tickets can only be issued for confirmed orders.",
+        );
+      }
+
+      if (!source.hasSucceededPayment) {
+        throw new TicketIssueError(
+          "PAYMENT_NOT_SUCCEEDED",
+          "Tickets can only be issued after a successful payment.",
         );
       }
 

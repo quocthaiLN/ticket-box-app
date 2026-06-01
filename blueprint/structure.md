@@ -192,7 +192,7 @@ ticket-box-app/
 │       └── src/
 │           ├── api.types.ts
 │           ├── events.types.ts
-│           ├── roles.types.ts
+│           ├── auth.types.ts
 │           └── common.types.ts
 │
 ├── nginx/
@@ -221,9 +221,9 @@ ticket-box-app/
 | --- | --- | --- | --- |
 | `auth` | `auth-rbac-api.md` | `08-auth-rbac.md` | `users`, `audit_logs` |
 | `catalog` | `catalog-api.md` | `09-concert-catalog.md`, `14-caching.md` | `venues`, `concerts`, `seat_zones`, `ticket_types` |
-| `inventory` | `inventory-api.md` | `01-ticket-inventory.md`, `02-per-user-ticket-limit.md` | `ticket_types`, `user_ticket_type_counters`, `ticket_inventory_events` |
+| `inventory` | `inventory-api.md` | `01-ticket-inventory.md`, `02-per-user-ticket-limit.md` | `ticket_types`, `user_ticket_type_counters`, `orders`, `order_items` |
 | `orders` | `order-checkout-api.md` | `10-order-checkout.md` | `orders`, `order_items` |
-| `payments` | `order-checkout-api.md` | `03-payment-idempotency.md` | `payments`, `payment_webhook_events`, `idempotency_keys` |
+| `payments` | `order-checkout-api.md` | `03-payment-idempotency.md` | `payments`, `orders` |
 | `tickets` | `e-ticket-api.md` | `11-e-ticket-qr.md` | `tickets`, `notifications` |
 | `checkin` | `check-in-api.md` | `04-offline-checkin-sync.md`, `12-checkin-online.md`, `13-guest-checkin.md` | `checkin_devices`, `checkin_gates`, `checkin_gate_zones`, `checkin_logs`, `offline_checkin_batches`, `offline_checkin_items` |
 | `guest-list` | `guest-list-api.md` | `05-guest-list-import.md`, `13-guest-checkin.md` | `guest_import_jobs`, `guest_list`, `guest_import_errors` |
@@ -258,7 +258,7 @@ ticket-box-app/
 - Không thêm `roles/user_roles/permissions` package/module riêng; RBAC dùng `users.role`.
 - Không thêm module `artist` riêng; Artist Bio gắn với `concerts.artist_name` và `concerts.artist_bio`.
 - Không thêm notification template/DLQ table/module riêng; MVP dùng bảng `notifications`.
-- Không thêm `device_status`; check-in device hợp lệ khi record tồn tại và khớp staff/concert/gate.
+- Không thêm module riêng cho `device_status`; trạng thái thiết bị nằm trong `checkin_devices.status`.
 - Không tạo microservice độc lập cho từng module; tách package/process chỉ khi có lý do hạ tầng rõ ràng.
 
 ## 7. Lưu ý

@@ -12,8 +12,8 @@ Nguồn nghiệp vụ chính:
 ## 1. Mục tiêu
 
 - Sau payment success, phát hành đúng số lượng ticket.
-- Mỗi ticket có `qr_token` unique và `qr_signature`.
-- QR đủ dữ liệu để mobile app kiểm tra offline: `ticket_id`, `concert_id`, `ticket_type_id`, `seat_zone_id`, `issued_at`, `qr_token`.
+- Mỗi ticket có `qr_token_hash` unique và `qr_signature`.
+- QR đủ dữ liệu để mobile app kiểm tra offline: `ticket_id`, `concert_id`, `ticket_type_id`, `seat_zone_id`, `issued_at`, token/payload đã ký.
 - Không lưu dữ liệu nhạy cảm không cần thiết trong QR.
 - Email/push lỗi không làm mất ticket; user vẫn xem được trong tài khoản.
 
@@ -27,6 +27,7 @@ Nguồn nghiệp vụ chính:
 | `ticket_type` | `ticket_types` | Nguồn giá/khu của ticket. |
 | `seat_zone` | `seat_zones` | Khu được phép vào. |
 | `order` | `orders`, `order_items` | Nguồn phát hành ticket. |
+| `payment` | `payments` | Điều kiện thanh toán thành công. |
 | `notification` | `notifications` | Gửi email/app chứa e-ticket. |
 
 ---
@@ -184,9 +185,10 @@ Response `201`:
 
 Ràng buộc:
 
-- Order phải `PAID`.
+- Payment phải `SUCCEEDED`.
+- Order phải `CONFIRMED`.
 - Số ticket phát hành bằng tổng `order_items.quantity`.
-- `qr_token` unique.
+- `qr_token_hash` unique.
 - Retry cùng idempotency key không tạo thêm ticket.
 - Sau khi phát hành, publish event cho Notification Module gửi e-ticket.
 
@@ -200,7 +202,8 @@ Ràng buộc:
 | `404` | `TICKET_NOT_FOUND` | Ticket không tồn tại hoặc không được phép lộ. |
 | `409` | `TICKETS_ALREADY_ISSUED` | Order đã phát hành ticket trước đó. |
 | `409` | `QR_TOKEN_CONFLICT` | Unique constraint chặn token trùng. |
-| `422` | `ORDER_NOT_PAID` | Order chưa thanh toán thành công. |
+| `422` | `ORDER_NOT_CONFIRMED` | Order chưa xác nhận thành công. |
+| `422` | `PAYMENT_NOT_SUCCEEDED` | Payment chưa thành công. |
 | `422` | `TICKET_NOT_USABLE` | Ticket cancelled/refunded nên không trả QR dùng được. |
 
 ---

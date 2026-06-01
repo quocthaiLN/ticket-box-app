@@ -30,18 +30,19 @@ Nguồn nghiệp vụ chính:
 
 | Resource | Bảng | Vai trò |
 | --- | --- | --- |
-| `order` | `orders` | Đơn hàng và trạng thái checkout. |
+| `order` | `orders` | Đơn hàng và trạng thái nghiệp vụ checkout. |
 | `order_item` | `order_items` | Dòng vé trong order. |
-| `payment` | `payments` | Payment attempt với VNPAY/MoMo. |
-| `payment_webhook_event` | `payment_webhook_events` | Raw webhook/IPN và audit xử lý. |
-| `idempotency_key` | `idempotency_keys` | Chống request tạo order/payment trùng. |
-| `ticket_type` | `ticket_types` | Tồn kho và sale window. |
+| `payment` | `payments` | Payment attempt, trạng thái thanh toán và raw webhook payload cuối. |
+| `ticket_type` | `ticket_types` | Tồn kho, sale window và per-user limit source. |
 | `user_ticket_type_counter` | `user_ticket_type_counters` | Giới hạn vé mỗi user. |
 | `ticket` | `tickets` | Vé phát hành sau payment success. |
+| `audit_log` | `audit_logs` | Audit thao tác admin/nghiệp vụ nếu cần. |
 
-Order status: `HELD`, `PAID`, `CANCELLED`, `EXPIRED`, `FAILED`, `REFUNDED`.
+Order status MVP: `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED`.
 
 Payment status: `PENDING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, `REFUNDED`.
+
+Idempotency runtime nằm ở Redis. PostgreSQL chỉ giữ unique constraint trên `orders.idempotency_key` và `payments.idempotency_key` để bảo vệ cuối cùng.
 
 ---
 
@@ -129,21 +130,20 @@ Content-Type: application/json
 
 **Transaction rules**
 
-1. Idempotency middleware tạo/lock key trạng thái `PROCESSING`.
+1. Idempotency middleware lock key trạng thái `PROCESSING` trong Redis.
 2. Lock `ticket_types` rows bằng `SELECT ... FOR UPDATE`.
 3. Lock hoặc tạo `user_ticket_type_counters`.
 4. Kiểm tra:
    - ticket type thuộc concert;
    - sale window hợp lệ;
-   - `available_quantity >= quantity`;
+   - computed `available_quantity = total_quantity - held_quantity - sold_quantity` đủ cho `quantity`;
    - `held_quantity + paid_quantity + quantity <= max_per_user`.
 5. Tạo order `HELD`, `hold_expires_at = now() + TTL`.
 6. Tạo order items, tính total amount.
 7. Cập nhật inventory và user counters.
-8. Ghi `ticket_inventory_events = HOLD`.
-9. Commit transaction.
-10. Tạo payment `PENDING` và checkout URL.
-11. Cập nhật idempotency response.
+8. Commit transaction.
+9. Tạo payment `PENDING` và checkout URL.
+10. Cache idempotency response trong Redis.
 
 Nếu payment provider circuit breaker đang open, backend có thể fail-fast và release hold ngay, hoặc giữ order đến TTL tùy policy. Khuyến nghị với đồ án: fail-fast, release hold, trả `503 PAYMENT_PROVIDER_UNAVAILABLE`.
 
@@ -174,13 +174,18 @@ Khán giả poll trạng thái order sau khi quay về từ payment provider.
 }
 ```
 
-**Response `200` khi `PAID`**
+**Response `200` khi `CONFIRMED`**
 
 ```json
 {
   "data": {
     "order_id": "ord_01JX9QA1",
-    "status": "PAID",
+    "status": "CONFIRMED",
+    "payment": {
+      "id": "pay_01JX9QB2",
+      "status": "SUCCEEDED",
+      "paid_at": "2026-05-30T10:18:30Z"
+    },
     "total_amount": {
       "amount": 9000000,
       "currency": "VND"
@@ -238,7 +243,7 @@ Ràng buộc:
 
 - Chỉ hủy order `HELD`.
 - Release inventory và user held counter trong transaction.
-- Không hủy order `PAID`; refund là flow riêng.
+- Không hủy order `CONFIRMED`; refund là flow riêng của Payment/Admin.
 
 ---
 
@@ -280,14 +285,14 @@ Webhook/IPN từ VNPAY/MoMo. Endpoint public nhưng bắt buộc verify signatur
 
 **Webhook processing rules**
 
-1. Lưu raw payload vào `payment_webhook_events` trước khi xử lý.
-2. Verify chữ ký provider, set `signature_valid`.
-3. Resolve order/payment.
+1. Resolve order/payment theo provider payload.
+2. Lưu raw payload cuối vào `payments.webhook_payload`, `webhook_received_at`.
+3. Verify chữ ký provider, set `payments.webhook_signature_valid`.
 4. Kiểm tra amount khớp order.
-5. Dùng unique constraint provider transaction/event để chống webhook trùng.
+5. Dùng unique constraint `(provider, provider_transaction_id)` để chống webhook trùng.
 6. Nếu success:
    - update `payments.status = SUCCEEDED`;
-   - update `orders.status = PAID`;
+   - update `orders.status = CONFIRMED`;
    - chuyển inventory held sang sold;
    - chuyển user counter held sang paid;
    - phát hành tickets;
@@ -295,7 +300,7 @@ Webhook/IPN từ VNPAY/MoMo. Endpoint public nhưng bắt buộc verify signatur
 7. Nếu fail/cancel:
    - update payment failed/cancelled;
    - release hold nếu order còn `HELD`.
-8. Mark webhook `processed = TRUE`.
+8. Cache webhook/idempotency result nếu cần để provider retry nhận `200` ổn định.
 
 Webhook trùng phải trả `200` idempotent nhưng không phát hành vé lần hai.
 
@@ -325,7 +330,7 @@ Worker gọi khi order quá `hold_expires_at`.
 }
 ```
 
-Idempotent: nếu order đã `PAID`, `CANCELLED` hoặc `EXPIRED`, không release lần hai.
+Idempotent: nếu order đã `CONFIRMED`, `CANCELLED` hoặc `EXPIRED`, không release lần hai.
 
 ---
 
@@ -352,14 +357,12 @@ Organizer chỉ xem order thuộc concert mình quản lý.
 Order transitions hợp lệ:
 
 ```text
-HELD -> PAID
+HELD -> CONFIRMED
 HELD -> CANCELLED
 HELD -> EXPIRED
-HELD -> FAILED
-PAID -> REFUNDED
 ```
 
-Không phát hành ticket nếu order chưa `PAID`.
+Không phát hành ticket nếu payment chưa `SUCCEEDED` hoặc order chưa `CONFIRMED`.
 
 Payment transitions hợp lệ:
 
@@ -376,10 +379,10 @@ SUCCEEDED -> REFUNDED
 
 - `POST /orders` bắt buộc `Idempotency-Key`.
 - Redis lưu key trạng thái nhanh với TTL tối thiểu 24h.
-- PostgreSQL unique constraint trên `idempotency_keys.key`.
+- PostgreSQL unique constraint trên `orders.idempotency_key` và `payments.idempotency_key`.
 - Nếu key đang `PROCESSING`, trả `409 IDEMPOTENCY_IN_PROGRESS`.
-- Nếu key `SUCCEEDED`, trả response cũ.
-- Webhook idempotent theo provider event/transaction id.
+- Nếu key đã hoàn tất, trả response cũ.
+- Webhook idempotent theo provider transaction id và unique `(provider, provider_transaction_id)`.
 - Nếu Redis mất dữ liệu, PostgreSQL unique constraint là lớp bảo vệ cuối.
 
 ---
@@ -394,7 +397,7 @@ SUCCEEDED -> REFUNDED
 | `404` | `ORDER_NOT_FOUND` | Order không tồn tại hoặc không được phép lộ. |
 | `409` | `TICKET_SOLD_OUT` | Không đủ vé. |
 | `409` | `IDEMPOTENCY_IN_PROGRESS` | Request cùng key đang xử lý. |
-| `409` | `ORDER_ALREADY_FINALIZED` | Hủy/expire order đã paid/refunded. |
+| `409` | `ORDER_ALREADY_FINALIZED` | Hủy/expire order đã confirmed/cancelled/expired. |
 | `422` | `PER_USER_LIMIT_EXCEEDED` | Vượt giới hạn mỗi user. |
 | `422` | `TICKET_TYPE_NOT_ON_SALE` | Loại vé chưa mở bán/hết hạn/closed. |
 | `422` | `PAYMENT_SIGNATURE_INVALID` | Webhook sai chữ ký. |
@@ -424,6 +427,6 @@ SUCCEEDED -> REFUNDED
 - User không thể vượt `max_per_user` dù gửi nhiều request song song.
 - Hai người mua vé cuối cùng chỉ một người hold thành công.
 - Order hết hạn release inventory và quota user.
-- Webhook success verify đúng chữ ký/amount mới chuyển order `PAID`.
+- Webhook success verify đúng chữ ký/amount mới chuyển order `CONFIRMED`.
 - Webhook trùng không phát hành vé trùng.
 - Payment provider lỗi không làm sập catalog/check-in.

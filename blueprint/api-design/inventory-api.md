@@ -1,6 +1,6 @@
 # TicketBox — Inventory API Design
 
-Tài liệu này thiết kế API vận hành tồn kho vé. Public read tồn kho cho UI nằm trong `catalog-api.md`; file này tập trung vào nghiệp vụ thay đổi tồn kho an toàn: hold, release, payment confirmed, refund/admin adjustment.
+Tài liệu này thiết kế API vận hành tồn kho vé. Public read tồn kho cho UI nằm trong `catalog-api.md`; file này tập trung vào nghiệp vụ thay đổi tồn kho an toàn: hold, release, payment confirmed và admin adjustment.
 
 Nguồn nghiệp vụ chính:
 
@@ -13,10 +13,10 @@ Nguồn nghiệp vụ chính:
 ## 1. Mục tiêu
 
 - Chống oversell bằng PostgreSQL transaction và row-level lock.
-- Duy trì bất biến: `total_quantity = available_quantity + held_quantity + sold_quantity`.
-- Ghi audit mọi thay đổi tồn kho vào `ticket_inventory_events`.
+- Duy trì bất biến: `total_quantity >= held_quantity + sold_quantity`.
+- `available_quantity` là computed field: `total_quantity - held_quantity - sold_quantity`.
 - Không dùng Redis làm source of truth khi quyết định bán vé.
-- Cho phép admin xem lịch sử và thực hiện điều chỉnh tồn kho có kiểm soát.
+- Cho phép admin xem/tạo audit nghiệp vụ qua `audit_logs`; MVP không có bảng `ticket_inventory_events` riêng.
 
 ---
 
@@ -24,10 +24,10 @@ Nguồn nghiệp vụ chính:
 
 | Resource | Bảng | Vai trò |
 | --- | --- | --- |
-| `ticket_type_inventory` | `ticket_types` | Số lượng tổng/còn/giữ/đã bán theo loại vé. |
+| `ticket_type_inventory` | `ticket_types` | Số lượng tổng/giữ/đã bán theo loại vé. |
 | `user_ticket_type_counter` | `user_ticket_type_counters` | Enforce `max_per_user`. |
-| `inventory_event` | `ticket_inventory_events` | Audit HOLD/RELEASE/PAYMENT_CONFIRMED/REFUND/ADMIN_ADJUST. |
 | `order` | `orders`, `order_items` | Nguồn thay đổi hold/release/payment. |
+| `audit_log` | `audit_logs` | Audit thao tác admin/nghiệp vụ quan trọng. |
 
 ---
 
@@ -36,12 +36,10 @@ Nguồn nghiệp vụ chính:
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
 | `GET` | `/admin/ticket-types/{ticket_type_id}/inventory` | `ORGANIZER`, `ADMIN` | Xem tồn kho source-of-truth. |
-| `GET` | `/admin/ticket-types/{ticket_type_id}/inventory-events` | `ORGANIZER`, `ADMIN` | Xem audit tồn kho. |
 | `POST` | `/internal/inventory/holds` | Internal/Ticketing | Hold vé khi tạo order. |
 | `POST` | `/internal/inventory/releases` | Internal/Worker | Release hold khi order hết hạn/hủy. |
 | `POST` | `/internal/inventory/payment-confirmations` | Internal/Payment | Chuyển held sang sold khi payment thành công. |
-| `POST` | `/internal/inventory/refunds` | Internal/Payment/Admin | Hoàn vé khi refund. |
-| `POST` | `/admin/ticket-types/{ticket_type_id}/inventory-adjustments` | `ADMIN` | Điều chỉnh tồn kho thủ công có audit. |
+| `POST` | `/admin/ticket-types/{ticket_type_id}/inventory-adjustments` | `ADMIN` | Điều chỉnh tổng tồn kho thủ công và ghi audit. |
 
 Internal endpoints có thể là module method nội bộ trong modular monolith; nếu expose HTTP thì chỉ nằm trong private network và bắt buộc service auth.
 
@@ -67,7 +65,8 @@ Response `200`:
     "updated_at": "2026-05-30T10:15:30Z"
   },
   "meta": {
-    "request_id": "req_01JX9Q6N4E"
+    "request_id": "req_01JX9Q6N4E",
+    "computed_fields": ["available_quantity"]
   }
 }
 ```
@@ -124,13 +123,12 @@ Transaction rules:
 
 1. Lock `ticket_types` rows bằng `SELECT ... FOR UPDATE`.
 2. Lock hoặc tạo `user_ticket_type_counters`.
-3. Kiểm tra `available_quantity >= quantity`.
+3. Tính computed `available_quantity` và kiểm tra đủ vé.
 4. Kiểm tra sale window và `status = ON_SALE`.
 5. Kiểm tra `held_quantity + paid_quantity + quantity <= max_per_user`.
 6. Tạo order/order items.
-7. Giảm available, tăng held, tăng user held counter.
-8. Ghi `ticket_inventory_events` loại `HOLD`.
-9. Commit rồi mới cập nhật/invalidate Redis inventory.
+7. Tăng `ticket_types.held_quantity`, tăng user held counter.
+8. Commit rồi mới cập nhật/invalidate Redis inventory.
 
 ### 4.3. `POST /internal/inventory/releases`
 
@@ -178,12 +176,12 @@ Chuyển inventory từ held sang sold sau webhook payment hợp lệ.
 
 Side effects:
 
-- `orders.status = PAID`.
+- `orders.status = CONFIRMED`.
 - `ticket_types.held_quantity -= quantity`.
 - `ticket_types.sold_quantity += quantity`.
 - user counter chuyển held sang paid.
-- Ghi event `PAYMENT_CONFIRMED`.
 - Phát hành ticket ở Ticketing/E-ticket module.
+- Ghi `audit_logs` nếu đây là thao tác admin/manual hoặc cần đối soát.
 
 ### 4.5. `POST /admin/ticket-types/{ticket_type_id}/inventory-adjustments`
 
@@ -204,19 +202,20 @@ Response `200`:
     "ticket_type_id": "tkt_01JX9Q5A",
     "total_quantity": 250,
     "available_quantity": 168,
-    "event_id": "ive_01JX9QK3"
+    "audit_log_id": "aud_01JX9QK3"
   },
   "meta": {
-    "request_id": "req_01JX9Q6N4E"
+    "request_id": "req_01JX9Q6N4E",
+    "computed_fields": ["available_quantity"]
   }
 }
 ```
 
 Ràng buộc:
 
-- Không làm `available_quantity` âm.
+- Không làm computed `available_quantity` âm.
 - Không làm tổng vé vượt `seat_zones.capacity`.
-- Ghi `ADMIN_ADJUST` và audit log.
+- Ghi audit log `INVENTORY_ADJUSTED`.
 
 ---
 
@@ -224,11 +223,11 @@ Ràng buộc:
 
 | HTTP | Code | Khi nào xảy ra |
 | --- | --- | --- |
-| `409` | `TICKET_SOLD_OUT` | Không đủ `available_quantity`. |
+| `409` | `TICKET_SOLD_OUT` | Không đủ computed `available_quantity`. |
 | `409` | `PER_USER_LIMIT_EXCEEDED` | Vượt `max_per_user`. |
 | `409` | `ORDER_NOT_HELD` | Release/confirm order không ở trạng thái phù hợp. |
 | `422` | `TICKET_TYPE_NOT_ON_SALE` | Chưa mở bán, hết hạn bán hoặc status không hợp lệ. |
-| `422` | `INVENTORY_INVARIANT_VIOLATED` | Tổng quantity không khớp. |
+| `422` | `INVENTORY_INVARIANT_VIOLATED` | `held_quantity + sold_quantity > total_quantity`. |
 | `422` | `ZONE_CAPACITY_EXCEEDED` | Điều chỉnh vượt capacity khu. |
 | `503` | `LOCK_TIMEOUT_RETRYABLE` | DB lock timeout/deadlock, client/worker có thể retry. |
 
@@ -237,7 +236,7 @@ Ràng buộc:
 ## 6. Acceptance criteria
 
 - Hai request cùng mua vé cuối cùng chỉ một request thành công.
-- Không bao giờ có `available_quantity < 0`.
+- Không bao giờ có computed `available_quantity < 0`.
 - Order hết hạn release đúng số lượng.
 - Payment success chuyển held sang sold đúng một lần.
-- Mọi thay đổi tồn kho có `ticket_inventory_events`.
+- Không còn phụ thuộc bảng `ticket_inventory_events`.
