@@ -1,0 +1,19 @@
+{
+  "name": "ticket-box-app",
+  "version": "1.0.0",
+  "description": "Ticket Box Monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "start": "npm run start --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

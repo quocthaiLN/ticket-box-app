@@ -1,0 +1,13 @@
+{
+  "name": "worker-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"worker-server: no dev script specified\" && exit 0",
+    "start": "echo \"worker-server: no start script specified\" && exit 0"
+  },
+  "dependencies": {
+    "@ticket-box/redis": "*"
+  }
+}
