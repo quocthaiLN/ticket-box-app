@@ -21,7 +21,7 @@ ticket-box-app/
 ├── apps/
 │   ├── web/                                  # Web khán giả + Admin Dashboard
 │   │   ├── src/
-│   │   │   ├── app/                          # Routes/pages nếu dùng Next.js App Router
+│   │   │   ├── routes/                       # React Router route components cho audience/admin
 │   │   │   ├── features/                     # UI theo domain: catalog, checkout, admin...
 │   │   │   ├── components/                   # Component dùng chung
 │   │   │   ├── lib/                          # API client, auth client, formatters

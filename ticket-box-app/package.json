@@ -1,0 +1,23 @@
+{
+  "name": "ticket-box-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev -w @ticketbox/api-server",
+    "dev:web": "npm run dev -w @ticketbox/web",
+    "build:api": "npm run build -w @ticketbox/api-server",
+    "build:web": "npm run build -w @ticketbox/web",
+    "build:storage": "npm run build -w @ticketbox/storage",
+    "db:validate": "npm run prisma:validate -w @ticketbox/database",
+    "db:generate": "npm run prisma:generate -w @ticketbox/database",
+    "db:seed": "npm run prisma:seed -w @ticketbox/database"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  }
+}
