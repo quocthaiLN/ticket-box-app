@@ -1,5 +1,8 @@
 import { prisma, Prisma, OrderStatus } from '@ticketbox/database';
+import { cacheDelete } from '@ticket-box/redis';
 import type { HoldRequest, ReleaseRequest, PaymentConfirmationRequest, InventoryAdjustmentRequest } from './inventory.type.js';
+
+const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
 type TicketTypeRow = {
   id: string;
@@ -77,11 +80,12 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
   const holdExpiresAt = new Date(req.hold_expires_at);
   const now = new Date();
 
-  return prisma.$transaction(async (tx) => {
-    // Sort by ticket_type_id to avoid deadlocks on concurrent requests
-    const sortedItems = [...req.items].sort((a, b) =>
-      a.ticket_type_id.localeCompare(b.ticket_type_id),
-    );
+  // Sort outside transaction so we can reference after commit for cache invalidation
+  const sortedItems = [...req.items].sort((a, b) =>
+    a.ticket_type_id.localeCompare(b.ticket_type_id),
+  );
+
+  const result = await prisma.$transaction(async (tx) => {
     const ticketTypeIds = sortedItems.map((i) => i.ticket_type_id);
 
     const ticketTypes = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
@@ -221,10 +225,16 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
 
     return { order, itemResults };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  await Promise.allSettled(sortedItems.map((item) => cacheDelete(inventoryCacheKey(item.ticket_type_id))));
+
+  return result;
 }
 
 export async function releaseInventory(req: ReleaseRequest) {
-  return prisma.$transaction(async (tx) => {
+  let releasedTicketTypeIds: string[] = [];
+
+  const result = await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<OrderWithItemsRow[]>(Prisma.sql`
       SELECT
         o.id AS "orderId",
@@ -290,12 +300,19 @@ export async function releaseInventory(req: ReleaseRequest) {
       releasedItems.push({ ticket_type_id: row.ticketTypeId, quantity: row.quantity });
     }
 
+    releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
     return { orderId: req.order_id, status: newStatus, releasedItems };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  await Promise.allSettled(releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))));
+
+  return result;
 }
 
 export async function confirmPayment(req: PaymentConfirmationRequest) {
-  return prisma.$transaction(async (tx) => {
+  let confirmedTicketTypeIds: string[] = [];
+
+  const result = await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<OrderWithItemsRow[]>(Prisma.sql`
       SELECT
         o.id AS "orderId",
@@ -364,12 +381,17 @@ export async function confirmPayment(req: PaymentConfirmationRequest) {
       WHERE id = ${req.payment_id}::uuid AND order_id = ${req.order_id}::uuid
     `);
 
+    confirmedTicketTypeIds = [...new Set(rows.map((r) => r.ticketTypeId))];
     return { orderId: req.order_id, status: OrderStatus.CONFIRMED, confirmedAt: now };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  await Promise.allSettled(confirmedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))));
+
+  return result;
 }
 
 export async function adjustInventory(ticketTypeId: string, req: InventoryAdjustmentRequest, actorUserId?: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const [row] = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
       SELECT
         id,
@@ -453,4 +475,8 @@ export async function adjustInventory(ticketTypeId: string, req: InventoryAdjust
       auditLogId: auditLog.id,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  await cacheDelete(inventoryCacheKey(ticketTypeId));
+
+  return result;
 }

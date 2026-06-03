@@ -1,5 +1,13 @@
 import type { Request } from 'express';
 
+declare global {
+  namespace Express {
+    interface Request {
+      requestId: string;
+    }
+  }
+}
+
 export interface HoldItem {
   ticket_type_id: string;
   quantity: number;
@@ -76,6 +84,4 @@ export interface InventoryAdjustmentResponse {
   audit_log_id: string;
 }
 
-export interface AppRequest extends Request {
-  requestId: string;
-}
+export interface AppRequest extends Request {}
