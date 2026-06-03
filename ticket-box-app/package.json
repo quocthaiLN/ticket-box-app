@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "config"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",

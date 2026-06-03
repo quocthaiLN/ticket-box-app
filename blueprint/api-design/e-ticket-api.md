@@ -34,14 +34,34 @@ Nguồn nghiệp vụ chính:
 
 ## 3. Endpoint tổng hợp
 
-| Method | Endpoint | Auth | Mục đích |
-| --- | --- | --- | --- |
-| `GET` | `/me/tickets` | `AUDIENCE` | Danh sách vé của user. |
-| `GET` | `/me/tickets/{ticket_id}` | `AUDIENCE` | Chi tiết e-ticket. |
-| `GET` | `/me/tickets/{ticket_id}/qr` | `AUDIENCE` | QR payload/signature để hiển thị. |
-| `POST` | `/internal/orders/{order_id}/tickets/issue` | Internal/Ticketing | Phát hành ticket sau payment success. |
-| `POST` | `/internal/tickets/{ticket_id}/void` | Internal/Admin/Payment | Hủy ticket khi refund/cancel. |
-| `POST` | `/internal/tickets/resolve-qr` | Internal/Check-in | Resolve QR token cho check-in. |
+| Method | Endpoint | Auth | Mô tả auth | Mục đích |
+| --- | --- | --- | --- | --- |
+| `GET` | `/me/tickets` | JWT Bearer | `AUDIENCE` — `user_id` extract từ JWT (`token.sub`); chỉ trả ticket của chính user | Danh sách vé của user. |
+| `GET` | `/me/tickets/{ticket_id}` | JWT Bearer | `AUDIENCE` — verify ownership: `ticket.user_id === token.sub` | Chi tiết e-ticket. |
+| `GET` | `/me/tickets/{ticket_id}/qr` | JWT Bearer | `AUDIENCE` — verify ownership: `ticket.user_id === token.sub` | QR payload/signature để hiển thị. |
+| `POST` | `/internal/orders/{order_id}/tickets/issue` | Internal service token | Không có user JWT; xác thực bằng internal service token hoặc private network | Phát hành ticket sau payment success. |
+| `POST` | `/internal/tickets/{ticket_id}/void` | Internal service token | Không có user JWT; gọi bởi Payment/Admin module khi refund/cancel | Hủy ticket khi refund/cancel. |
+| `POST` | `/internal/tickets/resolve-qr` | Internal service token | Không có user JWT; gọi bởi Check-in module | Resolve QR token cho check-in. |
+
+### Auth chi tiết
+
+**JWT Bearer (AUDIENCE endpoints)**
+
+```http
+Authorization: Bearer <access_token>
+```
+
+- Backend extract `user_id = token.sub` từ JWT (không nhận `user_id` từ body/query).
+- Access token là short-lived (15–60 phút); refresh token dùng để cấp access token mới.
+- Nếu thiếu hoặc token hết hạn: `401 UNAUTHORIZED`.
+- Nếu token hợp lệ nhưng không sở hữu ticket: `403 TICKET_ACCESS_DENIED`.
+
+**Internal endpoints**
+
+- Không có user JWT.
+- Trong modular monolith: direct module call hoặc private HTTP với `X-Internal-Token` header.
+- Nếu expose ra ngoài: chỉ cho phép từ private network + service token, không bao giờ expose public.
+- Idempotency-Key header bắt buộc với `POST /internal/orders/{order_id}/tickets/issue`.
 
 ---
 

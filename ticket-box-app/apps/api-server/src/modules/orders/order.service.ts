@@ -10,7 +10,7 @@ import {
   getOrderWithDetails,
   OrderError,
 } from './order.repository.js';
-import { buildCheckoutUrl } from './order.payment.js';
+import { buildCheckoutUrlWithFallback } from '../payments/payment.service.js';
 import type {
   AdminOrderListResponse,
   AdminOrdersQuery,
@@ -133,11 +133,11 @@ export async function createOrder(
   }
 
   const { order, items } = orderResult;
-  const provider = req.payment_provider ?? 'VNPAY';
+  const preferredProvider = req.payment_provider ?? 'VNPAY';
   const orderInfo = `Payment for order ${order.id}`;
 
-  const checkoutUrl = buildCheckoutUrl(
-    provider,
+  const { url: checkoutUrl, provider } = await buildCheckoutUrlWithFallback(
+    preferredProvider,
     order.id,
     order.totalAmount,
     order.currency,

@@ -9,6 +9,7 @@
 - Khán giả
 - Ticketing Module
 - Payment Module
+- VNPAY / MoMo Provider
 - PostgreSQL
 - Redis Idempotency Store
 - Order Expiry Worker
@@ -34,6 +35,29 @@
 8. Payment success chuyển `payments.status = SUCCEEDED`, `orders.status = CONFIRMED`, chuyển held sang sold và phát hành ticket.
 9. Payment fail/cancel hoặc order timeout release hold và chuyển order sang `CANCELLED` hoặc `EXPIRED` theo nguyên nhân.
 
+## 4.1. Luồng ReturnUrl vs IPN/Webhook
+
+VNPAY và MoMo đều có hai loại callback:
+
+| Loại | Trigger | Xử lý |
+| --- | --- | --- |
+| **ReturnUrl** | Browser redirect sau khi user xong trên trang provider | **Frontend only** — hiển thị màn hình "đang xử lý", bắt đầu poll `GET /orders/{order_id}` |
+| **IPN / Webhook** | Server-to-server từ provider, độc lập browser | **Backend** — verify signature, cập nhật payment/order, phát hành ticket |
+
+ReturnUrl không được dùng để cập nhật order status. Backend chỉ tin vào IPN/Webhook đã verify signature.
+
+## 4.2. Luồng payment retry
+
+Khi payment có trạng thái `FAILED` (provider từ chối), user có thể thử lại mà không cần tạo order mới:
+
+1. User gửi `POST /orders/{order_id}/payments` với provider mới hoặc cùng provider.
+2. Backend kiểm tra order vẫn `HELD` và chưa hết hạn.
+3. Backend tạo `payments` mới trạng thái `PENDING` cho cùng order; giữ nguyên hold inventory.
+4. Backend trả checkout URL mới.
+5. Một order có thể có nhiều payment attempts; chỉ một `SUCCEEDED` là hợp lệ.
+
+Ràng buộc: không cho retry nếu order `CONFIRMED`, `CANCELLED`, hoặc `EXPIRED`.
+
 ## 5. Kịch bản lỗi
 
 - Idempotency key trùng: trả response cũ hoặc trạng thái đang xử lý từ Redis.
@@ -56,3 +80,5 @@
 - Order hết hạn release vé và quota user.
 - Payment success chuyển order `CONFIRMED` và phát hành ticket.
 - Checkout retry không tạo đơn trùng.
+- ReturnUrl không cập nhật order status; backend chỉ tin IPN/Webhook đã verify.
+- Payment retry tạo payment attempt mới mà không ảnh hưởng hold inventory.

@@ -1,0 +1,11 @@
+{
+  "name": "@ticket-box/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./env.ts",
+  "exports": {
+    ".": "./env.ts",
+    "./payment.js": "./payment.ts"
+  }
+}

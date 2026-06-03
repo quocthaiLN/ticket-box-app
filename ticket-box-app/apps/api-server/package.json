@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "@ticket-box/config": "*",
     "@ticket-box/redis": "*",
     "@ticketbox/database": "*"
   },
