@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { authRouter } from "./modules/auth/auth.router.js";
 import { catalogRouter } from "./modules/catalog/catalog.router.js";
 import { errorMiddleware } from "./shared/middleware/error.middleware.js";
 import { requestIdMiddleware } from "./shared/middleware/request-id.middleware.js";
@@ -20,6 +21,7 @@ export function createApp() {
     res.json(ok({ status: "OK" }, req.requestId));
   });
 
+  app.use("/v1/auth", authRouter);
   app.use("/v1", catalogRouter);
 
   app.use(errorMiddleware);
