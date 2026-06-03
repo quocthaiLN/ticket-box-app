@@ -16,6 +16,8 @@ Mã nguồn nằm trong `ticket-box-app/` dưới dạng npm workspace:
 - File trong module theo quy ước `*.router.ts`, `*.service.ts`, `*.repository.ts`, `*.schema.ts`, `*.types.ts` và có thể có `*.cache.ts`.
 - Public Catalog endpoints được mount theo dạng `/v1/concerts...`.
 - Admin Catalog endpoints được mount theo dạng `/v1/admin/...` và sẽ dùng auth/role guard khi Auth được implement.
+- Check-in Sprint 1 endpoints có route theo prompt (`/v1/check-in/scan`, `/v1/check-in/preload`, `/v1/check-in/offline-sync`) và alias theo blueprint API (`/v1/check-in/scans`, `/v1/check-in/offline-batches...`).
+- Guest list Sprint 1 endpoints có route theo prompt (`/v1/guest-list/import`, `/v1/guest-list/search`, `/v1/guest-list/scan`) và alias theo blueprint API cho admin/check-in guest.
 - Response dùng envelope trong `blueprint/api-design/base-api.md`: `{ data, meta }`; collection response có thêm pagination.
 - Source dùng TypeScript và ESM. JSON field trong API DTO giữ dạng `snake_case`.
 

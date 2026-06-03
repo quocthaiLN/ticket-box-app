@@ -194,6 +194,17 @@ Sprint 1 - Thanh:
 - README đã ghi module boundaries, route mount convention và lệnh local cơ bản.
 - Đã tạo `description.md` cho `apps/api-server`, `apps/web`, `packages/database`, `packages/storage` để team vừa làm vừa research và cập nhật dần qua từng sprint.
 
+Sprint 1 - Quang:
+
+- `apps/api-server/src/modules/checkin` đã có scaffold router/service/repository/schema/types và `checkin.sync.ts`.
+- Check-in route theo prompt đã có: `/v1/check-in/scan`, `/v1/check-in/preload`, `/v1/check-in/offline-sync`.
+- Check-in route alias theo blueprint đã có: `/v1/check-in/scans`, `/v1/check-in/offline-batches`, `/v1/check-in/offline-batches/:batch_id/items`.
+- `apps/api-server/src/modules/guest-list` đã có scaffold router/service/repository/schema/types.
+- Guest list route theo prompt đã có: `/v1/guest-list/import`, `/v1/guest-list/search`, `/v1/guest-list/scan`.
+- Guest list route alias theo blueprint đã có: `/v1/admin/concerts/:concert_id/guest-import-jobs`, `/v1/check-in/guests/search`, `/v1/admin/concerts/:concert_id/guests`, `/v1/check-in/guests/scans`.
+- Decision note offline check-in sync nằm ở `docs/decisions/offline-checkin-sync.md`.
+
 Quyết định cập nhật:
 
 - Team chọn React + Vite + React Router cho web audience/admin thay vì Next.js vì phù hợp kiến thức hiện tại của nhóm hơn.
+- Offline check-in sync dùng `client_item_id` cho từng offline scan item để server xử lý idempotency theo từng dòng khi mobile retry batch.
