@@ -3,7 +3,7 @@
 All commands must be run from the database package directory:
 
 ```
-cd project/ticket-box-app/packages/database
+cd /ticket-box-app/packages/database
 ```
 
 ## 1. Set environment variable

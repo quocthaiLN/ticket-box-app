@@ -1,20 +1,23 @@
 {
   "name": "ticket-box-app",
-  "version": "1.0.0",
-  "description": "Ticket Box Monorepo",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "config"
+    "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
-    "start": "npm run start --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev -w @ticketbox/api-server",
+    "dev:web": "npm run dev -w @ticketbox/web",
+    "build:api": "npm run build -w @ticketbox/api-server",
+    "build:web": "npm run build -w @ticketbox/web",
+    "build:storage": "npm run build -w @ticketbox/storage",
+    "db:validate": "npm run prisma:validate -w @ticketbox/database",
+    "db:generate": "npm run prisma:generate -w @ticketbox/database",
+    "db:seed": "npm run prisma:seed -w @ticketbox/database"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "@types/node": "^25.9.1"
   }
 }
