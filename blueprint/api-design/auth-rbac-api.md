@@ -21,10 +21,10 @@ Nguồn nghiệp vụ chính:
 
 ## 2. Resource và mapping database
 
-| Resource | Bảng | Vai trò |
-| --- | --- | --- |
-| `user` | `users` | Tài khoản khán giả, organizer, checker, admin; chứa `role` và `status`. |
-| `audit_log` | `audit_logs` | Audit thay đổi role, khóa/mở tài khoản, tạo user nội bộ. |
+| Resource    | Bảng         | Vai trò                                                                 |
+| ----------- | ------------ | ----------------------------------------------------------------------- |
+| `user`      | `users`      | Tài khoản khán giả, organizer, checker, admin; chứa `role` và `status`. |
+| `audit_log` | `audit_logs` | Audit thay đổi role, khóa/mở tài khoản, tạo user nội bộ.                |
 
 Role hợp lệ: `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`.
 
@@ -32,17 +32,17 @@ Role hợp lệ: `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`.
 
 ## 3. Endpoint tổng hợp
 
-| Method | Endpoint | Auth | Mục đích |
-| --- | --- | --- | --- |
-| `POST` | `/auth/register` | Public | Đăng ký tài khoản khán giả. |
-| `POST` | `/auth/login` | Public | Đăng nhập, phát access/refresh token. |
-| `POST` | `/auth/logout` | User | Thu hồi token hiện tại qua Redis denylist. |
-| `POST` | `/auth/refresh` | Refresh token | Cấp access token mới. |
-| `GET` | `/auth/me` | User | Lấy thông tin user hiện tại và role. |
-| `GET` | `/admin/users` | `ADMIN` | Tra cứu user. |
-| `POST` | `/admin/users` | `ADMIN` | Tạo user nội bộ. |
-| `PATCH` | `/admin/users/{user_id}/status` | `ADMIN` | Khóa/mở/disable user. |
-| `PATCH` | `/admin/users/{user_id}/role` | `ADMIN` | Gán role chính cho user. |
+| Method  | Endpoint                        | Auth          | Mục đích                                   |
+| ------- | ------------------------------- | ------------- | ------------------------------------------ |
+| `POST`  | `/auth/register`                | Public        | Đăng ký tài khoản khán giả.                |
+| `POST`  | `/auth/login`                   | Public        | Đăng nhập, phát access/refresh token.      |
+| `POST`  | `/auth/logout`                  | User          | Thu hồi token hiện tại qua Redis denylist. |
+| `POST`  | `/auth/refresh`                 | Refresh token | Cấp access token mới.                      |
+| `GET`   | `/auth/me`                      | User          | Lấy thông tin user hiện tại và role.       |
+| `GET`   | `/admin/users`                  | `ADMIN`       | Tra cứu user.                              |
+| `POST`  | `/admin/users`                  | `ADMIN`       | Tạo user nội bộ.                           |
+| `PATCH` | `/admin/users/{user_id}/status` | `ADMIN`       | Khóa/mở/disable user.                      |
+| `PATCH` | `/admin/users/{user_id}/role`   | `ADMIN`       | Gán role chính cho user.                   |
 
 ---
 
@@ -56,8 +56,8 @@ Tạo tài khoản khán giả.
 {
   "email": "audience@example.com",
   "password": "StrongPassword123!",
-  "full_name": "Nguyen Van A",
-  "phone": "+84901234567"
+  "confirmPassword": "StrongPassword123!",
+  "otp": "123456"
 }
 ```
 
@@ -80,7 +80,6 @@ Response `201`:
 Ràng buộc:
 
 - `email` unique và đúng format.
-- `phone` unique nếu có.
 - Password không lưu plaintext; backend chỉ lưu `password_hash`.
 - Role mặc định là `AUDIENCE`.
 
@@ -101,8 +100,6 @@ Response `200`:
 {
   "data": {
     "access_token": "jwt-access-token",
-    "refresh_token": "jwt-refresh-token",
-    "token_type": "Bearer",
     "expires_in": 900,
     "user": {
       "id": "usr_01JX9Q8B",
@@ -122,6 +119,7 @@ Ràng buộc:
 - Nếu password sai, trả `401 INVALID_CREDENTIALS` và không tiết lộ email có tồn tại hay không.
 - `LOCKED` hoặc `DISABLED` không được đăng nhập.
 - JWT chứa `sub`, `role`, `iat`, `exp`, `jti`.
+- Refresh token lưu trong cookie.
 
 ### 4.3. `POST /auth/logout`
 
@@ -185,17 +183,17 @@ Side effects:
 
 ## 5. Error catalog
 
-| HTTP | Code | Khi nào xảy ra |
-| --- | --- | --- |
-| `400` | `INVALID_EMAIL` | Email sai format. |
-| `400` | `WEAK_PASSWORD` | Password không đạt policy. |
-| `401` | `INVALID_CREDENTIALS` | Sai email/password. |
-| `401` | `TOKEN_EXPIRED` | JWT hết hạn. |
-| `401` | `TOKEN_REVOKED` | JWT nằm trong Redis denylist. |
-| `403` | `FORBIDDEN` | Không đủ role. |
-| `409` | `EMAIL_ALREADY_EXISTS` | Email đã được dùng. |
-| `409` | `PHONE_ALREADY_EXISTS` | Phone đã được dùng. |
-| `422` | `INVALID_ROLE` | Role không thuộc danh sách hợp lệ. |
+| HTTP  | Code                   | Khi nào xảy ra                     |
+| ----- | ---------------------- | ---------------------------------- |
+| `400` | `INVALID_EMAIL`        | Email sai format.                  |
+| `400` | `WEAK_PASSWORD`        | Password không đạt policy.         |
+| `401` | `INVALID_CREDENTIALS`  | Sai email/password.                |
+| `401` | `TOKEN_EXPIRED`        | JWT hết hạn.                       |
+| `401` | `TOKEN_REVOKED`        | JWT nằm trong Redis denylist.      |
+| `403` | `FORBIDDEN`            | Không đủ role.                     |
+| `409` | `EMAIL_ALREADY_EXISTS` | Email đã được dùng.                |
+| `409` | `PHONE_ALREADY_EXISTS` | Phone đã được dùng.                |
+| `422` | `INVALID_ROLE`         | Role không thuộc danh sách hợp lệ. |
 
 ---
 

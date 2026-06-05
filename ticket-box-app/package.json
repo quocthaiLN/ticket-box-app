@@ -10,9 +10,13 @@
     "build": "npm run build --workspaces --if-present",
     "dev:api": "npm run dev -w @ticketbox/api-server",
     "dev:web": "npm run dev -w @ticketbox/web",
+    "dev:worker": "npm run dev -w @ticketbox/worker-server",
     "build:api": "npm run build -w @ticketbox/api-server",
     "build:web": "npm run build -w @ticketbox/web",
+    "build:worker": "npm run build -w @ticketbox/worker-server",
     "build:storage": "npm run build -w @ticketbox/storage",
+    "build:redis": "npm run build -w @ticketbox/redis",
+    "build:queue": "npm run build -w @ticketbox/queue",
     "db:validate": "npm run prisma:validate -w @ticketbox/database",
     "db:generate": "npm run prisma:generate -w @ticketbox/database",
     "db:seed": "npm run prisma:seed -w @ticketbox/database"

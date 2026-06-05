@@ -183,28 +183,3 @@ Khi mở context mới:
 7. Khi cài đặt thêm kiến thức, module, pattern hoặc dependency mới trong `apps/api-server`, `apps/web`, `packages/database`, `packages/storage`, phải cập nhật `description.md` tương ứng trong folder đó. Mỗi file `description.md` là sổ tay sống của folder: vai trò, hiện trạng, cách đọc, quy ước cần giữ, nguồn học thêm và ghi chú cần update ở sprint sau.
 
 ## 11. Trạng thái ghi nhận hiện tại
-
-Sprint 1 - Thanh:
-
-- Root npm workspace được scaffold trong `ticket-box-app/` theo `blueprint/structure.md`.
-- `apps/api-server` có Express API skeleton, request-id middleware, response envelope, problem-details error middleware và Catalog router mount dưới `/v1`.
-- Catalog module đã có public/admin route stubs, DTO/types, query parser, service/repository/cache key skeleton theo `blueprint/api-design/catalog-api.md`.
-- `apps/web` có React + Vite + React Router skeleton với audience home, concert detail placeholder, admin home và admin catalog placeholder.
-- `packages/storage` có MinIO/CDN wrapper contract: bucket convention, object key convention, public URL, upload URL và download URL interface.
-- README đã ghi module boundaries, route mount convention và lệnh local cơ bản.
-- Đã tạo `description.md` cho `apps/api-server`, `apps/web`, `packages/database`, `packages/storage` để team vừa làm vừa research và cập nhật dần qua từng sprint.
-
-Sprint 1 - Quang:
-
-- `apps/api-server/src/modules/checkin` đã có scaffold router/service/repository/schema/types và `checkin.sync.ts`.
-- Check-in route theo prompt đã có: `/v1/check-in/scan`, `/v1/check-in/preload`, `/v1/check-in/offline-sync`.
-- Check-in route alias theo blueprint đã có: `/v1/check-in/scans`, `/v1/check-in/offline-batches`, `/v1/check-in/offline-batches/:batch_id/items`.
-- `apps/api-server/src/modules/guest-list` đã có scaffold router/service/repository/schema/types.
-- Guest list route theo prompt đã có: `/v1/guest-list/import`, `/v1/guest-list/search`, `/v1/guest-list/scan`.
-- Guest list route alias theo blueprint đã có: `/v1/admin/concerts/:concert_id/guest-import-jobs`, `/v1/check-in/guests/search`, `/v1/admin/concerts/:concert_id/guests`, `/v1/check-in/guests/scans`.
-- Decision note offline check-in sync nằm ở `docs/decisions/offline-checkin-sync.md`.
-
-Quyết định cập nhật:
-
-- Team chọn React + Vite + React Router cho web audience/admin thay vì Next.js vì phù hợp kiến thức hiện tại của nhóm hơn.
-- Offline check-in sync dùng `client_item_id` cho từng offline scan item để server xử lý idempotency theo từng dòng khi mobile retry batch.
