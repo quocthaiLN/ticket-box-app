@@ -4,18 +4,19 @@ const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 export const emailSchema = z
-  .email("Invalid email address")
+  .string()
   .trim()
   .toLowerCase()
   .min(1, "Email is required")
-  .max(255, "Email is too long");
+  .max(255, "Email is too long")
+  .email("Invalid email address");
 
 export const registerSchema = z
   .object({
     email: emailSchema,
 
     password: z
-      .string("Password is required")
+      .string({ required_error: "Password is required" })
       .min(8, "Password must be at least 8 characters")
       .max(64, "Password must be at most 64 characters")
       .regex(
@@ -23,10 +24,12 @@ export const registerSchema = z
         "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
       ),
 
-    confirmPassword: z.string("Confirm password is requried"),
+    confirmPassword: z.string({
+      required_error: "Confirm password is required",
+    }),
 
     otp: z
-      .string("OTP is required")
+      .string({ required_error: "OTP is required" })
       .length(6, "OTP must be 6 digits")
       .regex(/^\d+$/, "OTP must be numeric"),
   })
@@ -42,9 +45,7 @@ export const loginSchema = z.object({
 
 /** Schema gán role (admin only) */
 export const updateRoleSchema = z.object({
-  role: z.enum(["AUDIENCE", "ORGANIZER", "CHECKER", "ADMIN"] as const, {
-    message: "role must be one of AUDIENCE, ORGANIZER, CHECKER, ADMIN",
-  }),
+  role: z.enum(["AUDIENCE", "ORGANIZER", "CHECKER", "ADMIN"] as const),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
