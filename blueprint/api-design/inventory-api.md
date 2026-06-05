@@ -75,9 +75,12 @@ Response `200`:
 
 Hold vé cho order. Endpoint này phải chạy trong transaction.
 
+Auth: JWT Bearer token (user). `user_id` được extract từ JWT payload (`sub` claim), không nhận từ request body để tránh giả mạo.
+
 Headers:
 
 ```http
+Authorization: Bearer <jwt_token>
 Idempotency-Key: hold_usr_01JX_tkt_01JX_0001
 ```
 
@@ -85,7 +88,6 @@ Request:
 
 ```json
 {
-  "user_id": "usr_01JX9Q8B",
   "concert_id": "crt_01JX9Q2M5P7KZ3R4N8Y6",
   "items": [
     {
@@ -134,6 +136,8 @@ Transaction rules:
 
 Release vé đang hold khi order hết hạn hoặc bị hủy.
 
+Auth: Internal service auth (không có user JWT). Endpoint này được gọi bởi background worker (scheduler/job queue) khi order hết hạn, hoặc bởi order module khi user hủy. Trong modular monolith thường là direct module call; nếu expose HTTP thì giới hạn private network + service token.
+
 ```json
 {
   "order_id": "ord_01JX9QA1",
@@ -167,6 +171,8 @@ Idempotent rule: nếu order không còn `HELD`, trả trạng thái hiện tạ
 
 Chuyển inventory từ held sang sold sau webhook payment hợp lệ.
 
+Auth: Không có user JWT. Endpoint này được trigger bởi message consumer (event-driven) sau khi Payment module publish event `payment.succeeded` lên message broker. Không expose HTTP ra ngoài; nếu cần HTTP thì chỉ private network + service token. Không cần verify user identity — chỉ cần verify `order_id` và `payment_id` hợp lệ trong DB.
+
 ```json
 {
   "order_id": "ord_01JX9QA1",
@@ -185,7 +191,13 @@ Side effects:
 
 ### 4.5. `POST /admin/ticket-types/{ticket_type_id}/inventory-adjustments`
 
-Điều chỉnh thủ công, chỉ `ADMIN`.
+Điều chỉnh thủ công, chỉ `ADMIN`. `user_id` của admin được extract từ JWT để ghi vào `audit_logs.performed_by`, không nhận từ request body.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt_token>  (role = ADMIN)
+```
 
 ```json
 {

@@ -4,3 +4,4 @@ dist/
 .env
 .env.local
 *.log
+ticket-box-app/packages/database/src/generated/prisma/

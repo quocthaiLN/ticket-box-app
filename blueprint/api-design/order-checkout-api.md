@@ -53,6 +53,7 @@ Idempotency runtime nằm ở Redis. PostgreSQL chỉ giữ unique constraint tr
 | `POST` | `/orders` | `AUDIENCE` | Tạo order held và payment URL. |
 | `GET` | `/orders/{order_id}` | `AUDIENCE`, `ADMIN` | Poll trạng thái order. |
 | `POST` | `/orders/{order_id}/cancel` | `AUDIENCE` | Hủy order còn `HELD`. |
+| `POST` | `/orders/{order_id}/payments` | `AUDIENCE` | Tạo payment attempt mới (retry). |
 | `POST` | `/payments/webhooks/{provider}` | Public + signature | Webhook/IPN VNPAY/MoMo. |
 | `POST` | `/internal/orders/{order_id}/expire` | Internal/Worker | Expire order hết TTL. |
 | `GET` | `/admin/orders` | `ORGANIZER`, `ADMIN` | Tra cứu order quản trị. |
@@ -153,6 +154,14 @@ Nếu payment provider circuit breaker đang open, backend có thể fail-fast v
 
 Khán giả poll trạng thái order sau khi quay về từ payment provider.
 
+Auth: JWT Bearer token. `user_id` extract từ JWT để verify ownership (`order.user_id === token.sub`). Admin không cần check ownership.
+
+**Headers**
+
+```http
+Authorization: Bearer <jwt>
+```
+
 **Response `200` khi `HELD`**
 
 ```json
@@ -224,6 +233,14 @@ Ownership:
 
 User hủy order còn `HELD` trước khi thanh toán.
 
+Auth: JWT Bearer token. `user_id` extract từ JWT để verify ownership trước khi cho phép hủy — không nhận `user_id` từ body.
+
+**Headers**
+
+```http
+Authorization: Bearer <jwt>
+```
+
 **Response `200`**
 
 ```json
@@ -251,13 +268,19 @@ Ràng buộc:
 
 Webhook/IPN từ VNPAY/MoMo. Endpoint public nhưng bắt buộc verify signature.
 
+Auth: Không có user JWT. Xác thực duy nhất là verify chữ ký HMAC/hash của provider trong payload. Không có `user_id` trong flow này — identity được xác định qua `order_id` từ payload.
+
 **Path parameters**
 
 | Tên | Giá trị |
 | --- | --- |
 | `provider` | `vnpay`, `momo` |
 
-**VNPAY raw request ví dụ**
+**Lưu ý: ReturnUrl vs IPN**
+
+VNPAY và MoMo đều có hai loại callback. Backend chỉ xử lý IPN (server-to-server). `ReturnUrl` là browser redirect về frontend — frontend hiển thị màn hình "đang xử lý" và poll `GET /orders/{order_id}`, không gọi backend để confirm.
+
+**VNPAY IPN payload ví dụ**
 
 ```json
 {
@@ -274,12 +297,45 @@ Webhook/IPN từ VNPAY/MoMo. Endpoint public nhưng bắt buộc verify signatur
 }
 ```
 
-**Response `200` theo provider**
+Signature: HMAC-SHA512 trên chuỗi query params đã sort theo key, dùng `VNPAY_HASH_SECRET`. `vnp_ResponseCode = "00"` là thành công.
+
+**MoMo IPN payload ví dụ**
+
+```json
+{
+  "partnerCode": "TICKETBOX",
+  "orderId": "ord_01JX9QA1",
+  "requestId": "ord_01JX9QA1",
+  "amount": 9000000,
+  "orderInfo": "Thanh toan don hang ord_01JX9QA1",
+  "orderType": "momo_wallet",
+  "transId": 4082488746,
+  "resultCode": 0,
+  "message": "Successful.",
+  "payType": "qr",
+  "responseTime": 1748600310000,
+  "extraData": "",
+  "signature": "abc123def456"
+}
+```
+
+Signature: HMAC-SHA256 trên raw string `accessKey=...&amount=...&extraData=...&message=...&orderId=...&orderInfo=...&orderType=...&partnerCode=...&payType=...&requestId=...&responseTime=...&resultCode=...&transId=...`, dùng `MOMO_SECRET_KEY`. `resultCode = 0` là thành công.
+
+**Response `200` theo provider (VNPAY)**
 
 ```json
 {
   "RspCode": "00",
   "Message": "Confirm Success"
+}
+```
+
+**Response `200` theo provider (MoMo)**
+
+```json
+{
+  "status": 200,
+  "message": "success"
 }
 ```
 
@@ -310,6 +366,8 @@ Webhook trùng phải trả `200` idempotent nhưng không phát hành vé lần
 
 Worker gọi khi order quá `hold_expires_at`.
 
+Auth: Internal service auth, không có user JWT. Trong modular monolith thường là direct module call; nếu expose HTTP thì chỉ private network + service token.
+
 **Response `200`**
 
 ```json
@@ -338,6 +396,14 @@ Idempotent: nếu order đã `CONFIRMED`, `CANCELLED` hoặc `EXPIRED`, không r
 
 Admin/Organizer tra cứu order.
 
+Auth: JWT Bearer token với role `ORGANIZER` hoặc `ADMIN`. Organizer scope (concert nào được xem) derive từ JWT claims, không nhận từ query params.
+
+**Headers**
+
+```http
+Authorization: Bearer <jwt>  (role = ORGANIZER | ADMIN)
+```
+
 **Query parameters**
 
 | Tên | Mô tả |
@@ -349,6 +415,53 @@ Admin/Organizer tra cứu order.
 | `limit`, `cursor` | Phân trang. |
 
 Organizer chỉ xem order thuộc concert mình quản lý.
+
+---
+
+### 4.7. `POST /orders/{order_id}/payments`
+
+Tạo payment attempt mới khi payment trước đó `FAILED`. Order phải còn `HELD` và chưa hết hạn.
+
+Auth: JWT Bearer token. `user_id` từ JWT để verify ownership.
+
+**Headers**
+
+```http
+Authorization: Bearer <jwt>
+```
+
+**Request**
+
+```json
+{
+  "payment_provider": "MOMO"
+}
+```
+
+**Response `201`**
+
+```json
+{
+  "data": {
+    "payment_id": "pay_01JX9QD3",
+    "provider": "MOMO",
+    "status": "PENDING",
+    "checkout_url": "https://test-payment.momo.vn/v2/gateway/...",
+    "order_id": "ord_01JX9QA1",
+    "hold_expires_at": "2026-05-30T10:25:30Z"
+  },
+  "meta": {
+    "request_id": "req_01JX9Q6N4E"
+  }
+}
+```
+
+Ràng buộc:
+
+- Order phải `HELD` và `hold_expires_at > now()`.
+- Order không được có payment `SUCCEEDED` hoặc `PENDING` đang active.
+- Không tạo thêm payment nếu đã có `PENDING` — trả `409 PAYMENT_ALREADY_PENDING` để tránh double payment.
+- Không thay đổi inventory hold.
 
 ---
 
@@ -398,6 +511,8 @@ SUCCEEDED -> REFUNDED
 | `409` | `TICKET_SOLD_OUT` | Không đủ vé. |
 | `409` | `IDEMPOTENCY_IN_PROGRESS` | Request cùng key đang xử lý. |
 | `409` | `ORDER_ALREADY_FINALIZED` | Hủy/expire order đã confirmed/cancelled/expired. |
+| `409` | `PAYMENT_ALREADY_PENDING` | Retry khi đã có payment PENDING active. |
+| `422` | `ORDER_NOT_HELD` | Retry payment nhưng order không còn HELD. |
 | `422` | `PER_USER_LIMIT_EXCEEDED` | Vượt giới hạn mỗi user. |
 | `422` | `TICKET_TYPE_NOT_ON_SALE` | Loại vé chưa mở bán/hết hạn/closed. |
 | `422` | `PAYMENT_SIGNATURE_INVALID` | Webhook sai chữ ký. |
@@ -414,6 +529,7 @@ SUCCEEDED -> REFUNDED
 | `POST /orders` | 401 | Allow | 403 | Allow for test/support only | 403 |
 | `GET /orders/{id}` | 401 | Own order only | 403 | Allow | 403 |
 | `POST /orders/{id}/cancel` | 401 | Own held order only | 403 | Allow | 403 |
+| `POST /orders/{id}/payments` | 401 | Own held order only | 403 | Allow | 403 |
 | Payment webhook | Allow only with valid signature | 403 | 403 | 403 | Provider |
 | Internal expire | 403 | 403 | 403 | 403 | Internal only |
 | Admin order search | 401 | 403 | Scoped by concert | Allow | 403 |
