@@ -1,56 +1,72 @@
-/**
- * auth.utils.ts — Stub utilities cho password hashing và JWT.
- * Sprint 1: chỉ là placeholder interface. Sprint 2 sẽ implement bằng bcrypt + jsonwebtoken.
- */
-
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 import type { AuthPayload, Role } from "./auth.type.js";
 
-// ---------------------------------------------------------------------------
-// Password hashing stubs
-// ---------------------------------------------------------------------------
+const BCRYPT_ROUNDS = 12;
+const ACCESS_TOKEN_EXPIRES_IN = "15m";
+const REFRESH_TOKEN_EXPIRES_IN = "7d";
+export const ACCESS_TOKEN_TTL_SECONDS = 900; // 15 min
 
-/**
- * Hash mật khẩu plaintext (stub — Sprint 2 dùng bcrypt).
- */
-export async function hashPassword(_plain: string): Promise<string> {
-  throw new Error("hashPassword: not implemented — Sprint 2");
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET env variable is not set");
+  return secret;
 }
 
-/**
- * Xác minh mật khẩu so với hash đã lưu (stub — Sprint 2 dùng bcrypt).
- */
-export async function verifyPassword(
-  _plain: string,
-  _hash: string
-): Promise<boolean> {
-  throw new Error("verifyPassword: not implemented — Sprint 2");
+function getRefreshSecret(): string {
+  const secret = process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET env variable is not set");
+  return secret;
 }
 
-// ---------------------------------------------------------------------------
-// JWT stubs
-// ---------------------------------------------------------------------------
-
-/**
- * Ký access token ngắn hạn (stub — Sprint 2 dùng jsonwebtoken).
- * Payload chứa sub (user_id), role, jti, iat, exp.
- */
-export function signAccessToken(_payload: {
-  sub: string;
-  role: Role;
-}): string {
-  throw new Error("signAccessToken: not implemented — Sprint 2");
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, BCRYPT_ROUNDS);
 }
 
-/**
- * Ký refresh token dài hạn (stub — Sprint 2 dùng jsonwebtoken).
- */
-export function signRefreshToken(_payload: { sub: string }): string {
-  throw new Error("signRefreshToken: not implemented — Sprint 2");
+export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
 }
 
-/**
- * Xác minh và giải mã JWT (stub — Sprint 2 kiểm tra Redis denylist).
- */
-export function verifyToken(_token: string): AuthPayload {
-  throw new Error("verifyToken: not implemented — Sprint 2");
+export function signAccessToken(payload: { sub: string; role: Role }): string {
+  return jwt.sign(
+    { sub: payload.sub, role: payload.role, jti: randomUUID() },
+    getJwtSecret(),
+    { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+  );
+}
+
+export function signRefreshToken(payload: { sub: string }): string {
+  return jwt.sign(
+    { sub: payload.sub, jti: randomUUID() },
+    getRefreshSecret(),
+    { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
+  );
+}
+
+export function verifyToken(token: string): AuthPayload {
+  try {
+    return jwt.verify(token, getJwtSecret()) as AuthPayload;
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      const e = Object.assign(new Error("Token expired"), { code: "TOKEN_EXPIRED" });
+      throw e;
+    }
+    const e = Object.assign(new Error("Invalid token"), { code: "UNAUTHORIZED" });
+    throw e;
+  }
+}
+
+export function verifyRefreshToken(token: string): { sub: string; jti: string } {
+  try {
+    return jwt.verify(token, getRefreshSecret()) as { sub: string; jti: string };
+  } catch {
+    const e = Object.assign(new Error("Invalid refresh token"), { code: "UNAUTHORIZED" });
+    throw e;
+  }
+}
+
+/** Giây còn lại của token (dùng cho Redis TTL khi denylist). */
+export function getTokenRemainingTtl(exp: number): number {
+  return Math.max(0, exp - Math.floor(Date.now() / 1000));
 }

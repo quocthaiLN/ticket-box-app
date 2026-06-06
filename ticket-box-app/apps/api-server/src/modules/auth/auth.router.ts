@@ -1,17 +1,3 @@
-/**
- * auth.router.ts — Route definitions cho Auth module.
- * Tất cả routes được mount tại /v1/auth (xem app.ts).
- *
- * Public routes:
- *   POST /auth/register  — Đăng ký tài khoản khán giả
- *   POST /auth/login     — Đăng nhập
- *   POST /auth/refresh   — Làm mới access token
- *
- * Protected routes (yêu cầu Bearer token):
- *   POST /auth/logout    — Thu hồi token qua Redis denylist
- *   GET  /auth/me        — Lấy thông tin user hiện tại
- */
-
 import { Router } from "express";
 import {
   handleLogin,
@@ -19,7 +5,12 @@ import {
   handleMe,
   handleRefresh,
   handleRegister,
+  handleAdminListUsers,
+  handleAdminUpdateRole,
+  handleAdminUpdateStatus,
 } from "./auth.controller.js";
+import { requireAuth } from "../../shared/middleware/auth.middleware.js";
+import { requireRole } from "../../shared/guards/role.guard.js";
 
 export const authRouter = Router();
 
@@ -28,6 +19,21 @@ authRouter.post("/register", handleRegister);
 authRouter.post("/login", handleLogin);
 authRouter.post("/refresh", handleRefresh);
 
-// Protected (requireAuth middleware trước handler)
-authRouter.post("/logout", handleLogout);
-authRouter.get("/me", handleMe);
+// Protected (yêu cầu Bearer token)
+authRouter.post("/logout", requireAuth, handleLogout);
+authRouter.get("/me", requireAuth, handleMe);
+
+// Admin-only
+authRouter.get("/admin/users", requireAuth, requireRole("ADMIN"), handleAdminListUsers);
+authRouter.patch(
+  "/admin/users/:user_id/role",
+  requireAuth,
+  requireRole("ADMIN"),
+  handleAdminUpdateRole
+);
+authRouter.patch(
+  "/admin/users/:user_id/status",
+  requireAuth,
+  requireRole("ADMIN"),
+  handleAdminUpdateStatus
+);
