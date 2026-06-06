@@ -50,11 +50,19 @@ export type GuestSummary = {
 };
 
 export type GuestScanResponse = {
-  status: "scaffolded";
-  scan_reference: string;
-  received: GuestScanRequest;
-  placeholders: {
-    duplicate_guest_checkin: GuestListPlaceholderState;
-    gate_zone_validation: GuestListPlaceholderState;
-  };
+  result:
+    | "SUCCESS"
+    | "WRONG_GATE"
+    | "ALREADY_CHECKED_IN"
+    | "INVALID_GUEST"
+    | "GUEST_CANCELLED"
+    | "WRONG_CONCERT"
+    | "DEVICE_NOT_ASSIGNED";
+  guest_id?: string;
+  gate_id: string;
+  device_id: string;
+  zone_id?: string | null;
+  checked_in_at?: string;
+  log_id?: string;
+  reason?: string;
 };

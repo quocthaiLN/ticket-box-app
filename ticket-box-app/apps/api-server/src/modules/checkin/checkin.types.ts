@@ -2,6 +2,9 @@ export type CheckinScanRequest = {
   concert_id: string;
   device_id: string;
   gate_id: string;
+  qr_payload?: unknown;
+  qr_token?: string;
+  qr_signature?: string;
   ticket_code?: string;
   qr_payload_hash?: string;
   scanned_at?: string;
@@ -43,17 +46,23 @@ export type OfflineBatchRequest = {
   ended_at?: string;
 };
 
-export type CheckinPlaceholderState = "pending_sprint_2";
-
 export type CheckinScanResponse = {
-  status: "scaffolded";
-  scan_reference: string;
-  received: CheckinScanRequest;
-  placeholders: {
-    qr_verification: CheckinPlaceholderState;
-    gate_zone_validation: CheckinPlaceholderState;
-    duplicate_scan_detection: CheckinPlaceholderState;
-  };
+  result:
+    | "SUCCESS"
+    | "WRONG_GATE"
+    | "ALREADY_CHECKED_IN"
+    | "INVALID_TICKET"
+    | "EXPIRED_OR_CANCELLED"
+    | "WRONG_CONCERT"
+    | "DEVICE_NOT_ASSIGNED"
+    | "GATE_NOT_ACTIVE";
+  ticket_id?: string;
+  gate_id: string;
+  device_id: string;
+  zone_id?: string;
+  checked_in_at?: string;
+  log_id?: string;
+  reason?: string;
 };
 
 export type CheckinPreloadResponse = {
@@ -62,11 +71,34 @@ export type CheckinPreloadResponse = {
   gate_id: string;
   device_id: string;
   generated_at: string;
+  device: {
+    id: string;
+    device_code: string;
+    name: string | null;
+    status: string;
+    last_seen_at: string | null;
+  };
+  gate: {
+    id: string;
+    code: string;
+    name: string;
+    is_active: boolean;
+  };
+  concert: {
+    id: string;
+    title: string;
+    starts_at: string;
+  };
   allowed_zone_ids: string[];
+  allowed_seat_zones: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
   tickets: Array<{
     ticket_id: string;
-    ticket_code?: string;
     qr_payload_hash: string;
+    qr_signature?: string | null;
     concert_id: string;
     zone_id: string;
     status_snapshot: "ISSUED" | "CHECKED_IN" | "CANCELLED";
@@ -79,8 +111,10 @@ export type CheckinPreloadResponse = {
     phone_masked?: string;
     status_snapshot: "INVITED" | "CHECKED_IN" | "CANCELLED";
   }>;
-  placeholders: {
-    gate_zone_validation: CheckinPlaceholderState;
+  offline: {
+    qr_signature_supported: boolean;
+    full_offline_sync_ready: boolean;
+    notes: string[];
   };
 };
 
@@ -92,6 +126,8 @@ export type OfflineSyncItemStatus =
   | "already_checked_in"
   | "conflict"
   | "scaffolded";
+
+export type CheckinPlaceholderState = "pending_sprint_2";
 
 export type OfflineSyncResponse = {
   batch_id: string;
@@ -118,4 +154,80 @@ export type OfflineBatchResponse = {
     idempotency_by_batch_id: CheckinPlaceholderState;
     item_sync: CheckinPlaceholderState;
   };
+};
+
+export type GateDto = {
+  id: string;
+  concert_id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  zones?: Array<{ id: string; code: string; name: string }>;
+};
+
+export type DeviceDto = {
+  id: string;
+  device_code: string;
+  staff_id: string;
+  concert_id: string;
+  gate_id: string;
+  name: string | null;
+  status: string;
+  last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GateZoneMappingDto = {
+  id: string;
+  gate_id: string;
+  seat_zone_id: string;
+  concert_id: string;
+  created_at: string;
+};
+
+export type CreateGateRequest = {
+  concert_id: string;
+  code: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type UpdateGateRequest = {
+  code?: string;
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
+export type CreateDeviceRequest = {
+  device_code: string;
+  staff_id: string;
+  concert_id: string;
+  gate_id: string;
+  name?: string;
+};
+
+export type UpdateDeviceRequest = {
+  device_code?: string;
+  staff_id?: string;
+  gate_id?: string;
+  name?: string | null;
+  status?: "ACTIVE" | "REVOKED" | "LOST";
+};
+
+export type CreateGateZoneMappingRequest = {
+  gate_id: string;
+  seat_zone_id: string;
+};
+
+export type ReplaceGateZonesRequest = {
+  seat_zone_ids: string[];
 };

@@ -12,6 +12,7 @@ const service = new GuestListService();
 const organizerOnly = [requireAuth, requireRole("ORGANIZER", "ADMIN")];
 const checkerOnly = [requireAuth, requireRole("CHECKER", "ADMIN")];
 
+// Nhận request tạo job import guest từ admin/organizer.
 async function importGuests(req: Request, res: Response, next: NextFunction) {
   try {
     const body = parseGuestImportBody(withRouteConcertId(req.body, req.params.concert_id));
@@ -21,6 +22,7 @@ async function importGuests(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+// Nhận request tìm guest và trả danh sách có phân trang đơn giản.
 async function searchGuests(req: Request, res: Response, next: NextFunction) {
   try {
     const query = parseGuestSearchQuery(withRouteConcertId(req.query, req.params.concert_id));
@@ -37,6 +39,7 @@ async function searchGuests(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+// Nhận request check-in guest online tại cổng.
 async function scanGuest(req: Request, res: Response, next: NextFunction) {
   try {
     const body = parseGuestScanBody(req.body);
@@ -47,6 +50,7 @@ async function scanGuest(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+// Ghép concert_id từ route vào body/query để dùng chung parser.
 function withRouteConcertId(value: unknown, concertId?: string): Record<string, unknown> {
   const base = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return concertId ? { ...base, concert_id: concertId } : (base as Record<string, unknown>);

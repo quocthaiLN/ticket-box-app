@@ -1,5 +1,5 @@
 import { prisma, Prisma, OrderStatus } from '@ticketbox/database';
-import { cacheDelete } from '@ticket-box/redis';
+import { cacheDelete } from '@ticketbox/redis';
 import type { HoldRequest, ReleaseRequest, PaymentConfirmationRequest, InventoryAdjustmentRequest } from './inventory.type.js';
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;

@@ -12,6 +12,8 @@
 export type ExpireHoldsJobData = {
   /** Giới hạn số order xử lý mỗi batch (default 50) */
   batch_size?: number;
+  /** Scan and log expired holds without releasing inventory. */
+  dry_run?: boolean;
 };
 
 // ---------------------------------------------------------------------------

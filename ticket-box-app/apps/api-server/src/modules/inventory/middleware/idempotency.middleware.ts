@@ -1,6 +1,6 @@
 // check idempotency key in header and store it in redis with a TTL of 24 hours
 import type { NextFunction, Response } from 'express';
-import { get, set } from '@ticket-box/redis';
+import { get, set } from '@ticketbox/redis';
 import type { AppRequest } from '../inventory.type.js';
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours

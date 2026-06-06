@@ -2,7 +2,7 @@
   "name": "@ticketbox/worker-server",
   "version": "0.1.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -10,6 +10,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@ticketbox/database": "*",
     "@ticketbox/queue": "*",
     "@ticketbox/storage": "*",
     "@ticketbox/redis": "*",
