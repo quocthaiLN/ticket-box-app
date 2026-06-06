@@ -11,7 +11,8 @@ Hiện trạng gần nhất: repo mới có `ticket-box-app/packages/database` v
 3. **Modular monolith, không microservice hóa sớm**. Các module nằm chung `api-server`, giao tiếp nội bộ bằng service/event contract rõ ràng.
 4. **PostgreSQL là source of truth** thông qua `@ticketbox/database`; Redis/BullMQ/MinIO chỉ là package hạ tầng phụ trợ.
 5. **Worker tách process, không tách domain**. Worker xử lý AI, CSV, notification, expire hold bằng cùng shared packages và event contracts.
-6. **Không tạo abstraction chung khi chưa cần**. Mỗi module có router/service/repository/schema/types; chỉ đưa vào `shared/` khi dùng bởi nhiều module.
+6. **Không tạo abstraction chung khi chưa cần**. Mỗi module có router/controller/service/repository/schema/types; chỉ đưa vào `shared/` khi dùng bởi nhiều module.
+7. **Controller là ranh giới HTTP của module**. Router chỉ mount path/middleware; controller đọc request, gọi schema parser/service và trả response envelope; repository chỉ query DB/raw SQL, không chứa HTTP concern.
 
 ## 2. Cấu trúc mục tiêu
 
@@ -48,6 +49,7 @@ ticket-box-app/
 │   │   │   ├── modules/
 │   │   │   │   ├── auth/                     # JWT, users.role, Redis denylist
 │   │   │   │   │   ├── auth.router.ts
+│   │   │   │   │   ├── auth.controller.ts
 │   │   │   │   │   ├── auth.service.ts
 │   │   │   │   │   ├── auth.repository.ts
 │   │   │   │   │   ├── auth.schema.ts
@@ -55,6 +57,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── catalog/                  # Concert, venue, seat zones, public metadata
 │   │   │   │   │   ├── catalog.router.ts
+│   │   │   │   │   ├── catalog.controller.ts
 │   │   │   │   │   ├── catalog.service.ts
 │   │   │   │   │   ├── catalog.repository.ts
 │   │   │   │   │   ├── catalog.cache.ts
@@ -62,6 +65,8 @@ ticket-box-app/
 │   │   │   │   │   └── catalog.types.ts
 │   │   │   │   │
 │   │   │   │   ├── inventory/                # Hold/release/payment-confirmed/admin-adjust
+│   │   │   │   │   ├── inventory.router.ts
+│   │   │   │   │   ├── inventory.controller.ts
 │   │   │   │   │   ├── inventory.service.ts
 │   │   │   │   │   ├── inventory.repository.ts
 │   │   │   │   │   ├── inventory.lock.ts     # SELECT ... FOR UPDATE helpers
@@ -70,6 +75,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── orders/                   # Checkout, order status, ownership
 │   │   │   │   │   ├── orders.router.ts
+│   │   │   │   │   ├── orders.controller.ts
 │   │   │   │   │   ├── orders.service.ts
 │   │   │   │   │   ├── orders.repository.ts
 │   │   │   │   │   ├── orders.schema.ts
@@ -77,6 +83,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── payments/                 # VNPAY/MoMo sandbox, webhook, idempotency
 │   │   │   │   │   ├── payments.router.ts
+│   │   │   │   │   ├── payments.controller.ts
 │   │   │   │   │   ├── payments.service.ts
 │   │   │   │   │   ├── payments.repository.ts
 │   │   │   │   │   ├── payments.webhook.ts
@@ -85,6 +92,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── tickets/                  # E-ticket QR issuing/viewing
 │   │   │   │   │   ├── tickets.router.ts
+│   │   │   │   │   ├── tickets.controller.ts
 │   │   │   │   │   ├── tickets.service.ts
 │   │   │   │   │   ├── tickets.repository.ts
 │   │   │   │   │   ├── qr.service.ts
@@ -92,6 +100,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── checkin/                  # Online scan, guest scan, offline batch sync
 │   │   │   │   │   ├── checkin.router.ts
+│   │   │   │   │   ├── checkin.controller.ts
 │   │   │   │   │   ├── checkin.service.ts
 │   │   │   │   │   ├── checkin.repository.ts
 │   │   │   │   │   ├── checkin.sync.ts
@@ -100,6 +109,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── guest-list/               # CSV import jobs, guest CRUD/search
 │   │   │   │   │   ├── guest-list.router.ts
+│   │   │   │   │   ├── guest-list.controller.ts
 │   │   │   │   │   ├── guest-list.service.ts
 │   │   │   │   │   ├── guest-list.repository.ts
 │   │   │   │   │   ├── guest-list.schema.ts
@@ -107,6 +117,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── artist-bio/               # AI bio jobs + concerts.artist_bio
 │   │   │   │   │   ├── artist-bio.router.ts
+│   │   │   │   │   ├── artist-bio.controller.ts
 │   │   │   │   │   ├── artist-bio.service.ts
 │   │   │   │   │   ├── artist-bio.repository.ts
 │   │   │   │   │   ├── artist-bio.schema.ts
@@ -114,6 +125,7 @@ ticket-box-app/
 │   │   │   │   │
 │   │   │   │   ├── notifications/            # notifications table + enqueue endpoint
 │   │   │   │   │   ├── notifications.router.ts
+│   │   │   │   │   ├── notifications.controller.ts
 │   │   │   │   │   ├── notifications.service.ts
 │   │   │   │   │   ├── notifications.repository.ts
 │   │   │   │   │   ├── notifications.schema.ts
@@ -235,7 +247,8 @@ ticket-box-app/
 
 | File | Vai trò |
 | --- | --- |
-| `*.router.ts` | Khai báo Express routes, middleware, guard, response shape. |
+| `*.router.ts` | Khai báo Express routes, middleware và guard; không chứa nghiệp vụ hay format response phức tạp. |
+| `*.controller.ts` | Ranh giới HTTP của module: đọc params/body/query, gọi schema parser/service, trả response envelope hoặc chuyển lỗi cho middleware. |
 | `*.schema.ts` | Zod/request validation, query parsing. |
 | `*.service.ts` | Nghiệp vụ chính, transaction boundary, gọi repository/package khác. |
 | `*.repository.ts` | Query Prisma/raw SQL, không chứa HTTP concern. |
@@ -245,7 +258,9 @@ ticket-box-app/
 
 ## 5. Ranh giới trách nhiệm quan trọng
 
-- `api-server` nhận HTTP, validate, authorize, gọi service và trả response.
+- `api-server` nhận HTTP qua router/controller, validate, authorize, gọi service và trả response.
+- `controller` không query DB trực tiếp; mọi truy cập dữ liệu đi qua service/repository.
+- `repository` không import Express/request/response và không quyết định HTTP status.
 - `worker-server` xử lý job dài hoặc retry được; không trả response cho người dùng.
 - `packages/database` chỉ export Prisma client và helper transaction/lock dùng chung; không biết HTTP.
 - `packages/redis` chứa Redis primitives cho cache, rate limit, denylist, idempotency.
