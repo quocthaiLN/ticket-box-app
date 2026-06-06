@@ -10,7 +10,7 @@ import type { AppRequest, TicketListQuery } from './ticket.type.js';
 
 export async function listMyTicketsHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const query: TicketListQuery = {
       concert_id: req.query['concert_id'] as string | undefined,
       status: req.query['status'] as TicketListQuery['status'],
@@ -28,7 +28,7 @@ export async function listMyTicketsHandler(req: AppRequest, res: Response, next:
 
 export async function getMyTicketHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const ticketId = req.params['ticket_id'] as string;
 
     const data = await getMyTicket(userId, ticketId);
@@ -41,7 +41,7 @@ export async function getMyTicketHandler(req: AppRequest, res: Response, next: N
 
 export async function getMyTicketQrHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const ticketId = req.params['ticket_id'] as string;
 
     const data = await getMyTicketQr(userId, ticketId);

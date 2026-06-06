@@ -64,8 +64,7 @@ export async function confirmPaymentHandler(req: AppRequest, res: Response, next
 export async function adjustInventoryHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
     const ticket_type_id = req.params['ticket_type_id'] as string;
-    // actorUserId will come from JWT claims once auth is implemented
-    const actorUserId = req.headers['x-actor-user-id'] as string | undefined;
+    const actorUserId = res.locals['auth']?.user_id as string | undefined;
     const data = await adjustTicketInventory(ticket_type_id, req.body as InventoryAdjustmentRequest, actorUserId);
     res.json({
       data,

@@ -10,11 +10,11 @@ import { Redis } from "ioredis";
 let _client: Redis | null = null;
 
 function createRedisClient(): Redis | null {
-  const url = process.env.REDIS_URL;
+  const url = process.env.REDIS_URL ?? process.env.UPSTASH_REDIS_URL;
 
   if (!url) {
     console.warn(
-      "[redis] REDIS_URL is not set — Redis features will be disabled (cache miss / no denylist)"
+      "[redis] REDIS_URL / UPSTASH_REDIS_URL is not set — Redis features will be disabled (cache miss / no denylist)"
     );
     return null;
   }

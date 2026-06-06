@@ -1,5 +1,5 @@
 {
-  "name": "@ticketbox/redis",
+  "name": "@ticket-box/redis",
   "version": "0.1.0",
   "private": true,
   "type": "module",

@@ -114,7 +114,7 @@ export async function createOrder(
         status: existingOrder.status,
         total_amount: details.order.totalAmount,
         currency: details.order.currency,
-        hold_expires_at: details.order.holdExpiresAt ? details.order.holdExpiresAt.toISOString() : '',
+        hold_expires_at: details.order.holdExpiresAt?.toISOString() ?? null,
         checkout_url: details.payment.checkoutUrl ?? '',
         payment_id: details.payment.id,
         items: details.items.map((item) => ({
