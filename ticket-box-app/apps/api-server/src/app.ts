@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/auth.router.js";
 import { catalogRouter } from "./modules/catalog/catalog.router.js";
 import { checkinRouter } from "./modules/checkin/checkin.router.js";
@@ -13,6 +14,7 @@ export function createApp() {
 
   app.use(cors());
   app.use(express.json());
+  app.use(cookieParser());
   app.use(requestIdMiddleware);
 
   app.get("/health", (_req, res) => {

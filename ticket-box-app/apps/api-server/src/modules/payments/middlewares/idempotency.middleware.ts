@@ -1,47 +1,52 @@
-import type { NextFunction, Response } from 'express';
-import { get, set } from '@ticket-box/redis';
-import type { AppRequest } from '../payment.type.js';
+import type { NextFunction, Request, Response } from "express";
+import { getIdempotencyResponse, setIdempotencyResponse } from "@ticketbox/redis";
+import { Errors } from "../../../shared/http/problem-details.js";
 
-const IDEMPOTENCY_TTL = 86400; // 24 hours
+export async function idempotencyMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const rawKey = req.headers["idempotency-key"];
 
-export function idempotencyMiddleware(req: AppRequest, res: Response, next: NextFunction) {
-  const key = req.headers['idempotency-key'] as string | undefined;
-  const userId = req.headers['x-user-id'] as string | undefined;
-
-  if (!key) {
-    const err = Object.assign(new Error('Idempotency-Key header is required'), {
-      statusCode: 400,
-      code: 'MISSING_IDEMPOTENCY_KEY',
-    });
-    return next(err);
+  if (!rawKey) {
+    next(Errors.missingIdempotencyKey());
+    return;
   }
 
-  if (key.trim() === '' || key.length > 128) {
-    const err = Object.assign(new Error('Idempotency-Key must be a non-empty string under 128 characters'), {
-      statusCode: 400,
-      code: 'INVALID_IDEMPOTENCY_KEY',
-    });
-    return next(err);
+  const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+
+  if (!key || key.trim() === "" || key.length > 128) {
+    next(
+      Errors.badRequest("Idempotency-Key must be a non-empty string under 128 characters.")
+    );
+    return;
   }
 
-  const redisKey = `idempotency:payment:${userId ?? 'anon'}:${key}`;
+  const userId: string = res.locals.auth?.user_id ?? "anon";
+  const scopedKey = `payments:${userId}:${key}`;
 
-  get(redisKey)
-    .then((cached) => {
-      if (cached) {
-        const payload = cached as { statusCode: number; body: unknown };
-        return res.status(payload.statusCode).json(payload.body);
+  try {
+    const cached = await getIdempotencyResponse(scopedKey);
+    if (cached) {
+      res.status(cached.status).json(cached.body);
+      return;
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = (body: unknown): Response => {
+      if (res.statusCode < 400) {
+        setIdempotencyResponse(scopedKey, {
+          status: res.statusCode,
+          body,
+          created_at: new Date().toISOString(),
+        }).catch(() => {});
       }
+      return originalJson(body);
+    };
 
-      const originalJson = res.json.bind(res);
-      res.json = (body: unknown) => {
-        if (res.statusCode < 400) {
-          set(redisKey, { statusCode: res.statusCode, body }, IDEMPOTENCY_TTL).catch(() => {});
-        }
-        return originalJson(body);
-      };
-
-      next();
-    })
-    .catch(next);
+    next();
+  } catch (err) {
+    next(err);
+  }
 }

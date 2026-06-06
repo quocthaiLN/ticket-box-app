@@ -1,5 +1,5 @@
 import { prisma, Prisma, OrderStatus, PaymentStatus, PaymentProvider } from '@ticketbox/database';
-import { cacheDelete } from '@ticket-box/redis';
+import { cacheDel as cacheDelete } from '@ticketbox/redis';
 import type {
   CreateOrderRequest,
   AdminOrderRow,

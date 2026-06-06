@@ -3,7 +3,13 @@
  */
 
 export { getRedisClient, closeRedis } from "./client.js";
-export { cacheGet, cacheSet, cacheDel, cacheAside } from "./cache.js";
+export {
+  cacheGet,
+  cacheSet,
+  cacheDelete,
+  cacheAside,
+  getSetNX,
+} from "./cache.js";
 export {
   getIdempotencyResponse,
   setIdempotencyResponse,

@@ -18,3 +18,9 @@ export type {
   AiBioJobData,
   GuestImportJobData,
 } from "./jobs.js";
+export {
+  enqueueNotification,
+  enqueueExpireHolds,
+  enqueueAiBio,
+  enqueueGuestImport,
+} from "./enqueue.js";

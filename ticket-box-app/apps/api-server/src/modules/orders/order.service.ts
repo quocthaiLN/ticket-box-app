@@ -1,4 +1,4 @@
-import { get, set } from '@ticket-box/redis';
+import { cacheGet as get, cacheSet as set } from '@ticketbox/redis';
 import { Prisma } from '@ticketbox/database';
 import {
   cancelOrderById,

@@ -1,4 +1,4 @@
-import { del, get, set } from '@ticket-box/redis';
+import { cacheDel as del, cacheGet as get, cacheSet as set } from '@ticketbox/redis';
 import {
   adjustInventory,
   confirmPayment,
