@@ -7,7 +7,11 @@
 
 import { Worker, type Job } from "bullmq";
 import { expireHeldOrder, findExpiredHeldOrders } from "@ticketbox/database";
-import { getRedisConnection, QUEUE_NAMES, type ExpireHoldsJobData } from "@ticketbox/queue";
+import {
+  getRedisConnection,
+  QUEUE_NAMES,
+  type ExpireHoldsJobData,
+} from "@ticketbox/queue";
 
 // Tạo BullMQ worker định kỳ release các order giữ vé đã hết hạn.
 export function createExpireHoldsWorker(): Worker<ExpireHoldsJobData> {
@@ -31,7 +35,9 @@ export function createExpireHoldsWorker(): Worker<ExpireHoldsJobData> {
         try {
           if (dryRun) {
             skippedCount += 1;
-            console.log(`[expire-holds] dry-run order=${order.orderId} hold_expires_at=${order.holdExpiresAt.toISOString()}`);
+            console.log(
+              `[expire-holds] dry-run order=${order.orderId} hold_expires_at=${order.holdExpiresAt.toISOString()}`,
+            );
             continue;
           }
 
@@ -48,8 +54,11 @@ export function createExpireHoldsWorker(): Worker<ExpireHoldsJobData> {
           );
         } catch (error) {
           failedCount += 1;
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`[expire-holds] order=${order.orderId} failed=${message}`);
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `[expire-holds] order=${order.orderId} failed=${message}`,
+          );
         }
       }
 
@@ -67,8 +76,12 @@ export function createExpireHoldsWorker(): Worker<ExpireHoldsJobData> {
     { connection: getRedisConnection() },
   );
 
-  worker.on("completed", (job) => console.log(`[expire-holds] Job ${job.id} succeeded`));
-  worker.on("failed", (job, err) => console.error(`[expire-holds] Job ${job?.id} failed:`, err.message));
+  worker.on("completed", (job) =>
+    console.log(`[expire-holds] Job ${job.id} succeeded`),
+  );
+  worker.on("failed", (job, err) =>
+    console.error(`[expire-holds] Job ${job?.id} failed:`, err.message),
+  );
 
   return worker;
 }
