@@ -41,7 +41,9 @@ export type CreateConcertInput = {
   seat_map_object_key?: string;
 };
 
-export type UpdateConcertInput = Partial<Omit<CreateConcertInput, "organizer_id">>;
+export type UpdateConcertInput = Partial<
+  Omit<CreateConcertInput, "organizer_id">
+>;
 
 export type CreateSeatZoneInput = {
   code: string;
@@ -74,10 +76,17 @@ export type UpdateTicketTypeInput = Partial<CreateTicketTypeInput> & {
 
 const allowedSorts = new Set(["starts_at", "-starts_at", "title"]);
 
-export function parseCatalogListQuery(query: Record<string, unknown>): ListConcertsQuery {
+export function parseCatalogListQuery(
+  query: Record<string, unknown>,
+): ListConcertsQuery {
   const requestedLimit = Number(query.limit ?? 20);
-  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
-  const sort = typeof query.sort === "string" && allowedSorts.has(query.sort) ? query.sort : "starts_at";
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), 100)
+    : 20;
+  const sort =
+    typeof query.sort === "string" && allowedSorts.has(query.sort)
+      ? query.sort
+      : "starts_at";
 
   return {
     q: asOptionalString(query.q),
@@ -86,15 +95,17 @@ export function parseCatalogListQuery(query: Record<string, unknown>): ListConce
     to: asOptionalString(query.to),
     limit,
     cursor: asOptionalString(query.cursor),
-    sort: sort as ListConcertsQuery["sort"]
+    sort: sort as ListConcertsQuery["sort"],
   };
 }
 
-export function parseAdminConcertsQuery(query: Record<string, unknown>): ListAdminQuery {
+export function parseAdminConcertsQuery(
+  query: Record<string, unknown>,
+): ListAdminQuery {
   return {
     ...parseCatalogListQuery(query),
     status: asOptionalString(query.status) as ListAdminQuery["status"],
-    venue_id: asOptionalString(query.venue_id)
+    venue_id: asOptionalString(query.venue_id),
   };
 }
 
@@ -105,7 +116,7 @@ export function parseCreateVenueBody(body: unknown): CreateVenueInput {
     address: requiredString(value.address, "address"),
     city: requiredString(value.city, "city"),
     capacity: optionalPositiveInt(value.capacity, "capacity"),
-    map_url: asOptionalString(value.map_url)
+    map_url: asOptionalString(value.map_url),
   };
 }
 
@@ -116,7 +127,7 @@ export function parseUpdateVenueBody(body: unknown): UpdateVenueInput {
     address: asOptionalString(value.address),
     city: asOptionalString(value.city),
     capacity: optionalPositiveInt(value.capacity, "capacity"),
-    map_url: asOptionalString(value.map_url)
+    map_url: asOptionalString(value.map_url),
   });
 }
 
@@ -135,7 +146,7 @@ export function parseCreateConcertBody(body: unknown): CreateConcertInput {
     cover_image_url: asOptionalString(value.cover_image_url),
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
-    seat_map_object_key: asOptionalString(value.seat_map_object_key)
+    seat_map_object_key: asOptionalString(value.seat_map_object_key),
   };
 }
 
@@ -153,7 +164,7 @@ export function parseUpdateConcertBody(body: unknown): UpdateConcertInput {
     cover_image_url: asOptionalString(value.cover_image_url),
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
-    seat_map_object_key: asOptionalString(value.seat_map_object_key)
+    seat_map_object_key: asOptionalString(value.seat_map_object_key),
   });
 }
 
@@ -165,7 +176,7 @@ export function parseCreateSeatZoneBody(body: unknown): CreateSeatZoneInput {
     description: asOptionalString(value.description),
     capacity: requiredPositiveInt(value.capacity, "capacity"),
     svg_path: asOptionalString(value.svg_path),
-    sort_order: optionalInt(value.sort_order, "sort_order") ?? 0
+    sort_order: optionalInt(value.sort_order, "sort_order") ?? 0,
   };
 }
 
@@ -177,11 +188,13 @@ export function parseUpdateSeatZoneBody(body: unknown): UpdateSeatZoneInput {
     description: asOptionalString(value.description),
     capacity: optionalPositiveInt(value.capacity, "capacity"),
     svg_path: asOptionalString(value.svg_path),
-    sort_order: optionalInt(value.sort_order, "sort_order")
+    sort_order: optionalInt(value.sort_order, "sort_order"),
   });
 }
 
-export function parseCreateTicketTypeBody(body: unknown): CreateTicketTypeInput {
+export function parseCreateTicketTypeBody(
+  body: unknown,
+): CreateTicketTypeInput {
   const value = asRecord(body);
   return {
     seat_zone_id: requiredString(value.seat_zone_id, "seat_zone_id"),
@@ -191,11 +204,13 @@ export function parseCreateTicketTypeBody(body: unknown): CreateTicketTypeInput 
     total_quantity: requiredPositiveInt(value.total_quantity, "total_quantity"),
     max_per_user: requiredPositiveInt(value.max_per_user, "max_per_user"),
     sale_start_at: requiredDateString(value.sale_start_at, "sale_start_at"),
-    sale_end_at: requiredDateString(value.sale_end_at, "sale_end_at")
+    sale_end_at: requiredDateString(value.sale_end_at, "sale_end_at"),
   };
 }
 
-export function parseUpdateTicketTypeBody(body: unknown): UpdateTicketTypeInput {
+export function parseUpdateTicketTypeBody(
+  body: unknown,
+): UpdateTicketTypeInput {
   const value = asRecord(body);
   return stripUndefined({
     seat_zone_id: asOptionalString(value.seat_zone_id),
@@ -206,12 +221,14 @@ export function parseUpdateTicketTypeBody(body: unknown): UpdateTicketTypeInput 
     max_per_user: optionalPositiveInt(value.max_per_user, "max_per_user"),
     sale_start_at: optionalDateString(value.sale_start_at, "sale_start_at"),
     sale_end_at: optionalDateString(value.sale_end_at, "sale_end_at"),
-    status: parseTicketTypeStatus(value.status)
+    status: parseTicketTypeStatus(value.status),
   });
 }
 
 function asOptionalString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -272,7 +289,10 @@ function parseMoney(value: unknown): { amount: number; currency: "VND" } {
   const money = asRecord(value);
   const amount = Number(money.amount);
   if (!Number.isFinite(amount) || amount < 0) {
-    throw validationError("price.amount", "price.amount must be a non-negative number.");
+    throw validationError(
+      "price.amount",
+      "price.amount must be a non-negative number.",
+    );
   }
 
   if (money.currency !== undefined && money.currency !== "VND") {
@@ -284,23 +304,34 @@ function parseMoney(value: unknown): { amount: number; currency: "VND" } {
 
 function parseTicketTypeStatus(value: unknown) {
   if (value === undefined || value === null || value === "") return undefined;
-  if (value === "DRAFT" || value === "ON_SALE" || value === "SOLD_OUT" || value === "CLOSED") {
+  if (
+    value === "DRAFT" ||
+    value === "ON_SALE" ||
+    value === "SOLD_OUT" ||
+    value === "CLOSED"
+  ) {
     return value;
   }
-  throw validationError("status", "status must be one of DRAFT, ON_SALE, SOLD_OUT, CLOSED.");
+  throw validationError(
+    "status",
+    "status must be one of DRAFT, ON_SALE, SOLD_OUT, CLOSED.",
+  );
 }
 
-function stripUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as Partial<T>;
+function stripUndefined<T extends Record<string, unknown>>(
+  value: T,
+): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined),
+  ) as Partial<T>;
 }
 
 function validationError(field: string, message: string) {
   return new ApiError({
-    type: "https://api.ticketbox.vn/errors/invalid-catalog-request",
     title: "Invalid catalog request",
     status: 400,
     code: "INVALID_CATALOG_REQUEST",
     detail: message,
-    errors: [{ field, message }]
+    errors: [{ field, message }],
   });
 }

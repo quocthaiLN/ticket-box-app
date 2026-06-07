@@ -11,7 +11,7 @@ import type {
   UpdateConcertInput,
   UpdateSeatZoneInput,
   UpdateTicketTypeInput,
-  UpdateVenueInput
+  UpdateVenueInput,
 } from "./catalog.schema.js";
 
 export class CatalogService {
@@ -73,7 +73,7 @@ export class CatalogService {
       address: input.address,
       city: input.city,
       capacity: input.capacity,
-      mapUrl: input.map_url
+      mapUrl: input.map_url,
     });
   }
 
@@ -83,13 +83,15 @@ export class CatalogService {
       address: input.address,
       city: input.city,
       capacity: input.capacity,
-      mapUrl: input.map_url
+      mapUrl: input.map_url,
     });
   }
 
   async createConcert(input: CreateConcertInput, actorUserId?: string) {
     this.assertTimeRange(input.starts_at, input.ends_at);
-    const organizerId = await this.resolveOrganizerId(input.organizer_id ?? actorUserId);
+    const organizerId = await this.resolveOrganizerId(
+      input.organizer_id ?? actorUserId,
+    );
 
     return this.repository.createConcert({
       venueId: input.venue_id,
@@ -101,8 +103,10 @@ export class CatalogService {
       artistBio: input.artist_bio,
       startsAt: new Date(input.starts_at),
       endsAt: new Date(input.ends_at),
-      coverImageUrl: input.cover_image_url ?? this.assetUrl(input.cover_image_object_key),
-      seatMapUrl: input.seat_map_url ?? this.assetUrl(input.seat_map_object_key)
+      coverImageUrl:
+        input.cover_image_url ?? this.assetUrl(input.cover_image_object_key),
+      seatMapUrl:
+        input.seat_map_url ?? this.assetUrl(input.seat_map_object_key),
     });
   }
 
@@ -120,8 +124,12 @@ export class CatalogService {
       artistBio: nullable(input.artist_bio),
       startsAt: input.starts_at ? new Date(input.starts_at) : undefined,
       endsAt: input.ends_at ? new Date(input.ends_at) : undefined,
-      coverImageUrl: nullable(input.cover_image_url ?? this.assetUrl(input.cover_image_object_key)),
-      seatMapUrl: nullable(input.seat_map_url ?? this.assetUrl(input.seat_map_object_key))
+      coverImageUrl: nullable(
+        input.cover_image_url ?? this.assetUrl(input.cover_image_object_key),
+      ),
+      seatMapUrl: nullable(
+        input.seat_map_url ?? this.assetUrl(input.seat_map_object_key),
+      ),
     });
   }
 
@@ -132,13 +140,17 @@ export class CatalogService {
       throw this.notFound("concert", concertId);
     }
 
-    if (!readiness.has_valid_time_range || readiness.seat_zone_count === 0 || readiness.ticket_type_count === 0) {
+    if (
+      !readiness.has_valid_time_range ||
+      readiness.seat_zone_count === 0 ||
+      readiness.ticket_type_count === 0
+    ) {
       throw new ApiError({
-        type: "https://api.ticketbox.vn/errors/cannot-publish-concert",
         title: "Cannot publish concert",
         status: 422,
         code: "CANNOT_PUBLISH_CONCERT",
-        detail: "Concert must have a valid time range, at least one seat zone, and at least one ticket type."
+        detail:
+          "Concert must have a valid time range, at least one seat zone, and at least one ticket type.",
       });
     }
 
@@ -156,7 +168,7 @@ export class CatalogService {
       description: input.description,
       capacity: input.capacity,
       svgPath: input.svg_path,
-      sortOrder: input.sort_order
+      sortOrder: input.sort_order,
     });
   }
 
@@ -167,13 +179,15 @@ export class CatalogService {
       description: nullable(input.description),
       capacity: input.capacity,
       svgPath: nullable(input.svg_path),
-      sortOrder: input.sort_order
+      sortOrder: input.sort_order,
     });
   }
 
   async createTicketType(concertId: string, input: CreateTicketTypeInput) {
     this.assertSaleWindow(input.sale_start_at, input.sale_end_at);
-    const usage = await this.repository.getSeatZoneCapacityUsage(input.seat_zone_id);
+    const usage = await this.repository.getSeatZoneCapacityUsage(
+      input.seat_zone_id,
+    );
 
     if (!usage || usage.concert_id !== concertId) {
       throw this.notFound("seat_zone", input.seat_zone_id);
@@ -191,7 +205,7 @@ export class CatalogService {
       totalQuantity: input.total_quantity,
       maxPerUser: input.max_per_user,
       saleStartAt: new Date(input.sale_start_at),
-      saleEndAt: new Date(input.sale_end_at)
+      saleEndAt: new Date(input.sale_end_at),
     });
   }
 
@@ -207,9 +221,11 @@ export class CatalogService {
       price: input.price?.amount,
       totalQuantity: input.total_quantity,
       maxPerUser: input.max_per_user,
-      saleStartAt: input.sale_start_at ? new Date(input.sale_start_at) : undefined,
+      saleStartAt: input.sale_start_at
+        ? new Date(input.sale_start_at)
+        : undefined,
       saleEndAt: input.sale_end_at ? new Date(input.sale_end_at) : undefined,
-      status: input.status
+      status: input.status,
     });
   }
 
@@ -221,11 +237,10 @@ export class CatalogService {
     const fallback = await this.repository.findDefaultOrganizerId();
     if (!fallback) {
       throw new ApiError({
-        type: "https://api.ticketbox.vn/errors/organizer-not-found",
         title: "Organizer not found",
         status: 422,
         code: "ORGANIZER_NOT_FOUND",
-        detail: "A valid organizer user is required to create a concert."
+        detail: "A valid organizer user is required to create a concert.",
       });
     }
 
@@ -235,11 +250,10 @@ export class CatalogService {
   private assertTimeRange(startsAt: string, endsAt: string) {
     if (new Date(endsAt) <= new Date(startsAt)) {
       throw new ApiError({
-        type: "https://api.ticketbox.vn/errors/invalid-concert-time-range",
         title: "Invalid concert time range",
         status: 422,
         code: "INVALID_CONCERT_TIME_RANGE",
-        detail: "ends_at must be later than starts_at."
+        detail: "ends_at must be later than starts_at.",
       });
     }
   }
@@ -247,11 +261,10 @@ export class CatalogService {
   private assertSaleWindow(startsAt: string, endsAt: string) {
     if (new Date(endsAt) <= new Date(startsAt)) {
       throw new ApiError({
-        type: "https://api.ticketbox.vn/errors/invalid-sale-window",
         title: "Invalid sale window",
         status: 422,
         code: "INVALID_SALE_WINDOW",
-        detail: "sale_end_at must be later than sale_start_at."
+        detail: "sale_end_at must be later than sale_start_at.",
       });
     }
   }
@@ -261,23 +274,23 @@ export class CatalogService {
   }
 
   private notFound(resource: "concert" | "seat_zone", id: string) {
-    const code = resource === "concert" ? "CONCERT_NOT_FOUND" : "SEAT_ZONE_NOT_FOUND";
+    const code =
+      resource === "concert" ? "CONCERT_NOT_FOUND" : "SEAT_ZONE_NOT_FOUND";
     return new ApiError({
-      type: `https://api.ticketbox.vn/errors/${resource.replace("_", "-")}-not-found`,
-      title: resource === "concert" ? "Concert not found" : "Seat zone not found",
+      title:
+        resource === "concert" ? "Concert not found" : "Seat zone not found",
       status: 404,
       code,
-      detail: `${resource} ${id} does not exist or is not accessible.`
+      detail: `${resource} ${id} does not exist or is not accessible.`,
     });
   }
 
   private capacityExceeded() {
     return new ApiError({
-      type: "https://api.ticketbox.vn/errors/zone-capacity-exceeded",
       title: "Zone capacity exceeded",
       status: 422,
       code: "ZONE_CAPACITY_EXCEEDED",
-      detail: "Configured ticket quantity would exceed the seat zone capacity."
+      detail: "Configured ticket quantity would exceed the seat zone capacity.",
     });
   }
 }
@@ -287,5 +300,7 @@ function nullable(value: string | undefined): string | null | undefined {
 }
 
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }

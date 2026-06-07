@@ -1,5 +1,5 @@
 // check idempotency key in header and store it in redis with a TTL of 24 hours
-import type { NextFunction, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import {
   cacheGet as get,
   getIdempotencyResponse,
@@ -16,7 +16,7 @@ export async function idempotencyMiddleware(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const rawKey = req.headers.get("idempotency-key");
+  const rawKey = req.headers["idempotency-key"];
 
   if (!rawKey) {
     next(Errors.missingIdempotencyKey());

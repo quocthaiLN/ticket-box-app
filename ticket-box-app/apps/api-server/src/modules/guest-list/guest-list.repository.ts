@@ -208,7 +208,6 @@ export class GuestListRepository {
 
     if (!device) {
       throw new ApiError({
-        type: "https://api.ticketbox.vn/errors/device-not-assigned",
         title: "DEVICE_NOT_ASSIGNED",
         status: 422,
         code: "DEVICE_NOT_ASSIGNED",

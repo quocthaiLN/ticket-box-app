@@ -19,7 +19,7 @@
     "build:worker": "npm run build -w @ticketbox/worker-server",
     "build:database": "npm run build -w @ticketbox/database",
     "build:storage": "npm run build -w @ticketbox/storage",
-    "build:redis": "npm run build -w @ticket-box/redis",
+    "build:redis": "npm run build -w @ticketbox/redis",
     "build:queue": "npm run build -w @ticketbox/queue",
     "db:validate": "npm run prisma:validate -w @ticketbox/database",
     "db:generate": "npm run prisma:generate -w @ticketbox/database",

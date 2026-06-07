@@ -295,7 +295,6 @@ function optionalIsoString(value: unknown, field: string) {
 // Tạo lỗi validation theo chuẩn problem-details.
 function validationError(field: string, message: string): ApiError {
   return new ApiError({
-    type: "https://api.ticketbox.vn/errors/validation-error",
     title: "Validation error",
     status: 422,
     code: "VALIDATION_ERROR",

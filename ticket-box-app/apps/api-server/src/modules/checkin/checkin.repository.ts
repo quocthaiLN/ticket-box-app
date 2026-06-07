@@ -6,7 +6,7 @@ import {
   GateZoneValidationError,
   prisma,
   Prisma,
-  TicketStatus
+  TicketStatus,
 } from "@ticketbox/database";
 import { env } from "@ticket-box/config";
 import type {
@@ -26,7 +26,7 @@ import type {
   OfflineSyncResponse,
   ReplaceGateZonesRequest,
   UpdateDeviceRequest,
-  UpdateGateRequest
+  UpdateGateRequest,
 } from "./checkin.types.js";
 import { buildScaffoldOfflineSyncResponse } from "./checkin.sync.js";
 import { ApiError } from "../../shared/http/problem-details.js";
@@ -54,10 +54,18 @@ type QueryOptions = {
 
 export class CheckinRepository {
   // Quét vé online, kiểm tra QR/device/gate và trả kết quả check-in cho checker.
-  async recordOnlineScan(input: CheckinScanRequest): Promise<CheckinScanResponse> {
-    const device = await this.getActiveDeviceContext(input.device_id, input.concert_id, input.gate_id);
+  async recordOnlineScan(
+    input: CheckinScanRequest,
+  ): Promise<CheckinScanResponse> {
+    const device = await this.getActiveDeviceContext(
+      input.device_id,
+      input.concert_id,
+      input.gate_id,
+    );
     const qr = this.resolveQrInput(input);
-    const scannedAt = input.scanned_at ? new Date(input.scanned_at) : new Date();
+    const scannedAt = input.scanned_at
+      ? new Date(input.scanned_at)
+      : new Date();
 
     if (!qr.tokenHash || qr.invalidReason) {
       const logId = await this.createRejectedTicketLog({
@@ -66,7 +74,7 @@ export class CheckinRepository {
         result: CheckinResult.INVALID_TICKET,
         reason: qr.invalidReason ?? "QR_TOKEN_MISSING",
         scanTokenHash: qr.tokenHash,
-        scannedAt
+        scannedAt,
       });
 
       return {
@@ -74,7 +82,7 @@ export class CheckinRepository {
         gate_id: input.gate_id,
         device_id: input.device_id,
         log_id: logId,
-        reason: qr.invalidReason ?? "QR_TOKEN_MISSING"
+        reason: qr.invalidReason ?? "QR_TOKEN_MISSING",
       };
     }
 
@@ -88,18 +96,18 @@ export class CheckinRepository {
         scannedAt,
         metadata: {
           source: "online",
-          qr_payload_present: Boolean(qr.payload)
-        } as Prisma.InputJsonValue
+          qr_payload_present: Boolean(qr.payload),
+        } as Prisma.InputJsonValue,
       });
 
       const log = await prisma.checkinLog.findFirst({
         where: {
           ticketId: ticket.id,
           result: CheckinResult.SUCCESS,
-          scannedAt
+          scannedAt,
         },
         orderBy: { createdAt: "desc" },
-        select: { id: true }
+        select: { id: true },
       });
 
       return {
@@ -108,8 +116,9 @@ export class CheckinRepository {
         gate_id: input.gate_id,
         device_id: input.device_id,
         zone_id: ticket.seatZoneId,
-        checked_in_at: ticket.checkedInAt?.toISOString() ?? scannedAt.toISOString(),
-        log_id: log?.id
+        checked_in_at:
+          ticket.checkedInAt?.toISOString() ?? scannedAt.toISOString(),
+        log_id: log?.id,
       };
     } catch (error) {
       if (error instanceof GateZoneValidationError) {
@@ -118,10 +127,10 @@ export class CheckinRepository {
           where: {
             scanTokenHash: qr.tokenHash,
             concertId: input.concert_id,
-            result: mapped.logResult
+            result: mapped.logResult,
           },
           orderBy: { createdAt: "desc" },
-          select: { id: true, ticketId: true, seatZoneId: true }
+          select: { id: true, ticketId: true, seatZoneId: true },
         });
 
         return {
@@ -131,7 +140,7 @@ export class CheckinRepository {
           device_id: input.device_id,
           zone_id: log?.seatZoneId ?? undefined,
           log_id: log?.id,
-          reason: error.code
+          reason: error.code,
         };
       }
 
@@ -140,25 +149,27 @@ export class CheckinRepository {
   }
 
   // Tải snapshot dữ liệu hợp lệ cho thiết bị trước khi check-in hoặc chạy offline.
-  async getPreloadSnapshot(query: CheckinPreloadQuery): Promise<CheckinPreloadResponse> {
+  async getPreloadSnapshot(
+    query: CheckinPreloadQuery,
+  ): Promise<CheckinPreloadResponse> {
     const device = await prisma.checkinDevice.findFirst({
       where: {
         id: query.device_id,
         concertId: query.concert_id,
         gateId: query.gate_id,
-        status: DeviceStatus.ACTIVE
+        status: DeviceStatus.ACTIVE,
       },
       include: {
         concert: { select: { id: true, title: true, startsAt: true } },
-        gate: { select: { id: true, code: true, name: true, isActive: true } }
-      }
+        gate: { select: { id: true, code: true, name: true, isActive: true } },
+      },
     });
 
     if (!device || !device.gate.isActive) {
       throw domainError(
         "DEVICE_NOT_ASSIGNED",
         "Device is not active or is not assigned to this concert/gate.",
-        422
+        422,
       );
     }
 
@@ -166,12 +177,12 @@ export class CheckinRepository {
       where: {
         gateId: query.gate_id,
         concertId: query.concert_id,
-        gate: { isActive: true }
+        gate: { isActive: true },
       },
       include: {
-        seatZone: { select: { id: true, code: true, name: true } }
+        seatZone: { select: { id: true, code: true, name: true } },
       },
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "asc" },
     });
 
     const allowedZoneIds = allowedZones.map((mapping) => mapping.seatZoneId);
@@ -180,7 +191,7 @@ export class CheckinRepository {
       where: {
         concertId: query.concert_id,
         seatZoneId: { in: allowedZoneIds },
-        status: TicketStatus.ISSUED
+        status: TicketStatus.ISSUED,
       },
       select: {
         id: true,
@@ -188,10 +199,10 @@ export class CheckinRepository {
         qrSignature: true,
         concertId: true,
         seatZoneId: true,
-        status: true
+        status: true,
       },
       orderBy: { issuedAt: "asc" },
-      take: query.limit
+      take: query.limit,
     });
 
     const guests = query.include_guests
@@ -199,7 +210,7 @@ export class CheckinRepository {
           where: {
             concertId: query.concert_id,
             seatZoneId: { in: allowedZoneIds },
-            status: "INVITED"
+            status: "INVITED",
           },
           select: {
             id: true,
@@ -207,16 +218,16 @@ export class CheckinRepository {
             seatZoneId: true,
             fullName: true,
             phone: true,
-            status: true
+            status: true,
           },
           orderBy: { fullName: "asc" },
-          take: query.limit
+          take: query.limit,
         })
       : [];
 
     await prisma.checkinDevice.update({
       where: { id: device.id },
-      data: { lastSeenAt: new Date() }
+      data: { lastSeenAt: new Date() },
     });
 
     return {
@@ -230,24 +241,24 @@ export class CheckinRepository {
         device_code: device.deviceCode,
         name: device.name,
         status: device.status,
-        last_seen_at: device.lastSeenAt?.toISOString() ?? null
+        last_seen_at: device.lastSeenAt?.toISOString() ?? null,
       },
       gate: {
         id: device.gate.id,
         code: device.gate.code,
         name: device.gate.name,
-        is_active: device.gate.isActive
+        is_active: device.gate.isActive,
       },
       concert: {
         id: device.concert.id,
         title: device.concert.title,
-        starts_at: device.concert.startsAt.toISOString()
+        starts_at: device.concert.startsAt.toISOString(),
       },
       allowed_zone_ids: allowedZoneIds,
       allowed_seat_zones: allowedZones.map((mapping) => ({
         id: mapping.seatZone.id,
         code: mapping.seatZone.code,
-        name: mapping.seatZone.name
+        name: mapping.seatZone.name,
       })),
       tickets: tickets.map((ticket) => ({
         ticket_id: ticket.id,
@@ -255,7 +266,7 @@ export class CheckinRepository {
         qr_signature: ticket.qrSignature,
         concert_id: ticket.concertId,
         zone_id: ticket.seatZoneId,
-        status_snapshot: "ISSUED"
+        status_snapshot: "ISSUED",
       })),
       guests: guests.map((guest) => ({
         guest_id: guest.id,
@@ -263,13 +274,15 @@ export class CheckinRepository {
         zone_id: guest.seatZoneId ?? "",
         full_name: guest.fullName,
         phone_masked: maskPhone(guest.phone),
-        status_snapshot: guest.status
+        status_snapshot: guest.status,
       })),
       offline: {
         qr_signature_supported: true,
         full_offline_sync_ready: false,
-        notes: ["Sprint 3 supports online scan demo; batch conflict sync remains Sprint 4 scope."]
-      }
+        notes: [
+          "Sprint 3 supports online scan demo; batch conflict sync remains Sprint 4 scope.",
+        ],
+      },
     };
   }
 
@@ -278,15 +291,17 @@ export class CheckinRepository {
     const rows = await prisma.checkinGate.findMany({
       where: {
         concertId: options.concert_id,
-        ...(options.gate_id ? { id: options.gate_id } : {})
+        ...(options.gate_id ? { id: options.gate_id } : {}),
       },
       include: {
         gateZones: {
-          include: { seatZone: { select: { id: true, code: true, name: true } } }
-        }
+          include: {
+            seatZone: { select: { id: true, code: true, name: true } },
+          },
+        },
       },
       orderBy: [{ concertId: "asc" }, { sortOrder: "asc" }],
-      take: options.limit
+      take: options.limit,
     });
 
     return rows.map(toGateDto);
@@ -298,9 +313,11 @@ export class CheckinRepository {
       where: { id: gateId },
       include: {
         gateZones: {
-          include: { seatZone: { select: { id: true, code: true, name: true } } }
-        }
-      }
+          include: {
+            seatZone: { select: { id: true, code: true, name: true } },
+          },
+        },
+      },
     });
 
     if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
@@ -317,9 +334,9 @@ export class CheckinRepository {
         name: input.name,
         description: input.description,
         isActive: input.is_active,
-        sortOrder: input.sort_order
+        sortOrder: input.sort_order,
       },
-      include: { gateZones: { include: { seatZone: true } } }
+      include: { gateZones: { include: { seatZone: true } } },
     });
 
     return toGateDto(gate);
@@ -335,9 +352,9 @@ export class CheckinRepository {
         name: input.name,
         description: input.description,
         isActive: input.is_active,
-        sortOrder: input.sort_order
+        sortOrder: input.sort_order,
       },
-      include: { gateZones: { include: { seatZone: true } } }
+      include: { gateZones: { include: { seatZone: true } } },
     });
 
     return toGateDto(gate);
@@ -349,7 +366,7 @@ export class CheckinRepository {
     const gate = await prisma.checkinGate.update({
       where: { id: gateId },
       data: { isActive: false },
-      include: { gateZones: { include: { seatZone: true } } }
+      include: { gateZones: { include: { seatZone: true } } },
     });
     return toGateDto(gate);
   }
@@ -359,10 +376,10 @@ export class CheckinRepository {
     const rows = await prisma.checkinDevice.findMany({
       where: {
         concertId: options.concert_id,
-        gateId: options.gate_id
+        gateId: options.gate_id,
       },
       orderBy: [{ concertId: "asc" }, { createdAt: "desc" }],
-      take: options.limit
+      take: options.limit,
     });
 
     return rows.map(toDeviceDto);
@@ -377,17 +394,23 @@ export class CheckinRepository {
         staffId: input.staff_id,
         concertId: input.concert_id,
         gateId: input.gate_id,
-        name: input.name
-      }
+        name: input.name,
+      },
     });
 
     return toDeviceDto(device);
   }
 
   // Cập nhật thiết bị check-in, bao gồm đổi gate, tên hoặc trạng thái.
-  async updateDevice(deviceId: string, input: UpdateDeviceRequest): Promise<DeviceDto> {
-    const current = await prisma.checkinDevice.findUnique({ where: { id: deviceId } });
-    if (!current) throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
+  async updateDevice(
+    deviceId: string,
+    input: UpdateDeviceRequest,
+  ): Promise<DeviceDto> {
+    const current = await prisma.checkinDevice.findUnique({
+      where: { id: deviceId },
+    });
+    if (!current)
+      throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
 
     const targetGateId = input.gate_id ?? current.gateId;
     await this.assertGateBelongsToConcert(targetGateId, current.concertId);
@@ -399,8 +422,8 @@ export class CheckinRepository {
         staffId: input.staff_id,
         gateId: input.gate_id,
         name: input.name,
-        status: input.status
-      }
+        status: input.status,
+      },
     });
 
     return toDeviceDto(device);
@@ -408,34 +431,43 @@ export class CheckinRepository {
 
   // Thu hồi thiết bị bằng trạng thái REVOKED thay vì xoá cứng.
   async deleteDevice(deviceId: string): Promise<DeviceDto> {
-    const current = await prisma.checkinDevice.findUnique({ where: { id: deviceId } });
-    if (!current) throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
+    const current = await prisma.checkinDevice.findUnique({
+      where: { id: deviceId },
+    });
+    if (!current)
+      throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
 
     const device = await prisma.checkinDevice.update({
       where: { id: deviceId },
-      data: { status: DeviceStatus.REVOKED }
+      data: { status: DeviceStatus.REVOKED },
     });
 
     return toDeviceDto(device);
   }
 
   // Lấy danh sách mapping giữa cổng và khu vé được phép vào.
-  async listGateZoneMappings(options: QueryOptions): Promise<GateZoneMappingDto[]> {
+  async listGateZoneMappings(
+    options: QueryOptions,
+  ): Promise<GateZoneMappingDto[]> {
     const rows = await prisma.checkinGateZone.findMany({
       where: {
         concertId: options.concert_id,
-        gateId: options.gate_id
+        gateId: options.gate_id,
       },
       orderBy: { createdAt: "desc" },
-      take: options.limit
+      take: options.limit,
     });
 
     return rows.map(toMappingDto);
   }
 
   // Tạo mapping cổng-khu vé, dùng upsert để gọi lại không tạo trùng.
-  async createGateZoneMapping(input: CreateGateZoneMappingRequest): Promise<GateZoneMappingDto> {
-    const gate = await prisma.checkinGate.findUnique({ where: { id: input.gate_id } });
+  async createGateZoneMapping(
+    input: CreateGateZoneMappingRequest,
+  ): Promise<GateZoneMappingDto> {
+    const gate = await prisma.checkinGate.findUnique({
+      where: { id: input.gate_id },
+    });
     if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
     await this.assertZoneBelongsToConcert(input.seat_zone_id, gate.concertId);
 
@@ -443,22 +475,25 @@ export class CheckinRepository {
       where: {
         gateId_seatZoneId: {
           gateId: input.gate_id,
-          seatZoneId: input.seat_zone_id
-        }
+          seatZoneId: input.seat_zone_id,
+        },
       },
       update: {},
       create: {
         gateId: input.gate_id,
         seatZoneId: input.seat_zone_id,
-        concertId: gate.concertId
-      }
+        concertId: gate.concertId,
+      },
     });
 
     return toMappingDto(mapping);
   }
 
   // Thay toàn bộ danh sách zone được phép của một cổng trong một transaction.
-  async replaceGateZones(gateId: string, input: ReplaceGateZonesRequest): Promise<GateZoneMappingDto[]> {
+  async replaceGateZones(
+    gateId: string,
+    input: ReplaceGateZonesRequest,
+  ): Promise<GateZoneMappingDto[]> {
     const gate = await prisma.checkinGate.findUnique({ where: { id: gateId } });
     if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
 
@@ -477,12 +512,15 @@ export class CheckinRepository {
         data: input.seat_zone_ids.map((seatZoneId) => ({
           gateId,
           seatZoneId,
-          concertId: gate.concertId
+          concertId: gate.concertId,
         })),
-        skipDuplicates: true
+        skipDuplicates: true,
       });
 
-      return tx.checkinGateZone.findMany({ where: { gateId }, orderBy: { createdAt: "asc" } });
+      return tx.checkinGateZone.findMany({
+        where: { gateId },
+        orderBy: { createdAt: "asc" },
+      });
     });
 
     return mappings.map(toMappingDto);
@@ -495,32 +533,45 @@ export class CheckinRepository {
       throw domainError(
         "INVALID_MAPPING_ID",
         "Mapping id must be formatted as gate_id:seat_zone_id.",
-        400
+        400,
       );
     }
 
     const existing = await prisma.checkinGateZone.findUnique({
-      where: { gateId_seatZoneId: { gateId, seatZoneId } }
+      where: { gateId_seatZoneId: { gateId, seatZoneId } },
     });
-    if (!existing) throw domainError("MAPPING_NOT_FOUND", "Gate-zone mapping was not found.", 404);
+    if (!existing)
+      throw domainError(
+        "MAPPING_NOT_FOUND",
+        "Gate-zone mapping was not found.",
+        404,
+      );
 
     await prisma.checkinGateZone.delete({
-      where: { gateId_seatZoneId: { gateId, seatZoneId } }
+      where: { gateId_seatZoneId: { gateId, seatZoneId } },
     });
 
     return toMappingDto(existing);
   }
 
   // Trả response scaffold cho sync offline item, phần xử lý chi tiết để Sprint sau.
-  async recordOfflineSyncBatch(input: OfflineSyncRequest): Promise<OfflineSyncResponse> {
+  async recordOfflineSyncBatch(
+    input: OfflineSyncRequest,
+  ): Promise<OfflineSyncResponse> {
     return buildScaffoldOfflineSyncResponse(input);
   }
 
   // Tạo batch sync offline idempotent theo batch token.
-  async createOfflineBatch(input: OfflineBatchRequest): Promise<OfflineBatchResponse> {
-    const device = await this.getActiveDeviceContext(input.device_id, input.concert_id, input.gate_id);
+  async createOfflineBatch(
+    input: OfflineBatchRequest,
+  ): Promise<OfflineBatchResponse> {
+    const device = await this.getActiveDeviceContext(
+      input.device_id,
+      input.concert_id,
+      input.gate_id,
+    );
     const existing = await prisma.offlineCheckinBatch.findUnique({
-      where: { batchToken: input.batch_id }
+      where: { batchToken: input.batch_id },
     });
 
     if (existing) {
@@ -532,8 +583,8 @@ export class CheckinRepository {
         status: "scaffolded",
         placeholders: {
           idempotency_by_batch_id: "pending_sprint_2",
-          item_sync: "pending_sprint_2"
-        }
+          item_sync: "pending_sprint_2",
+        },
       };
     }
 
@@ -543,8 +594,8 @@ export class CheckinRepository {
         concertId: input.concert_id,
         gateId: input.gate_id,
         deviceId: input.device_id,
-        staffId: device.staffId
-      }
+        staffId: device.staffId,
+      },
     });
 
     return {
@@ -555,15 +606,18 @@ export class CheckinRepository {
       status: "scaffolded",
       placeholders: {
         idempotency_by_batch_id: "pending_sprint_2",
-        item_sync: "pending_sprint_2"
-      }
+        item_sync: "pending_sprint_2",
+      },
     };
   }
 
   // Chuẩn hoá nhiều dạng QR input thành token hash/payload/signature dùng chung.
   private resolveQrInput(input: CheckinScanRequest): QrInput {
     const payload = normalizePayload(input.qr_payload);
-    const rawPayloadToken = typeof input.qr_payload === "string" && !payload ? input.qr_payload.trim() : undefined;
+    const rawPayloadToken =
+      typeof input.qr_payload === "string" && !payload
+        ? input.qr_payload.trim()
+        : undefined;
     const tokenHash =
       input.qr_payload_hash ??
       input.qr_token ??
@@ -571,33 +625,51 @@ export class CheckinRepository {
       rawPayloadToken ??
       asString(payload?.qr_token) ??
       asString(payload?.qrToken);
-    const signature = input.qr_signature ?? asString(payload?.qr_signature) ?? asString(payload?.qrSignature);
+    const signature =
+      input.qr_signature ??
+      asString(payload?.qr_signature) ??
+      asString(payload?.qrSignature);
 
     if (payload && signature && !verifyQrSignature(payload, signature)) {
-      return { tokenHash, payload, signature, invalidReason: "QR_SIGNATURE_INVALID" };
+      return {
+        tokenHash,
+        payload,
+        signature,
+        invalidReason: "QR_SIGNATURE_INVALID",
+      };
     }
 
     return { tokenHash, payload, signature };
   }
 
   // Kiểm tra thiết bị đang active và đúng concert/gate trước khi cho scan.
-  private async getActiveDeviceContext(deviceId: string, concertId: string, gateId: string): Promise<DeviceContext> {
+  private async getActiveDeviceContext(
+    deviceId: string,
+    concertId: string,
+    gateId: string,
+  ): Promise<DeviceContext> {
     const device = await prisma.checkinDevice.findFirst({
       where: {
         id: deviceId,
         concertId,
         gateId,
         status: DeviceStatus.ACTIVE,
-        gate: { isActive: true }
+        gate: { isActive: true },
       },
-      select: { id: true, staffId: true, concertId: true, gateId: true, status: true }
+      select: {
+        id: true,
+        staffId: true,
+        concertId: true,
+        gateId: true,
+        status: true,
+      },
     });
 
     if (!device) {
       throw domainError(
         "DEVICE_NOT_ASSIGNED",
         "Device is not active or is not assigned to this concert/gate.",
-        422
+        422,
       );
     }
 
@@ -606,7 +678,9 @@ export class CheckinRepository {
 
   // Chọn staff thực hiện scan, ưu tiên staff từ request nếu là UUID hợp lệ.
   private resolveStaffId(input: CheckinScanRequest, device: DeviceContext) {
-    return input.staff_user_id && isUuid(input.staff_user_id) ? input.staff_user_id : device.staffId;
+    return input.staff_user_id && isUuid(input.staff_user_id)
+      ? input.staff_user_id
+      : device.staffId;
   }
 
   // Ghi log cho lượt scan vé bị từ chối để vẫn có audit trail.
@@ -628,61 +702,98 @@ export class CheckinRepository {
         result: args.result,
         reason: args.reason,
         scannedAt: args.scannedAt,
-        metadata: { source: "online" }
+        metadata: { source: "online" },
       },
-      select: { id: true }
+      select: { id: true },
     });
 
     return log.id;
   }
 
   // Chuyển lỗi domain từ database helper thành result trả về cho checker.
-  private mapTicketScanError(code: string): { result: CheckinScanResponse["result"]; logResult: CheckinResult } {
-    if (code === "GATE_ZONE_NOT_MAPPED" || code === "GATE_INACTIVE" || code === "GATE_CONCERT_MISMATCH") {
+  private mapTicketScanError(code: string): {
+    result: CheckinScanResponse["result"];
+    logResult: CheckinResult;
+  } {
+    if (
+      code === "GATE_ZONE_NOT_MAPPED" ||
+      code === "GATE_INACTIVE" ||
+      code === "GATE_CONCERT_MISMATCH"
+    ) {
       return { result: "WRONG_GATE", logResult: CheckinResult.WRONG_GATE };
     }
     if (code === "TICKET_ALREADY_CHECKED_IN") {
-      return { result: "ALREADY_CHECKED_IN", logResult: CheckinResult.ALREADY_CHECKED_IN };
+      return {
+        result: "ALREADY_CHECKED_IN",
+        logResult: CheckinResult.ALREADY_CHECKED_IN,
+      };
     }
     if (code === "WRONG_CONCERT") {
-      return { result: "WRONG_CONCERT", logResult: CheckinResult.WRONG_CONCERT };
+      return {
+        result: "WRONG_CONCERT",
+        logResult: CheckinResult.WRONG_CONCERT,
+      };
     }
     if (code === "TICKET_NOT_CHECKIN_READY") {
-      return { result: "EXPIRED_OR_CANCELLED", logResult: CheckinResult.INVALID_TICKET };
+      return {
+        result: "EXPIRED_OR_CANCELLED",
+        logResult: CheckinResult.INVALID_TICKET,
+      };
     }
 
-    return { result: "INVALID_TICKET", logResult: CheckinResult.INVALID_TICKET };
+    return {
+      result: "INVALID_TICKET",
+      logResult: CheckinResult.INVALID_TICKET,
+    };
   }
 
   // Đảm bảo concert tồn tại trước khi tạo tài nguyên check-in.
   private async assertConcertExists(concertId: string) {
-    const concert = await prisma.concert.findUnique({ where: { id: concertId }, select: { id: true } });
-    if (!concert) throw domainError("CONCERT_NOT_FOUND", "Concert was not found.", 404);
+    const concert = await prisma.concert.findUnique({
+      where: { id: concertId },
+      select: { id: true },
+    });
+    if (!concert)
+      throw domainError("CONCERT_NOT_FOUND", "Concert was not found.", 404);
   }
 
   // Đảm bảo gate thuộc đúng concert đang thao tác.
   private async assertGateBelongsToConcert(gateId: string, concertId: string) {
     const gate = await prisma.checkinGate.findUnique({
       where: { id_concertId: { id: gateId, concertId } },
-      select: { id: true }
+      select: { id: true },
     });
-    if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found for this concert.", 404);
+    if (!gate)
+      throw domainError(
+        "GATE_NOT_FOUND",
+        "Gate was not found for this concert.",
+        404,
+      );
   }
 
   // Đảm bảo seat zone thuộc đúng concert đang cấu hình.
-  private async assertZoneBelongsToConcert(seatZoneId: string, concertId: string) {
+  private async assertZoneBelongsToConcert(
+    seatZoneId: string,
+    concertId: string,
+  ) {
     const zone = await prisma.seatZone.findUnique({
       where: { id_concertId: { id: seatZoneId, concertId } },
-      select: { id: true }
+      select: { id: true },
     });
-    if (!zone) throw domainError("SEAT_ZONE_NOT_FOUND", "Seat zone was not found for this concert.", 422);
+    if (!zone)
+      throw domainError(
+        "SEAT_ZONE_NOT_FOUND",
+        "Seat zone was not found for this concert.",
+        422,
+      );
   }
 }
 
 // Parse QR payload JSON nếu client gửi payload dạng chuỗi.
 function normalizePayload(value: unknown): Record<string, unknown> | undefined {
   if (!value) return undefined;
-  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === "object" && !Array.isArray(value))
+    return value as Record<string, unknown>;
   if (typeof value !== "string") return undefined;
 
   try {
@@ -696,13 +807,22 @@ function normalizePayload(value: unknown): Record<string, unknown> | undefined {
 }
 
 // Verify chữ ký QR bằng HMAC để phát hiện payload bị chỉnh sửa.
-function verifyQrSignature(payload: Record<string, unknown>, signature: string) {
+function verifyQrSignature(
+  payload: Record<string, unknown>,
+  signature: string,
+) {
   const payloadWithoutSignature = { ...payload };
   delete payloadWithoutSignature["qr_signature"];
   delete payloadWithoutSignature["qrSignature"];
-  const sorted = Object.fromEntries(Object.keys(payloadWithoutSignature).sort().map((key) => [key, payloadWithoutSignature[key]]));
+  const sorted = Object.fromEntries(
+    Object.keys(payloadWithoutSignature)
+      .sort()
+      .map((key) => [key, payloadWithoutSignature[key]]),
+  );
   const canonical = JSON.stringify(sorted);
-  const expected = createHmac("sha256", env.qr.signingSecret).update(canonical, "utf8").digest("base64");
+  const expected = createHmac("sha256", env.qr.signingSecret)
+    .update(canonical, "utf8")
+    .digest("base64");
   return expected === signature;
 }
 
@@ -732,8 +852,8 @@ function toGateDto(gate: {
     zones: gate.gateZones?.map((mapping) => ({
       id: mapping.seatZone.id,
       code: mapping.seatZone.code,
-      name: mapping.seatZone.name
-    }))
+      name: mapping.seatZone.name,
+    })),
   };
 }
 
@@ -760,18 +880,23 @@ function toDeviceDto(device: {
     status: device.status,
     last_seen_at: device.lastSeenAt?.toISOString() ?? null,
     created_at: device.createdAt.toISOString(),
-    updated_at: device.updatedAt.toISOString()
+    updated_at: device.updatedAt.toISOString(),
   };
 }
 
 // Chuyển mapping gate-zone sang DTO có id tổng hợp.
-function toMappingDto(mapping: { gateId: string; seatZoneId: string; concertId: string; createdAt: Date }): GateZoneMappingDto {
+function toMappingDto(mapping: {
+  gateId: string;
+  seatZoneId: string;
+  concertId: string;
+  createdAt: Date;
+}): GateZoneMappingDto {
   return {
     id: `${mapping.gateId}:${mapping.seatZoneId}`,
     gate_id: mapping.gateId,
     seat_zone_id: mapping.seatZoneId,
     concert_id: mapping.concertId,
-    created_at: mapping.createdAt.toISOString()
+    created_at: mapping.createdAt.toISOString(),
   };
 }
 
@@ -783,21 +908,24 @@ function maskPhone(phone: string) {
 
 // Lấy chuỗi đã trim nếu giá trị đầu vào là string không rỗng.
 function asString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
 // Kiểm tra chuỗi có đúng định dạng UUID hay không.
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 // Tạo lỗi API theo chuẩn problem-details của hệ thống.
 function domainError(code: string, detail: string, status: number) {
   return new ApiError({
-    type: `https://api.ticketbox.vn/errors/${code.toLowerCase().replaceAll("_", "-")}`,
     title: code,
     status,
     code,
-    detail
+    detail,
   });
 }

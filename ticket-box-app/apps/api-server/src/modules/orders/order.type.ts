@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+import type { Request } from "express";
 
 declare global {
   namespace Express {
@@ -16,7 +16,7 @@ export interface OrderItem {
 export interface CreateOrderRequest {
   concert_id: string;
   items: OrderItem[];
-  payment_provider?: 'VNPAY' | 'MOMO';
+  payment_provider?: "VNPAY" | "MOMO";
 }
 
 export interface CreateOrderResponse {
@@ -24,7 +24,7 @@ export interface CreateOrderResponse {
   status: string;
   total_amount: string;
   currency: string;
-  hold_expires_at: string;
+  hold_expires_at: string | null;
   checkout_url: string;
   payment_id: string;
   items: Array<{
