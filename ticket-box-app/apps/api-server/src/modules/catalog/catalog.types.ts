@@ -15,6 +15,8 @@ export type VenueDto = VenueSummaryDto & {
   map_url?: string;
 };
 
+export type ConcertStatusDto = "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED";
+
 export type ConcertSummaryDto = {
   id: string;
   title: string;
@@ -22,7 +24,7 @@ export type ConcertSummaryDto = {
   artist_name: string;
   starts_at: string;
   ends_at: string;
-  status: "PUBLISHED";
+  status: ConcertStatusDto;
   cover_image_url?: string;
   venue: VenueSummaryDto;
   ticket_price_range?: {
@@ -36,6 +38,7 @@ export type ConcertDetailDto = Omit<ConcertSummaryDto, "venue" | "ticket_price_r
   description?: string;
   venue: VenueDto;
   artist_bio?: string;
+  seat_map_url?: string;
 };
 
 export type SeatZoneDto = {
@@ -92,4 +95,13 @@ export type InventoryDto = {
     status: "ON_SALE" | "SOLD_OUT" | "CLOSED";
     display_status: "AVAILABLE" | "LOW_STOCK" | "SOLD_OUT" | "CLOSED" | "UPDATING";
   }>;
+};
+
+export type MutationResultDto = {
+  id: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  published_at?: string;
+  cancelled_at?: string;
 };
