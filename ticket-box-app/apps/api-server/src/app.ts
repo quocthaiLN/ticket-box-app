@@ -5,6 +5,10 @@ import { authRouter } from "./modules/auth/auth.router.js";
 import { catalogRouter } from "./modules/catalog/catalog.router.js";
 import { checkinRouter } from "./modules/checkin/checkin.router.js";
 import { guestListRouter } from "./modules/guest-list/guest-list.router.js";
+import inventoryRouter from "./modules/inventory/inventory.router.js";
+import orderRouter from "./modules/orders/order.router.js";
+import paymentRouter from "./modules/payments/payment.router.js";
+import ticketRouter from "./modules/tickets/ticket.router.js";
 import { errorMiddleware } from "./shared/middleware/error.middleware.js";
 import { requestIdMiddleware } from "./shared/middleware/request-id.middleware.js";
 import { ok } from "./shared/http/response.js";
@@ -29,6 +33,10 @@ export function createApp() {
   app.use("/v1", catalogRouter);
   app.use("/v1", checkinRouter);
   app.use("/v1", guestListRouter);
+  app.use("/v1", inventoryRouter);
+  app.use("/v1", orderRouter);
+  app.use("/v1", paymentRouter);
+  app.use("/v1", ticketRouter);
 
   app.use(errorMiddleware);
 

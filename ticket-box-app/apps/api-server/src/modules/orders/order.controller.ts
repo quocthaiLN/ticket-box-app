@@ -10,7 +10,7 @@ import type { AdminOrdersQuery, AppRequest, CreateOrderRequest } from './order.t
 
 export async function createOrderHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const idempotencyKey = req.headers['idempotency-key'] as string;
 
     const data = await createOrder(userId, req.body as CreateOrderRequest, idempotencyKey);
@@ -26,7 +26,7 @@ export async function createOrderHandler(req: AppRequest, res: Response, next: N
 
 export async function getOrderHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const orderId = req.params['order_id'] as string;
 
     const data = await getOrder(orderId, userId);
@@ -42,7 +42,7 @@ export async function getOrderHandler(req: AppRequest, res: Response, next: Next
 
 export async function cancelOrderHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const orderId = req.params['order_id'] as string;
 
     const data = await cancelOrder(orderId, userId);

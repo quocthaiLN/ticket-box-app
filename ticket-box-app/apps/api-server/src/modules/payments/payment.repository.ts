@@ -145,7 +145,8 @@ export async function findPendingPaymentForWebhook(
     SELECT id, order_id AS "orderId", status::text AS "status", amount::text AS "amount"
     FROM payments
     WHERE order_id = ${orderId}::uuid
-      AND provider = ${providerEnum}::"PaymentProvider"
+      AND provider = ${providerEnum}::"payment_provider"
+      AND status = 'PENDING'
     ORDER BY created_at DESC
     LIMIT 1
   `);
@@ -164,7 +165,7 @@ export async function findPaymentByProviderTxn(
   >(Prisma.sql`
     SELECT id, status::text AS "status", order_id AS "orderId"
     FROM payments
-    WHERE provider = ${providerEnum}::"PaymentProvider"
+    WHERE provider = ${providerEnum}::"payment_provider"
       AND provider_transaction_id = ${providerTransactionId}
     LIMIT 1
   `);
@@ -209,8 +210,18 @@ export async function confirmOrderPayment(
       if (!orderRow)
         throw new PaymentError("ORDER_NOT_FOUND", "Order not found", 404);
 
-      // Idempotent: already confirmed
-      if (orderRow.status === OrderStatus.CONFIRMED) return;
+      // Idempotent: already confirmed — still ensure payment is SUCCEEDED
+      if (orderRow.status === OrderStatus.CONFIRMED) {
+        await tx.payment
+          .update({
+            where: { id: paymentId },
+            data: { status: PaymentStatus.SUCCEEDED, paidAt: new Date() },
+          })
+          .catch(() => {
+            /* already SUCCEEDED, ignore */
+          });
+        return;
+      }
 
       if (orderRow.status !== OrderStatus.HELD) {
         throw new PaymentError(

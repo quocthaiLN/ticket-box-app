@@ -13,7 +13,7 @@
     "@ticketbox/database": "*",
     "@ticketbox/queue": "*",
     "@ticketbox/storage": "*",
-    "@ticketbox/redis": "*",
+    "@ticket-box/redis": "*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.0.0"
   },

@@ -234,6 +234,13 @@ export async function createOrderHeld(
         FOR UPDATE
       `);
 
+        if (!counter) {
+          throw new OrderError(
+            "INVENTORY_ERROR",
+            `Could not lock user counter for ticket type ${item.ticket_type_id}`,
+            500,
+          );
+        }
         const tt = typeMap.get(item.ticket_type_id)!;
         if (
           counter.heldQuantity + counter.paidQuantity + item.quantity >
@@ -256,7 +263,7 @@ export async function createOrderHeld(
         );
       }
 
-      const firstTt = typeMap.values().next().value!;
+      const currency = typeMap.get(sortedItems[0].ticket_type_id)!.currency;
 
       // Create order
       const order = await tx.order.create({
@@ -267,7 +274,7 @@ export async function createOrderHeld(
           status: OrderStatus.HELD,
           holdExpiresAt,
           totalAmount,
-          currency: firstTt.currency,
+          currency,
         },
       });
 
@@ -581,9 +588,7 @@ export async function cancelOrderById(
   return result;
 }
 
-export async function expireOrderById(
-  orderId: string,
-): Promise<{
+export async function expireOrderById(orderId: string): Promise<{
   orderId: string;
   status: string;
   releasedItems: Array<{ ticket_type_id: string; quantity: number }>;

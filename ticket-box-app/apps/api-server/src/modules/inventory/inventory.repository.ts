@@ -1,5 +1,5 @@
 import { prisma, Prisma, OrderStatus } from "@ticketbox/database";
-import { cacheDel as cacheDelete } from "@ticketbox/redis";
+import { cacheDelete } from "@ticketbox/redis";
 import type {
   HoldRequest,
   ReleaseRequest,

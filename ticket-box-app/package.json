@@ -6,7 +6,8 @@
     "config",
     "apps/*",
     "packages/*",
-    "config"
+    "config",
+    "tests"
   ],
   "scripts": {
     "build": "npm run build:redis && npm run build:database && npm run build:queue && npm run build:storage && npm run build:api && npm run build:web && npm run build:worker",
@@ -18,7 +19,7 @@
     "build:worker": "npm run build -w @ticketbox/worker-server",
     "build:database": "npm run build -w @ticketbox/database",
     "build:storage": "npm run build -w @ticketbox/storage",
-    "build:redis": "npm run build -w @ticketbox/redis",
+    "build:redis": "npm run build -w @ticket-box/redis",
     "build:queue": "npm run build -w @ticketbox/queue",
     "db:validate": "npm run prisma:validate -w @ticketbox/database",
     "db:generate": "npm run prisma:generate -w @ticketbox/database",

@@ -13,7 +13,7 @@
     "@prisma/client": "6.0.0",
     "@ticket-box/config": "*",
     "@ticketbox/database": "*",
-    "@ticketbox/redis": "*",
+    "@ticket-box/redis": "*",
     "@ticketbox/storage": "*",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

@@ -4,7 +4,7 @@ import type { AppRequest, MomoWebhookBody, RetryPaymentRequest, VnpayWebhookBody
 
 export async function retryPaymentHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = res.locals['auth']?.user_id as string;
     const orderId = req.params['order_id'] as string;
     const body = req.body as RetryPaymentRequest;
     const provider = body.payment_provider ?? 'VNPAY';
