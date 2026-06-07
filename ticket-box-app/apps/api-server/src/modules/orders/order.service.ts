@@ -1,5 +1,5 @@
-import { cacheGet as get, cacheSet as set } from '@ticketbox/redis';
-import { Prisma } from '@ticketbox/database';
+import { cacheGet as get, cacheSet as set } from "@ticketbox/redis";
+import { Prisma } from "@ticketbox/database";
 import {
   cancelOrderById,
   createOrderHeld,
@@ -9,8 +9,8 @@ import {
   getOrderByIdempotencyKey,
   getOrderWithDetails,
   OrderError,
-} from './order.repository.js';
-import { buildCheckoutUrlWithFallback } from '../payments/payment.service.js';
+} from "./order.repository.js";
+import { buildCheckoutUrlWithFallback } from "../payments/payment.service.js";
 import type {
   AdminOrderListResponse,
   AdminOrdersQuery,
@@ -19,12 +19,15 @@ import type {
   CreateOrderResponse,
   ExpireOrderResponse,
   OrderDetailResponse,
-} from './order.type.js';
+} from "./order.type.js";
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours
-const idempotencyCacheKey = (userId: string, key: string) => `idempotency:checkout:${userId}:${key}`;
+const idempotencyCacheKey = (userId: string, key: string) =>
+  `idempotency:checkout:${userId}:${key}`;
 
-function mapOrderWithDetailsToResponse(details: NonNullable<Awaited<ReturnType<typeof getOrderWithDetails>>>): OrderDetailResponse {
+function mapOrderWithDetailsToResponse(
+  details: NonNullable<Awaited<ReturnType<typeof getOrderWithDetails>>>,
+): OrderDetailResponse {
   const { order, items, payment, tickets } = details;
 
   return {
@@ -32,7 +35,9 @@ function mapOrderWithDetailsToResponse(details: NonNullable<Awaited<ReturnType<t
     status: order.status,
     total_amount: order.totalAmount,
     currency: order.currency,
-    hold_expires_at: order.holdExpiresAt ? order.holdExpiresAt.toISOString() : null,
+    hold_expires_at: order.holdExpiresAt
+      ? order.holdExpiresAt.toISOString()
+      : null,
     confirmed_at: order.confirmedAt ? order.confirmedAt.toISOString() : null,
     cancelled_at: order.cancelledAt ? order.cancelledAt.toISOString() : null,
     expired_at: order.expiredAt ? order.expiredAt.toISOString() : null,
@@ -100,8 +105,8 @@ export async function createOrder(
     // Handle duplicate idempotency key (P2002 Prisma unique constraint violation)
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === 'P2002' &&
-      (err.meta?.target as string[] | undefined)?.includes('idempotency_key')
+      err.code === "P2002" &&
+      (err.meta?.target as string[] | undefined)?.includes("idempotency_key")
     ) {
       const existingOrder = await getOrderByIdempotencyKey(idempotencyKey);
       if (!existingOrder) throw err;
@@ -114,8 +119,10 @@ export async function createOrder(
         status: existingOrder.status,
         total_amount: details.order.totalAmount,
         currency: details.order.currency,
-        hold_expires_at: details.order.holdExpiresAt ? details.order.holdExpiresAt.toISOString() : '',
-        checkout_url: details.payment.checkoutUrl ?? '',
+        hold_expires_at: details.order.holdExpiresAt
+          ? details.order.holdExpiresAt.toISOString()
+          : "",
+        checkout_url: details.payment.checkoutUrl ?? "",
         payment_id: details.payment.id,
         items: details.items.map((item) => ({
           ticket_type_id: item.ticketTypeId,
@@ -133,7 +140,7 @@ export async function createOrder(
   }
 
   const { order, items } = orderResult;
-  const preferredProvider = req.payment_provider ?? 'VNPAY';
+  const preferredProvider = req.payment_provider ?? "VNPAY";
   const orderInfo = `Payment for order ${order.id}`;
 
   const { url: checkoutUrl, provider } = await buildCheckoutUrlWithFallback(
@@ -174,21 +181,31 @@ export async function createOrder(
   return response;
 }
 
-export async function getOrder(orderId: string, userId: string): Promise<OrderDetailResponse> {
+export async function getOrder(
+  orderId: string,
+  userId: string,
+): Promise<OrderDetailResponse> {
   const details = await getOrderWithDetails(orderId);
 
   if (!details) {
-    throw new OrderError('ORDER_NOT_FOUND', 'Order not found', 404);
+    throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
   }
 
   if (details.order.userId !== userId) {
-    throw new OrderError('ORDER_ACCESS_DENIED', 'Access denied to this order', 403);
+    throw new OrderError(
+      "ORDER_ACCESS_DENIED",
+      "Access denied to this order",
+      403,
+    );
   }
 
   return mapOrderWithDetailsToResponse(details);
 }
 
-export async function cancelOrder(orderId: string, userId: string): Promise<CancelOrderResponse> {
+export async function cancelOrder(
+  orderId: string,
+  userId: string,
+): Promise<CancelOrderResponse> {
   const result = await cancelOrderById(orderId, userId);
 
   return {
@@ -198,7 +215,9 @@ export async function cancelOrder(orderId: string, userId: string): Promise<Canc
   };
 }
 
-export async function expireOrder(orderId: string): Promise<ExpireOrderResponse> {
+export async function expireOrder(
+  orderId: string,
+): Promise<ExpireOrderResponse> {
   const result = await expireOrderById(orderId);
 
   return {
@@ -208,7 +227,9 @@ export async function expireOrder(orderId: string): Promise<ExpireOrderResponse>
   };
 }
 
-export async function listAdminOrders(query: AdminOrdersQuery): Promise<AdminOrderListResponse> {
+export async function listAdminOrders(
+  query: AdminOrdersQuery,
+): Promise<AdminOrderListResponse> {
   const { rows, nextCursor } = await findAdminOrders(query);
 
   return {

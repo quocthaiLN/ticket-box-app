@@ -1,10 +1,16 @@
-import { prisma, Prisma, OrderStatus, PaymentStatus, PaymentProvider } from '@ticketbox/database';
-import { cacheDel as cacheDelete } from '@ticketbox/redis';
+import {
+  prisma,
+  Prisma,
+  OrderStatus,
+  PaymentStatus,
+  PaymentProvider,
+} from "@ticketbox/database";
+import { cacheDelete } from "@ticketbox/redis";
 import type {
   CreateOrderRequest,
   AdminOrderRow,
   AdminOrdersQuery,
-} from './order.type.js';
+} from "./order.type.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
@@ -14,7 +20,7 @@ export class OrderError extends Error {
 
   constructor(code: string, message: string, statusCode = 400) {
     super(message);
-    this.name = 'OrderError';
+    this.name = "OrderError";
     this.code = code;
     this.statusCode = statusCode;
   }
@@ -134,10 +140,11 @@ export async function createOrderHeld(
   const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
   const now = new Date();
 
-  const result = await prisma.$transaction(async (tx) => {
-    const ticketTypeIds = sortedItems.map((i) => i.ticket_type_id);
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const ticketTypeIds = sortedItems.map((i) => i.ticket_type_id);
 
-    const ticketTypes = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
+      const ticketTypes = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
       SELECT
         id,
         concert_id AS "concertId",
@@ -158,160 +165,179 @@ export async function createOrderHeld(
       FOR UPDATE
     `);
 
-    if (ticketTypes.length !== ticketTypeIds.length) {
-      throw new OrderError('TICKET_TYPE_NOT_FOUND', 'One or more ticket types not found', 404);
-    }
-
-    const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
-
-    for (const item of sortedItems) {
-      const tt = typeMap.get(item.ticket_type_id);
-      if (!tt) {
-        throw new OrderError('TICKET_TYPE_NOT_FOUND', `Ticket type ${item.ticket_type_id} not found`, 404);
-      }
-
-      if (tt.concertId !== req.concert_id) {
+      if (ticketTypes.length !== ticketTypeIds.length) {
         throw new OrderError(
-          'TICKET_TYPE_NOT_ON_SALE',
-          `Ticket type ${item.ticket_type_id} does not belong to concert ${req.concert_id}`,
-          422,
+          "TICKET_TYPE_NOT_FOUND",
+          "One or more ticket types not found",
+          404,
         );
       }
 
-      if (tt.status !== 'ON_SALE') {
-        throw new OrderError(
-          'TICKET_TYPE_NOT_ON_SALE',
-          `Ticket type ${item.ticket_type_id} is not on sale`,
-          422,
-        );
+      const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
+
+      for (const item of sortedItems) {
+        const tt = typeMap.get(item.ticket_type_id);
+        if (!tt) {
+          throw new OrderError(
+            "TICKET_TYPE_NOT_FOUND",
+            `Ticket type ${item.ticket_type_id} not found`,
+            404,
+          );
+        }
+
+        if (tt.concertId !== req.concert_id) {
+          throw new OrderError(
+            "TICKET_TYPE_NOT_ON_SALE",
+            `Ticket type ${item.ticket_type_id} does not belong to concert ${req.concert_id}`,
+            422,
+          );
+        }
+
+        if (tt.status !== "ON_SALE") {
+          throw new OrderError(
+            "TICKET_TYPE_NOT_ON_SALE",
+            `Ticket type ${item.ticket_type_id} is not on sale`,
+            422,
+          );
+        }
+
+        if (now < tt.saleStartAt || now > tt.saleEndAt) {
+          throw new OrderError(
+            "TICKET_TYPE_NOT_ON_SALE",
+            `Ticket type ${item.ticket_type_id} is outside the sale window`,
+            422,
+          );
+        }
+
+        const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
+        if (available < item.quantity) {
+          throw new OrderError(
+            "TICKET_SOLD_OUT",
+            `Not enough available tickets for type ${item.ticket_type_id}`,
+            409,
+          );
+        }
       }
 
-      if (now < tt.saleStartAt || now > tt.saleEndAt) {
-        throw new OrderError(
-          'TICKET_TYPE_NOT_ON_SALE',
-          `Ticket type ${item.ticket_type_id} is outside the sale window`,
-          422,
-        );
-      }
-
-      const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
-      if (available < item.quantity) {
-        throw new OrderError(
-          'TICKET_SOLD_OUT',
-          `Not enough available tickets for type ${item.ticket_type_id}`,
-          409,
-        );
-      }
-    }
-
-    // Lock user counters and enforce per-user limits
-    for (const item of sortedItems) {
-      await tx.$executeRaw(Prisma.sql`
+      // Lock user counters and enforce per-user limits
+      for (const item of sortedItems) {
+        await tx.$executeRaw(Prisma.sql`
         INSERT INTO user_ticket_type_counters (user_id, ticket_type_id, held_quantity, paid_quantity)
         VALUES (${userId}::uuid, ${item.ticket_type_id}::uuid, 0, 0)
         ON CONFLICT (user_id, ticket_type_id) DO NOTHING
       `);
 
-      const [counter] = await tx.$queryRaw<UserCounterRow[]>(Prisma.sql`
+        const [counter] = await tx.$queryRaw<UserCounterRow[]>(Prisma.sql`
         SELECT held_quantity AS "heldQuantity", paid_quantity AS "paidQuantity"
         FROM user_ticket_type_counters
         WHERE user_id = ${userId}::uuid AND ticket_type_id = ${item.ticket_type_id}::uuid
         FOR UPDATE
       `);
 
-      const tt = typeMap.get(item.ticket_type_id)!;
-      if (counter.heldQuantity + counter.paidQuantity + item.quantity > tt.maxPerUser) {
-        throw new OrderError(
-          'PER_USER_LIMIT_EXCEEDED',
-          `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
-          422,
+        const tt = typeMap.get(item.ticket_type_id)!;
+        if (
+          counter.heldQuantity + counter.paidQuantity + item.quantity >
+          tt.maxPerUser
+        ) {
+          throw new OrderError(
+            "PER_USER_LIMIT_EXCEEDED",
+            `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
+            422,
+          );
+        }
+      }
+
+      // Calculate total amount
+      let totalAmount = new Prisma.Decimal(0);
+      for (const item of sortedItems) {
+        const tt = typeMap.get(item.ticket_type_id)!;
+        totalAmount = totalAmount.plus(
+          new Prisma.Decimal(tt.price).times(item.quantity),
         );
       }
-    }
 
-    // Calculate total amount
-    let totalAmount = new Prisma.Decimal(0);
-    for (const item of sortedItems) {
-      const tt = typeMap.get(item.ticket_type_id)!;
-      totalAmount = totalAmount.plus(new Prisma.Decimal(tt.price).times(item.quantity));
-    }
+      const firstTt = typeMap.values().next().value!;
 
-    const firstTt = typeMap.values().next().value!;
-
-    // Create order
-    const order = await tx.order.create({
-      data: {
-        userId,
-        concertId: req.concert_id,
-        idempotencyKey,
-        status: OrderStatus.HELD,
-        holdExpiresAt,
-        totalAmount,
-        currency: firstTt.currency,
-      },
-    });
-
-    const createdItems: Array<{
-      id: string;
-      ticketTypeId: string;
-      quantity: number;
-      unitPrice: string;
-      lineTotal: string;
-    }> = [];
-
-    for (const item of sortedItems) {
-      const tt = typeMap.get(item.ticket_type_id)!;
-      const unitPrice = new Prisma.Decimal(tt.price);
-      const lineTotal = unitPrice.times(item.quantity);
-
-      const orderItem = await tx.orderItem.create({
+      // Create order
+      const order = await tx.order.create({
         data: {
-          orderId: order.id,
-          ticketTypeId: item.ticket_type_id,
-          quantity: item.quantity,
-          unitPrice,
-          lineTotal,
+          userId,
+          concertId: req.concert_id,
+          idempotencyKey,
+          status: OrderStatus.HELD,
+          holdExpiresAt,
+          totalAmount,
+          currency: firstTt.currency,
         },
       });
 
-      createdItems.push({
-        id: orderItem.id,
-        ticketTypeId: item.ticket_type_id,
-        quantity: item.quantity,
-        unitPrice: unitPrice.toString(),
-        lineTotal: lineTotal.toString(),
-      });
+      const createdItems: Array<{
+        id: string;
+        ticketTypeId: string;
+        quantity: number;
+        unitPrice: string;
+        lineTotal: string;
+      }> = [];
 
-      await tx.$executeRaw(Prisma.sql`
+      for (const item of sortedItems) {
+        const tt = typeMap.get(item.ticket_type_id)!;
+        const unitPrice = new Prisma.Decimal(tt.price);
+        const lineTotal = unitPrice.times(item.quantity);
+
+        const orderItem = await tx.orderItem.create({
+          data: {
+            orderId: order.id,
+            ticketTypeId: item.ticket_type_id,
+            quantity: item.quantity,
+            unitPrice,
+            lineTotal,
+          },
+        });
+
+        createdItems.push({
+          id: orderItem.id,
+          ticketTypeId: item.ticket_type_id,
+          quantity: item.quantity,
+          unitPrice: unitPrice.toString(),
+          lineTotal: lineTotal.toString(),
+        });
+
+        await tx.$executeRaw(Prisma.sql`
         UPDATE ticket_types
         SET held_quantity = held_quantity + ${item.quantity}
         WHERE id = ${item.ticket_type_id}::uuid
       `);
 
-      await tx.$executeRaw(Prisma.sql`
+        await tx.$executeRaw(Prisma.sql`
         UPDATE user_ticket_type_counters
         SET held_quantity = held_quantity + ${item.quantity}
         WHERE user_id = ${userId}::uuid AND ticket_type_id = ${item.ticket_type_id}::uuid
       `);
-    }
+      }
 
-    return {
-      order: {
-        id: order.id,
-        userId: order.userId,
-        concertId: order.concertId,
-        status: order.status,
-        totalAmount: order.totalAmount.toString(),
-        currency: order.currency,
-        holdExpiresAt: order.holdExpiresAt!,
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-      },
-      items: createdItems,
-    };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return {
+        order: {
+          id: order.id,
+          userId: order.userId,
+          concertId: order.concertId,
+          status: order.status,
+          totalAmount: order.totalAmount.toString(),
+          currency: order.currency,
+          holdExpiresAt: order.holdExpiresAt!,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+        },
+        items: createdItems,
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 
-  await Promise.allSettled(sortedItems.map((item) => cacheDelete(inventoryCacheKey(item.ticket_type_id))));
+  await Promise.allSettled(
+    sortedItems.map((item) =>
+      cacheDelete(inventoryCacheKey(item.ticket_type_id)),
+    ),
+  );
 
   return result;
 }
@@ -320,14 +346,15 @@ export async function createPaymentRecord(
   orderId: string,
   amount: string,
   currency: string,
-  provider: 'VNPAY' | 'MOMO',
+  provider: "VNPAY" | "MOMO",
   checkoutUrl: string,
   idempotencyKey: string,
 ): Promise<{ id: string; status: string; checkoutUrl: string }> {
   const payment = await prisma.payment.create({
     data: {
       orderId,
-      provider: provider === 'VNPAY' ? PaymentProvider.VNPAY : PaymentProvider.MOMO,
+      provider:
+        provider === "VNPAY" ? PaymentProvider.VNPAY : PaymentProvider.MOMO,
       idempotencyKey,
       amount: new Prisma.Decimal(amount),
       currency,
@@ -343,7 +370,9 @@ export async function createPaymentRecord(
   };
 }
 
-export async function getOrderWithDetails(orderId: string): Promise<OrderWithDetails | null> {
+export async function getOrderWithDetails(
+  orderId: string,
+): Promise<OrderWithDetails | null> {
   const [order] = await prisma.$queryRaw<OrderDetailRow[]>(Prisma.sql`
     SELECT
       id,
@@ -425,8 +454,12 @@ export async function getOrderWithDetails(orderId: string): Promise<OrderWithDet
   };
 }
 
-export async function getOrderByIdempotencyKey(idempotencyKey: string): Promise<{ id: string; status: string } | null> {
-  const [row] = await prisma.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
+export async function getOrderByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<{ id: string; status: string } | null> {
+  const [row] = await prisma.$queryRaw<
+    Array<{ id: string; status: string }>
+  >(Prisma.sql`
     SELECT id, status::text AS "status"
     FROM orders
     WHERE idempotency_key = ${idempotencyKey}
@@ -438,7 +471,12 @@ export async function getOrderByIdempotencyKey(idempotencyKey: string): Promise<
 export async function cancelOrderById(
   orderId: string,
   userId: string,
-): Promise<{ orderId: string; status: string; cancelledAt: Date; releasedItems: Array<{ ticket_type_id: string; quantity: number }> }> {
+): Promise<{
+  orderId: string;
+  status: string;
+  cancelledAt: Date;
+  releasedItems: Array<{ ticket_type_id: string; quantity: number }>;
+}> {
   type OrderItemsRow = {
     orderId: string;
     userId: string;
@@ -450,8 +488,9 @@ export async function cancelOrderById(
 
   let releasedTicketTypeIds: string[] = [];
 
-  const result = await prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
       SELECT
         o.id AS "orderId",
         o.user_id AS "userId",
@@ -465,41 +504,50 @@ export async function cancelOrderById(
       FOR UPDATE OF o
     `);
 
-    if (rows.length === 0) {
-      throw new OrderError('ORDER_NOT_FOUND', 'Order not found', 404);
-    }
+      if (rows.length === 0) {
+        throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
+      }
 
-    const { orderStatus, userId: orderUserId } = rows[0];
+      const { orderStatus, userId: orderUserId } = rows[0];
 
-    if (orderUserId !== userId) {
-      throw new OrderError('ORDER_ACCESS_DENIED', 'Access denied to this order', 403);
-    }
+      if (orderUserId !== userId) {
+        throw new OrderError(
+          "ORDER_ACCESS_DENIED",
+          "Access denied to this order",
+          403,
+        );
+      }
 
-    if (orderStatus !== OrderStatus.HELD) {
-      throw new OrderError('ORDER_ALREADY_FINALIZED', `Order is in status ${orderStatus} and cannot be cancelled`, 409);
-    }
+      if (orderStatus !== OrderStatus.HELD) {
+        throw new OrderError(
+          "ORDER_ALREADY_FINALIZED",
+          `Order is in status ${orderStatus} and cannot be cancelled`,
+          409,
+        );
+      }
 
-    const now = new Date();
+      const now = new Date();
 
-    await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: OrderStatus.CANCELLED,
-        cancelledAt: now,
-        cancelledReason: 'USER_CANCELLED',
-      },
-    });
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.CANCELLED,
+          cancelledAt: now,
+          cancelledReason: "USER_CANCELLED",
+        },
+      });
 
-    const releasedItems: Array<{ ticket_type_id: string; quantity: number }> = [];
+      const releasedItems: Array<{ ticket_type_id: string; quantity: number }> =
+        [];
 
-    for (const row of rows) {
-      await tx.$executeRaw(Prisma.sql`
+      for (const row of rows) {
+        await tx.$executeRaw(Prisma.sql`
         UPDATE ticket_types
         SET held_quantity = GREATEST(0, held_quantity - ${row.quantity})
         WHERE id = ${row.ticketTypeId}::uuid
       `);
 
-      await tx.$executeRaw(Prisma.sql`
+        await tx.$executeRaw(Prisma.sql`
         UPDATE user_ticket_type_counters utc
         SET held_quantity = GREATEST(0, utc.held_quantity - ${row.quantity})
         FROM orders o
@@ -508,27 +556,38 @@ export async function cancelOrderById(
           AND utc.ticket_type_id = ${row.ticketTypeId}::uuid
       `);
 
-      releasedItems.push({ ticket_type_id: row.ticketTypeId, quantity: row.quantity });
-    }
+        releasedItems.push({
+          ticket_type_id: row.ticketTypeId,
+          quantity: row.quantity,
+        });
+      }
 
-    releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
+      releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
 
-    return {
-      orderId,
-      status: OrderStatus.CANCELLED,
-      cancelledAt: now,
-      releasedItems,
-    };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return {
+        orderId,
+        status: OrderStatus.CANCELLED,
+        cancelledAt: now,
+        releasedItems,
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 
-  await Promise.allSettled(releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))));
+  await Promise.allSettled(
+    releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
+  );
 
   return result;
 }
 
 export async function expireOrderById(
   orderId: string,
-): Promise<{ orderId: string; status: string; releasedItems: Array<{ ticket_type_id: string; quantity: number }> }> {
+): Promise<{
+  orderId: string;
+  status: string;
+  releasedItems: Array<{ ticket_type_id: string; quantity: number }>;
+}> {
   type OrderItemsRow = {
     orderId: string;
     orderStatus: string;
@@ -539,8 +598,9 @@ export async function expireOrderById(
 
   let releasedTicketTypeIds: string[] = [];
 
-  const result = await prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
       SELECT
         o.id AS "orderId",
         o.status::text AS "orderStatus",
@@ -553,41 +613,42 @@ export async function expireOrderById(
       FOR UPDATE OF o
     `);
 
-    if (rows.length === 0) {
-      throw new OrderError('ORDER_NOT_FOUND', 'Order not found', 404);
-    }
+      if (rows.length === 0) {
+        throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
+      }
 
-    const { orderStatus } = rows[0];
+      const { orderStatus } = rows[0];
 
-    // Idempotent: already expired/cancelled/confirmed
-    if (orderStatus !== OrderStatus.HELD) {
-      return {
-        orderId,
-        status: orderStatus,
-        releasedItems: [],
-      };
-    }
+      // Idempotent: already expired/cancelled/confirmed
+      if (orderStatus !== OrderStatus.HELD) {
+        return {
+          orderId,
+          status: orderStatus,
+          releasedItems: [],
+        };
+      }
 
-    const now = new Date();
+      const now = new Date();
 
-    await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: OrderStatus.EXPIRED,
-        expiredAt: now,
-      },
-    });
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.EXPIRED,
+          expiredAt: now,
+        },
+      });
 
-    const releasedItems: Array<{ ticket_type_id: string; quantity: number }> = [];
+      const releasedItems: Array<{ ticket_type_id: string; quantity: number }> =
+        [];
 
-    for (const row of rows) {
-      await tx.$executeRaw(Prisma.sql`
+      for (const row of rows) {
+        await tx.$executeRaw(Prisma.sql`
         UPDATE ticket_types
         SET held_quantity = GREATEST(0, held_quantity - ${row.quantity})
         WHERE id = ${row.ticketTypeId}::uuid
       `);
 
-      await tx.$executeRaw(Prisma.sql`
+        await tx.$executeRaw(Prisma.sql`
         UPDATE user_ticket_type_counters utc
         SET held_quantity = GREATEST(0, utc.held_quantity - ${row.quantity})
         FROM orders o
@@ -596,19 +657,26 @@ export async function expireOrderById(
           AND utc.ticket_type_id = ${row.ticketTypeId}::uuid
       `);
 
-      releasedItems.push({ ticket_type_id: row.ticketTypeId, quantity: row.quantity });
-    }
+        releasedItems.push({
+          ticket_type_id: row.ticketTypeId,
+          quantity: row.quantity,
+        });
+      }
 
-    releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
+      releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
 
-    return {
-      orderId,
-      status: OrderStatus.EXPIRED,
-      releasedItems,
-    };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return {
+        orderId,
+        status: OrderStatus.EXPIRED,
+        releasedItems,
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 
-  await Promise.allSettled(releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))));
+  await Promise.allSettled(
+    releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
+  );
 
   return result;
 }
@@ -625,12 +693,12 @@ export async function findAdminOrders(query: AdminOrdersQuery): Promise<{
 
   if (query.cursor) {
     try {
-      const decoded = Buffer.from(query.cursor, 'base64url').toString('utf8');
-      const [isoStr, id] = decoded.split(':');
+      const decoded = Buffer.from(query.cursor, "base64url").toString("utf8");
+      const [isoStr, id] = decoded.split(":");
       cursorCreatedAt = new Date(isoStr);
       cursorId = id;
     } catch {
-      throw new OrderError('INVALID_CHECKOUT_REQUEST', 'Invalid cursor', 400);
+      throw new OrderError("INVALID_CHECKOUT_REQUEST", "Invalid cursor", 400);
     }
   }
 
@@ -659,7 +727,7 @@ export async function findAdminOrders(query: AdminOrdersQuery): Promise<{
 
   const whereClause =
     conditions.length > 0
-      ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+      ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`
       : Prisma.sql``;
 
   const rows = await prisma.$queryRaw<AdminOrderRow[]>(Prisma.sql`
@@ -690,7 +758,7 @@ export async function findAdminOrders(query: AdminOrdersQuery): Promise<{
   if (hasMore && data.length > 0) {
     const last = data[data.length - 1];
     const raw = `${last.createdAt.toISOString()}:${last.id}`;
-    nextCursor = Buffer.from(raw).toString('base64url');
+    nextCursor = Buffer.from(raw).toString("base64url");
   }
 
   return { rows: data, nextCursor };

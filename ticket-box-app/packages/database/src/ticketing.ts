@@ -39,6 +39,18 @@ type TicketIssueSourceRow = {
   hasSucceededPayment: boolean;
 };
 
+type ExpiredHeldOrderRow = {
+  orderId: string;
+  holdExpiresAt: Date;
+};
+
+type HeldOrderItemRow = {
+  orderId: string;
+  orderStatus: string;
+  ticketTypeId: string;
+  quantity: number;
+};
+
 export type InventoryReservationErrorCode =
   | "INVALID_QUANTITY"
   | "INVALID_EXPIRATION"
@@ -360,6 +372,113 @@ export async function issueTicketsForOrderItem(
       }
 
       return tickets;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export type ExpireHeldOrderResult = {
+  orderId: string;
+  status: string;
+  releasedItems: Array<{
+    ticketTypeId: string;
+    quantity: number;
+  }>;
+};
+
+// Tìm các order đang HELD nhưng đã quá hạn giữ vé để worker xử lý.
+export async function findExpiredHeldOrders(
+  limit = 50,
+  now = new Date(),
+  db: PrismaClient = prisma,
+): Promise<ExpiredHeldOrderRow[]> {
+  return db.$queryRaw<ExpiredHeldOrderRow[]>(Prisma.sql`
+    SELECT
+      id AS "orderId",
+      hold_expires_at AS "holdExpiresAt"
+    FROM orders
+    WHERE status = ${OrderStatus.HELD}::order_status
+      AND hold_expires_at IS NOT NULL
+      AND hold_expires_at <= ${now}
+    ORDER BY hold_expires_at ASC
+    LIMIT ${Math.max(1, Math.min(limit, 500))}
+  `);
+}
+
+// Chuyển một order HELD quá hạn sang EXPIRED và trả lại vé/quota trong transaction.
+export async function expireHeldOrder(
+  orderId: string,
+  db: PrismaClient = prisma,
+): Promise<ExpireHeldOrderResult> {
+  return db.$transaction(
+    async (tx) => {
+      const rows = await tx.$queryRaw<HeldOrderItemRow[]>(Prisma.sql`
+        SELECT
+          o.id AS "orderId",
+          o.status::text AS "orderStatus",
+          oi.ticket_type_id AS "ticketTypeId",
+          oi.quantity AS "quantity"
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.id = ${orderId}::uuid
+        FOR UPDATE OF o
+      `);
+
+      if (rows.length === 0) {
+        return {
+          orderId,
+          status: "NOT_FOUND",
+          releasedItems: [],
+        };
+      }
+
+      if (rows[0].orderStatus !== OrderStatus.HELD) {
+        return {
+          orderId,
+          status: rows[0].orderStatus,
+          releasedItems: [],
+        };
+      }
+
+      const now = new Date();
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.EXPIRED,
+          expiredAt: now,
+        },
+      });
+
+      const releasedItems: ExpireHeldOrderResult["releasedItems"] = [];
+
+      for (const row of rows) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE ticket_types
+          SET held_quantity = GREATEST(0, held_quantity - ${row.quantity})
+          WHERE id = ${row.ticketTypeId}::uuid
+        `);
+
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE user_ticket_type_counters utc
+          SET held_quantity = GREATEST(0, utc.held_quantity - ${row.quantity})
+          FROM orders o
+          WHERE o.id = ${orderId}::uuid
+            AND utc.user_id = o.user_id
+            AND utc.ticket_type_id = ${row.ticketTypeId}::uuid
+        `);
+
+        releasedItems.push({
+          ticketTypeId: row.ticketTypeId,
+          quantity: row.quantity,
+        });
+      }
+
+      return {
+        orderId,
+        status: OrderStatus.EXPIRED,
+        releasedItems,
+      };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );

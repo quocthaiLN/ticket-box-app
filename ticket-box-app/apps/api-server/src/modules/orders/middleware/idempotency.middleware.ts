@@ -1,11 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
-import { getIdempotencyResponse, setIdempotencyResponse } from "@ticketbox/redis";
+import {
+  getIdempotencyResponse,
+  setIdempotencyResponse,
+} from "@ticketbox/redis";
 import { Errors } from "../../../shared/http/problem-details.js";
 
 export async function idempotencyMiddleware(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   const rawKey = req.headers["idempotency-key"];
 
@@ -18,7 +21,9 @@ export async function idempotencyMiddleware(
 
   if (!key || key.trim() === "" || key.length > 128) {
     next(
-      Errors.badRequest("Idempotency-Key must be a non-empty string under 128 characters.")
+      Errors.badRequest(
+        "Idempotency-Key must be a non-empty string under 128 characters.",
+      ),
     );
     return;
   }

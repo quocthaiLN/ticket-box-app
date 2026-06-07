@@ -1,13 +1,21 @@
-import type { NextFunction, Request, Response } from "express";
-import { getIdempotencyResponse, setIdempotencyResponse } from "@ticketbox/redis";
+import type { NextFunction, Response } from "express";
+import {
+  cacheGet as get,
+  getIdempotencyResponse,
+  cacheSet as set,
+  setIdempotencyResponse,
+} from "@ticketbox/redis";
+import type { AppRequest } from "../ticket.type.js";
 import { Errors } from "../../../shared/http/problem-details.js";
 
+const IDEMPOTENCY_TTL = 86400; // 24 hours
+
 export async function idempotencyMiddleware(
-  req: Request,
+  req: AppRequest,
   res: Response,
-  next: NextFunction
-): Promise<void> {
-  const rawKey = req.headers["idempotency-key"];
+  next: NextFunction,
+) {
+  const rawKey = req.headers["idempotency-key"] as string | undefined;
 
   if (!rawKey) {
     next(Errors.missingIdempotencyKey());
@@ -17,7 +25,11 @@ export async function idempotencyMiddleware(
   const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
   if (!key || key.trim() === "" || key.length > 128) {
-    next(Errors.badRequest("Idempotency-Key must be a non-empty string under 128 characters."));
+    next(
+      Errors.badRequest(
+        "Idempotency-Key must be a non-empty string under 128 characters.",
+      ),
+    );
     return;
   }
 

@@ -1,13 +1,22 @@
-import type { NextFunction, Request, Response } from "express";
-import { getIdempotencyResponse, setIdempotencyResponse } from "@ticketbox/redis";
+// check idempotency key in header and store it in redis with a TTL of 24 hours
+import type { NextFunction, Response } from "express";
+import {
+  cacheGet as get,
+  getIdempotencyResponse,
+  cacheSet as set,
+  setIdempotencyResponse,
+} from "@ticketbox/redis";
 import { Errors } from "../../../shared/http/problem-details.js";
+
+const IDEMPOTENCY_TTL = 86400; // 24 hours
+const IDEMPOTENCY_KEY_PREFIX = "idempotency:";
 
 export async function idempotencyMiddleware(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
-  const rawKey = req.headers["idempotency-key"];
+  const rawKey = req.headers.get("idempotency-key");
 
   if (!rawKey) {
     next(Errors.missingIdempotencyKey());
@@ -17,7 +26,11 @@ export async function idempotencyMiddleware(
   const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
   if (!key || key.trim() === "" || key.length > 128) {
-    next(Errors.badRequest("Idempotency-Key must be a non-empty string under 128 characters."));
+    next(
+      Errors.badRequest(
+        "Idempotency-Key must be a non-empty string under 128 characters.",
+      ),
+    );
     return;
   }
 
