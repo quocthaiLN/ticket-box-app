@@ -6,6 +6,8 @@ import {
   PaymentStatus,
   PaymentProvider,
   TicketStatus,
+  NotificationChannel,
+  NotificationType,
 } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
 
@@ -258,6 +260,8 @@ export async function confirmOrderPayment(
       WHERE oi.order_id = ${orderId}::uuid
     `);
 
+      const issuedTickets: Array<{ id: string; userId: string; concertId: string }> = [];
+
       for (const item of items) {
         // Move held → sold
         await tx.$executeRaw(Prisma.sql`
@@ -287,7 +291,7 @@ export async function confirmOrderPayment(
             .update(rawToken, "utf8")
             .digest("hex");
 
-          await tx.ticket.create({
+          const ticket = await tx.ticket.create({
             data: {
               orderId,
               orderItemId: item.itemId,
@@ -300,7 +304,26 @@ export async function confirmOrderPayment(
               issuedAt: now,
             },
           });
+
+          issuedTickets.push({
+            id: ticket.id,
+            userId: item.userId,
+            concertId: item.concertId,
+          });
         }
+      }
+
+      if (issuedTickets.length > 0) {
+        await tx.notification.createMany({
+          data: issuedTickets.map((t) => ({
+            userId: t.userId,
+            concertId: t.concertId,
+            ticketId: t.id,
+            channel: NotificationChannel.EMAIL,
+            type: NotificationType.TICKET_ISSUED,
+            payload: { ticket_id: t.id, order_id: orderId } as Prisma.InputJsonValue,
+          })),
+        });
       }
 
       affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
