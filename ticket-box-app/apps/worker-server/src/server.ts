@@ -26,22 +26,38 @@ const workers = [
 const notificationQueue = new Queue(QUEUE_NAMES.NOTIFICATIONS, {
   connection: getRedisConnection(),
 });
+const expireHoldsQueue = new Queue(QUEUE_NAMES.EXPIRE_HOLDS, {
+  connection: getRedisConnection(),
+});
 
 const reminderTimer = startReminderScheduler(notificationQueue);
+const expireHoldsIntervalMs = Number(process.env.EXPIRE_HOLDS_INTERVAL_MS ?? 60_000);
+const expireHoldsBatchSize = Number(process.env.EXPIRE_HOLDS_BATCH_SIZE ?? 50);
+const expireHoldsDryRun = process.env.EXPIRE_HOLDS_DRY_RUN === "true";
+// Đưa job expire-holds vào queue theo chu kỳ cấu hình.
+const expireHoldsTimer = setInterval(() => {
+  void expireHoldsQueue.add("expire-held-orders", {
+    batch_size: expireHoldsBatchSize,
+    dry_run: expireHoldsDryRun,
+  });
+}, Math.max(expireHoldsIntervalMs, 5_000));
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown
 // ---------------------------------------------------------------------------
 
+// Đóng worker, queue và timer an toàn khi process nhận tín hiệu dừng.
 async function shutdown(signal: string): Promise<void> {
   console.log(
     `\n[worker-server] Received ${signal} — shutting down gracefully...`,
   );
 
   clearInterval(reminderTimer);
+  clearInterval(expireHoldsTimer);
 
   await Promise.all(workers.map((w) => w.close()));
   await notificationQueue.close();
+  await expireHoldsQueue.close();
 
   console.log("[worker-server] All workers stopped. Exiting.");
   process.exit(0);

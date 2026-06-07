@@ -8,12 +8,11 @@ export function requireRole(...roles: Role[]) {
 
     if (!currentRole || !roles.includes(currentRole)) {
       res.status(403).type("application/problem+json").json({
-        type: "https://api.ticketbox.vn/errors/forbidden",
         title: "Forbidden",
         status: 403,
         code: "FORBIDDEN",
         detail: "Role is not allowed to access this resource.",
-        request_id: _req.requestId
+        request_id: _req.requestId,
       });
       return;
     }

@@ -10,11 +10,11 @@ import { Redis } from "ioredis";
 let _client: Redis | null = null;
 
 function createRedisClient(): Redis | null {
-  const url = process.env.REDIS_URL ?? process.env.UPSTASH_REDIS_URL;
+  const url = process.env.REDIS_URL || "redis://localhost:6379";
 
   if (!url) {
     console.warn(
-      "[redis] REDIS_URL / UPSTASH_REDIS_URL is not set — Redis features will be disabled (cache miss / no denylist)"
+      "[redis] REDIS_URL is not set — Redis features will be disabled (cache miss / no denylist)",
     );
     return null;
   }
@@ -26,9 +26,11 @@ function createRedisClient(): Redis | null {
   });
 
   client.on("connect", () => console.log("[redis] Connected"));
-  client.on("ready",   () => console.log("[redis] Ready"));
-  client.on("error",   (err: Error) => console.error("[redis] Error:", err.message));
-  client.on("close",   () => console.warn("[redis] Connection closed"));
+  client.on("ready", () => console.log("[redis] Ready"));
+  client.on("error", (err: Error) =>
+    console.error("[redis] Error:", err.message),
+  );
+  client.on("close", () => console.warn("[redis] Connection closed"));
 
   return client;
 }

@@ -1,49 +1,63 @@
 // check idempotency key in header and store it in redis with a TTL of 24 hours
-import type { NextFunction, Response } from 'express';
-import { get, set } from '@ticket-box/redis';
-import type { AppRequest } from '../inventory.type.js';
+import type { NextFunction, Request, Response } from "express";
+import {
+  cacheGet as get,
+  getIdempotencyResponse,
+  cacheSet as set,
+  setIdempotencyResponse,
+} from "@ticketbox/redis";
+import { Errors } from "../../../shared/http/problem-details.js";
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours
-const IDEMPOTENCY_KEY_PREFIX = 'idempotency:';
+const IDEMPOTENCY_KEY_PREFIX = "idempotency:";
 
-export function idempotencyMiddleware(req: AppRequest, res: Response, next: NextFunction) {
-  const key = req.headers['idempotency-key'] as string | undefined;
+export async function idempotencyMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const rawKey = req.headers["idempotency-key"];
 
-  if (!key) {
-    const err = Object.assign(new Error('Idempotency-Key header is required'), {
-      statusCode: 400,
-      code: 'MISSING_IDEMPOTENCY_KEY',
-    });
-    return next(err);
+  if (!rawKey) {
+    next(Errors.missingIdempotencyKey());
+    return;
   }
 
-  if (typeof key !== 'string' || key.trim() === '' || key.length > 128) {
-    const err = Object.assign(new Error('Idempotency-Key must be a non-empty string under 128 characters'), {
-      statusCode: 400,
-      code: 'INVALID_IDEMPOTENCY_KEY',
-    });
-    return next(err);
+  const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+
+  if (!key || key.trim() === "" || key.length > 128) {
+    next(
+      Errors.badRequest(
+        "Idempotency-Key must be a non-empty string under 128 characters.",
+      ),
+    );
+    return;
   }
 
-  const redisKey = `${IDEMPOTENCY_KEY_PREFIX}${key}`;
+  const userId: string = res.locals.auth?.user_id ?? "anon";
+  const scopedKey = `inventory:${userId}:${key}`;
 
-  get(redisKey)
-    .then((cached) => {
-      if (cached) {
-        const payload = cached as { status: number; body: unknown };
-        return res.status(payload.status).json(payload.body);
+  try {
+    const cached = await getIdempotencyResponse(scopedKey);
+    if (cached) {
+      res.status(cached.status).json(cached.body);
+      return;
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = (body: unknown): Response => {
+      if (res.statusCode < 400) {
+        setIdempotencyResponse(scopedKey, {
+          status: res.statusCode,
+          body,
+          created_at: new Date().toISOString(),
+        }).catch(() => {});
       }
+      return originalJson(body);
+    };
 
-      // Patch res.json to cache the response after it's sent
-      const originalJson = res.json.bind(res);
-      res.json = (body: unknown) => {
-        set(redisKey, { status: res.statusCode, body }, IDEMPOTENCY_TTL).catch(() => {
-          // Redis failure after response is non-fatal
-        });
-        return originalJson(body);
-      };
-
-      next();
-    })
-    .catch(next);
+    next();
+  } catch (err) {
+    next(err);
+  }
 }

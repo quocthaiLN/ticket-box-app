@@ -1,36 +1,42 @@
-/**
- * notifications.service.ts — Business logic cho Notification module.
- *
- * Luồng Sprint 4:
- *   1. Tạo row notifications với status PENDING (bằng repository).
- *   2. Enqueue job vào queue "notifications" (BullMQ).
- *   3. Worker nhận job, gửi thật, cập nhật status SENT/FAILED.
- *
- * Sprint 1: chỉ định nghĩa contract, throw not implemented.
- */
-
+import { getNotificationsQueue } from "@ticketbox/queue";
+import { notificationsRepository } from "./notifications.repository.js";
 import type { CreateNotificationInput, Notification } from "./notifications.types.js";
 
 export const notificationsService = {
   /**
-   * Tạo notification PENDING và enqueue job gửi.
-   *
-   * Được gọi bởi các module khác sau event:
-   *   - payment success → gửi ticket confirmation
-   *   - ticket issued → gửi e-ticket
-   *   - check-in success → gửi confirmation
-   *
-   * Sprint 4: notificationsRepository.create() + notificationsQueue.add()
+   * Tạo notification PENDING trong DB và enqueue job gửi.
+   * Được gọi bởi payment/ticket/check-in sau event tương ứng.
    */
-  async enqueue(_input: CreateNotificationInput): Promise<Notification> {
-    throw new Error("notificationsService.enqueue: not implemented — Sprint 4");
+  async enqueue(input: CreateNotificationInput): Promise<Notification> {
+    const notification = await notificationsRepository.create(input);
+
+    try {
+      const queue = getNotificationsQueue();
+      await queue.add(
+        "send-notification",
+        {
+          notification_id: notification.id,
+          channel: input.channel,
+          recipient_user_id: input.user_id,
+          subject: input.subject,
+          body: input.body,
+        },
+        {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+          removeOnComplete: { count: 100 },
+          removeOnFail: { count: 50 },
+        }
+      );
+    } catch (err) {
+      // Queue không khả dụng không được phép làm crash luồng chính
+      console.error("[notifications] Failed to enqueue job:", err);
+    }
+
+    return notification;
   },
 
-  /**
-   * Lấy danh sách notification của user (debug/admin).
-   * Sprint 4: notificationsRepository.findByUserId()
-   */
-  async getByUserId(_userId: string): Promise<Notification[]> {
-    throw new Error("notificationsService.getByUserId: not implemented — Sprint 4");
+  async getByUserId(userId: string): Promise<Notification[]> {
+    return notificationsRepository.findByUserId(userId);
   },
 };

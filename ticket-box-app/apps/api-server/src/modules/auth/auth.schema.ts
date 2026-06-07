@@ -28,10 +28,10 @@ export const registerSchema = z
       required_error: "Confirm password is required",
     }),
 
-    otp: z
-      .string({ required_error: "OTP is required" })
-      .length(6, "OTP must be 6 digits")
-      .regex(/^\d+$/, "OTP must be numeric"),
+    full_name: z
+      .string({ required_error: "Full name is required" })
+      .min(1, "Full name is required")
+      .max(255, "Full name is too long"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",

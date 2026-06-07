@@ -33,7 +33,7 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 export async function cacheSet(
   key: string,
   value: unknown,
-  ttlSeconds: number = DEFAULT_TTL_SECONDS
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<void> {
   const client = getRedisClient();
   if (!client) return;
@@ -48,7 +48,7 @@ export async function cacheSet(
 /**
  * Xóa một hoặc nhiều cache key.
  */
-export async function cacheDel(...keys: string[]): Promise<void> {
+export async function cacheDelete(...keys: string[]): Promise<void> {
   const client = getRedisClient();
   if (!client || keys.length === 0) return;
 
@@ -65,7 +65,7 @@ export async function cacheDel(...keys: string[]): Promise<void> {
 export async function cacheAside<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttlSeconds: number = DEFAULT_TTL_SECONDS
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<T> {
   const cached = await cacheGet<T>(key);
   if (cached !== null) return cached;
@@ -73,4 +73,29 @@ export async function cacheAside<T>(
   const fresh = await fetcher();
   await cacheSet(key, fresh, ttlSeconds);
   return fresh;
+}
+
+/**
+ * Set only if key does not exist.
+ * Returns true if value was written.
+ */
+export async function getSetNX(
+  key: string,
+  value: unknown,
+  ttl?: number,
+): Promise<boolean> {
+  const client = getRedisClient();
+
+  if (!client) {
+    return false;
+  }
+
+  const serialized = JSON.stringify(value);
+
+  const result =
+    ttl !== undefined
+      ? await client.set(key, serialized, "EX", ttl, "NX")
+      : await client.set(key, serialized, "NX");
+
+  return result === "OK";
 }

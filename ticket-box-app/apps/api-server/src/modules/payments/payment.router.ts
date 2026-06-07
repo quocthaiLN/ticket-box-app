@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { momoWebhookHandler, retryPaymentHandler, vnpayWebhookHandler } from './payment.controller.js';
 import { paymentHealthHandler } from './payment.health.js';
-import { idempotencyMiddleware, validateBody } from './middlewares/index.js';
+import { idempotencyMiddleware, webhookIdempotencyMiddleware, validateBody } from './middlewares/index.js';
 import { validateRetryPaymentRequest } from './payment.schema.js';
 import type { RetryPaymentRequest } from './payment.type.js';
 import { requireAuth } from '../../shared/middleware/auth.middleware.js';
@@ -20,10 +20,10 @@ router.post(
 );
 
 // POST /payments/webhooks/vnpay — VNPAY IPN (public, signature-verified — no user JWT)
-router.post('/payments/webhooks/vnpay', vnpayWebhookHandler);
+router.post('/payments/webhooks/vnpay', webhookIdempotencyMiddleware, vnpayWebhookHandler);
 
 // POST /payments/webhooks/momo — MoMo IPN (public, signature-verified — no user JWT)
-router.post('/payments/webhooks/momo', momoWebhookHandler);
+router.post('/payments/webhooks/momo', webhookIdempotencyMiddleware, momoWebhookHandler);
 
 // GET /payments/health — circuit breaker status (public diagnostic)
 router.get('/payments/health', paymentHealthHandler);

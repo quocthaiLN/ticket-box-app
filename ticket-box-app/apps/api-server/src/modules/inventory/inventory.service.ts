@@ -1,11 +1,15 @@
-import { del, get, set } from '@ticket-box/redis';
+import {
+  cacheDelete as del,
+  cacheGet as get,
+  cacheSet as set,
+} from "@ticketbox/redis";
 import {
   adjustInventory,
   confirmPayment,
   getInventoryByTicketTypeId,
   holdInventory,
   releaseInventory,
-} from './inventory.repository.js';
+} from "./inventory.repository.js";
 import type {
   HoldRequest,
   HoldResponse,
@@ -16,12 +20,15 @@ import type {
   PaymentConfirmationResponse,
   ReleaseRequest,
   ReleaseResponse,
-} from './inventory.type.js';
+} from "./inventory.type.js";
 
 const INVENTORY_CACHE_TTL = 60; // seconds
-const INVENTORY_CACHE_KEY = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
+const INVENTORY_CACHE_KEY = (ticketTypeId: string) =>
+  `inventory:${ticketTypeId}`;
 
-export async function getInventory(ticketTypeId: string): Promise<InventoryView> {
+export async function getInventory(
+  ticketTypeId: string,
+): Promise<InventoryView> {
   const cached = await get(INVENTORY_CACHE_KEY(ticketTypeId));
   if (cached) return cached as InventoryView;
 
@@ -42,11 +49,16 @@ export async function getInventory(ticketTypeId: string): Promise<InventoryView>
   return view;
 }
 
-export async function holdTickets(req: HoldRequest, idempotencyKey: string): Promise<HoldResponse> {
+export async function holdTickets(
+  req: HoldRequest,
+  idempotencyKey: string,
+): Promise<HoldResponse> {
   const { order, itemResults } = await holdInventory(req, idempotencyKey);
 
   // Invalidate cache for all affected ticket types
-  await Promise.allSettled(req.items.map((i) => del(INVENTORY_CACHE_KEY(i.ticket_type_id))));
+  await Promise.allSettled(
+    req.items.map((i) => del(INVENTORY_CACHE_KEY(i.ticket_type_id))),
+  );
 
   return {
     order_id: order.id,
@@ -60,10 +72,14 @@ export async function holdTickets(req: HoldRequest, idempotencyKey: string): Pro
   };
 }
 
-export async function releaseTickets(req: ReleaseRequest): Promise<ReleaseResponse> {
+export async function releaseTickets(
+  req: ReleaseRequest,
+): Promise<ReleaseResponse> {
   const result = await releaseInventory(req);
 
-  await Promise.allSettled(result.releasedItems.map((i) => del(INVENTORY_CACHE_KEY(i.ticket_type_id))));
+  await Promise.allSettled(
+    result.releasedItems.map((i) => del(INVENTORY_CACHE_KEY(i.ticket_type_id))),
+  );
 
   return {
     order_id: result.orderId,
@@ -72,7 +88,9 @@ export async function releaseTickets(req: ReleaseRequest): Promise<ReleaseRespon
   };
 }
 
-export async function confirmTicketPayment(req: PaymentConfirmationRequest): Promise<PaymentConfirmationResponse> {
+export async function confirmTicketPayment(
+  req: PaymentConfirmationRequest,
+): Promise<PaymentConfirmationResponse> {
   const result = await confirmPayment(req);
   return {
     order_id: result.orderId,

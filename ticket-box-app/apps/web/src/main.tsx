@@ -6,6 +6,7 @@ import { AdminCatalogPage } from "./routes/admin/AdminCatalogPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
+import { CheckerPage } from "./routes/checker/CheckerPage";
 import "./styles/globals.css";
 
 const router = createBrowserRouter([
@@ -28,6 +29,10 @@ const router = createBrowserRouter([
       {
         path: "admin/catalog",
         element: <AdminCatalogPage />
+      },
+      {
+        path: "checker",
+        element: <CheckerPage />
       }
     ]
   }

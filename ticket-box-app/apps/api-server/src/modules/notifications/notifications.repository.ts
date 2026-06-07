@@ -1,36 +1,77 @@
-/**
- * notifications.repository.ts — Database access cho Notification module.
- * Sprint 1: stub interface — Sprint 4 implement với Prisma.
- */
+import { PrismaClient, NotificationChannel, NotificationType, NotificationStatus } from "@prisma/client";
+import type { CreateNotificationInput, Notification } from "./notifications.types.js";
 
-import type { CreateNotificationInput, Notification, NotificationStatus } from "./notifications.types.js";
+const prisma = new PrismaClient();
+
+function mapChannel(ch: string): NotificationChannel {
+  const map: Record<string, NotificationChannel> = {
+    EMAIL: NotificationChannel.EMAIL,
+    PUSH: NotificationChannel.APP,
+    IN_APP: NotificationChannel.APP,
+    APP: NotificationChannel.APP,
+    SMS: NotificationChannel.SMS,
+  };
+  return map[ch] ?? NotificationChannel.APP;
+}
+
+function toNotification(row: {
+  id: string;
+  userId: string | null;
+  channel: NotificationChannel;
+  type: NotificationType;
+  status: NotificationStatus;
+  payload: unknown;
+  sentAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): Notification {
+  const payload = row.payload as Record<string, unknown>;
+  return {
+    id: row.id,
+    user_id: row.userId ?? "",
+    channel: row.channel as string as Notification["channel"],
+    subject: (payload.subject as string) ?? null,
+    body: (payload.body as string) ?? "",
+    status: row.status as string as Notification["status"],
+    sent_at: row.sentAt,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+}
 
 export const notificationsRepository = {
-  /**
-   * Tạo notification row mới với status PENDING.
-   * Sprint 4: prisma.notification.create(...)
-   */
-  async create(_input: CreateNotificationInput): Promise<Notification> {
-    throw new Error("notificationsRepository.create: not implemented — Sprint 4");
+  async create(input: CreateNotificationInput): Promise<Notification> {
+    const row = await prisma.notification.create({
+      data: {
+        userId: input.user_id,
+        channel: mapChannel(input.channel),
+        type: NotificationType.SYSTEM,
+        status: NotificationStatus.PENDING,
+        payload: {
+          subject: input.subject ?? null,
+          body: input.body,
+        },
+      },
+    });
+    return toNotification(row);
   },
 
-  /**
-   * Cập nhật status notification (SENT / FAILED).
-   * Sprint 4: prisma.notification.update(...)
-   */
-  async updateStatus(
-    _id: string,
-    _status: NotificationStatus,
-    _sentAt?: Date
-  ): Promise<void> {
-    throw new Error("notificationsRepository.updateStatus: not implemented — Sprint 4");
+  async updateStatus(id: string, status: "SENT" | "FAILED", sentAt?: Date): Promise<void> {
+    await prisma.notification.update({
+      where: { id },
+      data: {
+        status: status as NotificationStatus,
+        sentAt: sentAt ?? (status === "SENT" ? new Date() : undefined),
+      },
+    });
   },
 
-  /**
-   * Lấy danh sách notification của user (dùng cho admin/debug).
-   * Sprint 4: prisma.notification.findMany(...)
-   */
-  async findByUserId(_userId: string): Promise<Notification[]> {
-    throw new Error("notificationsRepository.findByUserId: not implemented — Sprint 4");
+  async findByUserId(userId: string): Promise<Notification[]> {
+    const rows = await prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return rows.map(toNotification);
   },
 };
