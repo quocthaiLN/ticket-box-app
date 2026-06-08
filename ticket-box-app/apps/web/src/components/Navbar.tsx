@@ -36,9 +36,6 @@ export function Navbar() {
             <NavItem to="/events" active={location.pathname === "/events"}>
               Explore
             </NavItem>
-            <NavItem to="/admin" active={location.pathname.startsWith("/admin")}>
-              Admin
-            </NavItem>
           </div>
 
           <div className="mx-6 hidden max-w-sm flex-1 items-center gap-2 md:flex">
@@ -68,7 +65,6 @@ export function Navbar() {
         <div className="space-y-2 border-t border-white/10 bg-[#08080E]/95 px-4 py-4 md:hidden">
           <MobileNavLink to="/" label="Home" onClick={() => setMenuOpen(false)} />
           <MobileNavLink to="/events" label="Explore" onClick={() => setMenuOpen(false)} />
-          <MobileNavLink to="/admin" label="Admin" onClick={() => setMenuOpen(false)} />
         </div>
       )}
     </nav>
