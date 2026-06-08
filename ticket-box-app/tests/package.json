@@ -14,7 +14,7 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
-    "@ticket-box/redis": "*",
+    "@ticketbox/redis": "*",
     "@ticketbox/database": "*"
   }
 }

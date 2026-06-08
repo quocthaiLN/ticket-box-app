@@ -1,0 +1,369 @@
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  Ticket,
+  User,
+} from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { login, register } from "../../services/auth.service";
+import type { AuthUser } from "../../lib/auth-session";
+
+type AuthMode = "login" | "register";
+
+export function AuthPage({ mode }: { mode: AuthMode }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    fullName: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const user =
+        mode === "login"
+          ? await login({
+              email: form.email,
+              password: form.password,
+            })
+          : await register({
+              email: form.email,
+              password: form.password,
+              confirmPassword: form.confirmPassword,
+              full_name: form.fullName,
+            });
+
+      navigate(nextPathForUser(user), { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const isLogin = mode === "login";
+
+  return (
+    <main
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#08080E] px-4 py-24"
+      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 40%, rgba(232,49,91,0.12) 0%, transparent 60%), radial-gradient(circle at 20% 80%, rgba(123,97,255,0.1) 0%, transparent 50%)",
+        }}
+      />
+      <section
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl"
+        style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.09)" }}
+        aria-labelledby="auth-title"
+      >
+        <div className="h-1" style={{ background: "linear-gradient(90deg, #F5C842, #E8315B, #7B61FF)" }} />
+        <div className="p-8">
+          <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ background: "linear-gradient(135deg, #F5C842, #E8315B)" }}
+            >
+              <Ticket className="h-5 w-5 text-white" />
+            </span>
+            <span
+              style={{
+                color: "#F0EDEB",
+                fontFamily: "'Cormorant Garamond', Georgia, serif",
+                fontSize: "1.3rem",
+                letterSpacing: "0.04em",
+              }}
+            >
+              <span className="text-[#F5C842]">Ticket</span>Box
+            </span>
+          </Link>
+
+          <div className="mb-6 text-center">
+            <h1
+              id="auth-title"
+              className="mb-1 text-center"
+              style={{
+                color: "#F0EDEB",
+                fontFamily: "'Cormorant Garamond', Georgia, serif",
+                fontSize: "1.8rem",
+                fontWeight: 700,
+              }}
+            >
+              {isLogin ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="text-sm" style={{ color: "#8585A0" }}>
+              {isLogin ? "Sign in to buy tickets and manage your events." : "Join TicketBox for a smoother ticket experience."}
+            </p>
+          </div>
+
+          {error && (
+            <div
+              className="mb-4 rounded-lg p-3 text-sm"
+              style={{
+                background: "rgba(232,49,91,0.1)",
+                border: "1px solid rgba(232,49,91,0.2)",
+                color: "#E8315B",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-3" onSubmit={handleSubmit}>
+            {!isLogin && (
+              <AuthField
+                icon={<User className="h-4 w-4" />}
+                placeholder="Full name *"
+                type="text"
+                value={form.fullName}
+                onChange={(value) => setForm({ ...form, fullName: value })}
+                autoComplete="name"
+              />
+            )}
+
+            <AuthField
+              icon={<Mail className="h-4 w-4" />}
+              placeholder="Email *"
+              type="email"
+              value={form.email}
+              onChange={(value) => setForm({ ...form, email: value })}
+              autoComplete="email"
+            />
+
+            <PasswordField
+              placeholder="Password *"
+              value={form.password}
+              visible={showPassword}
+              onVisibleChange={() => setShowPassword((value) => !value)}
+              onChange={(value) => setForm({ ...form, password: value })}
+              autoComplete={isLogin ? "current-password" : "new-password"}
+            />
+
+            {!isLogin && (
+              <PasswordField
+                placeholder="Confirm password *"
+                value={form.confirmPassword}
+                visible={showPassword}
+                onVisibleChange={() => setShowPassword((value) => !value)}
+                onChange={(value) => setForm({ ...form, confirmPassword: value })}
+                autoComplete="new-password"
+              />
+            )}
+
+            {isLogin && (
+              <div className="text-right">
+                <Link
+                  to="#"
+                  className="text-xs transition-colors hover:text-amber-400"
+                  style={{ color: "#8585A0" }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl py-3.5 text-sm font-semibold transition-all hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                background: "linear-gradient(135deg, #E8315B, #C41E42)",
+                boxShadow: "0 8px 24px rgba(232,49,91,0.3)",
+                color: "#fff",
+                marginTop: "0.5rem",
+              }}
+            >
+              {loading ? "Working..." : isLogin ? "Sign in" : "Create account"}
+            </button>
+          </form>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3" style={{ background: "#111118", color: "#8585A0" }}>
+                {isLogin ? "or sign in with" : "or register in with"}
+              </span>
+            </div>
+          </div>
+
+          <div
+            className="mb-6 grid gap-2"
+            style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
+          >
+            <SocialButton icon="G" label="Google" />
+            <SocialButton icon="F" label="Facebook" />
+          </div>
+
+          <p className="text-center text-xs" style={{ color: "#8585A0" }}>
+            {isLogin ? "No account yet?" : "Already have an account?"}{" "}
+            <Link
+              to={isLogin ? "/register" : "/login"}
+              className="font-medium transition-colors hover:text-amber-400"
+              style={{ color: "#F5C842" }}
+            >
+              {isLogin ? "Register" : "Sign in"}
+            </Link>
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AuthField({
+  icon,
+  placeholder,
+  type,
+  value,
+  onChange,
+  autoComplete,
+}: {
+  icon: React.ReactNode;
+  placeholder: string;
+  type: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+}) {
+  return (
+    <div
+      className="auth-input-shell flex items-center gap-2 rounded-xl px-3 py-3"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        minHeight: "46px",
+      }}
+    >
+      <span
+        className="flex shrink-0 items-center justify-center"
+        style={{ color: "#8585A0", width: "18px", height: "18px" }}
+      >
+        {icon}
+      </span>
+        <input
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          required
+          className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+          style={{
+            width: "100%",
+            border: 0,
+            background: "transparent",
+            color: "#F0EDEB",
+            fontSize: "0.95rem",
+            lineHeight: "1.25rem",
+            padding: 0,
+          }}
+        />
+    </div>
+  );
+}
+
+function PasswordField({
+  placeholder,
+  value,
+  visible,
+  onVisibleChange,
+  onChange,
+  autoComplete,
+}: {
+  placeholder: string;
+  value: string;
+  visible: boolean;
+  onVisibleChange: () => void;
+  onChange: (value: string) => void;
+  autoComplete: string;
+}) {
+  return (
+    <div
+      className="auth-input-shell flex items-center gap-2 rounded-xl px-3 py-3"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        minHeight: "46px",
+      }}
+    >
+      <span
+        className="flex shrink-0 items-center justify-center"
+        style={{ color: "#8585A0", width: "18px", height: "18px" }}
+      >
+        <Lock className="h-4 w-4" />
+      </span>
+        <input
+          type={visible ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          required
+          className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+          style={{
+            width: "100%",
+            border: 0,
+            background: "transparent",
+            color: "#F0EDEB",
+            fontSize: "0.95rem",
+            lineHeight: "1.25rem",
+            padding: 0,
+          }}
+        />
+        <button
+          type="button"
+          onClick={onVisibleChange}
+          className="shrink-0 rounded-md p-1 text-[#8585A0] transition-colors hover:text-[#F0EDEB]"
+          aria-label={visible ? "Hide password" : "Show password"}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+    </div>
+  );
+}
+
+function SocialButton({ icon, label }: { icon: string; label: string }) {
+  return (
+    <button
+      type="button"
+      className="auth-social-button flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm transition-colors"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        color: "#F0EDEB",
+        minWidth: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+        style={{ background: "rgba(255,255,255,0.15)" }}
+      >
+        {icon}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function nextPathForUser(user: AuthUser) {
+  if (user.role === "ADMIN" || user.role === "ORGANIZER") return "/admin";
+  if (user.role === "CHECKER") return "/checker";
+  return "/";
+}
