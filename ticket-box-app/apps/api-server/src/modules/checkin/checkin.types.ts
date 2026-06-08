@@ -22,18 +22,26 @@ export type CheckinPreloadQuery = {
 
 export type OfflineSyncItemRequest = {
   client_item_id: string;
+  type?: "TICKET" | "GUEST";
+  ticket_id?: string;
+  guest_id?: string;
+  phone?: string;
+  qr_token?: string;
   ticket_code?: string;
   qr_payload_hash?: string;
   concert_id: string;
   gate_id: string;
+  seat_zone_id?: string;
   zone_id?: string;
   scanned_at: string;
 };
 
 export type OfflineSyncRequest = {
-  device_id: string;
-  staff_user_id: string;
+  device_id?: string;
+  staff_user_id?: string;
   batch_id: string;
+  concert_id?: string;
+  gate_id?: string;
   items: OfflineSyncItemRequest[];
 };
 
@@ -119,29 +127,27 @@ export type CheckinPreloadResponse = {
 };
 
 export type OfflineSyncItemStatus =
-  | "success"
-  | "duplicate"
-  | "invalid_ticket"
-  | "wrong_gate_zone"
-  | "already_checked_in"
-  | "conflict"
-  | "scaffolded";
-
-export type CheckinPlaceholderState = "pending_sprint_2";
+  | "SUCCESS"
+  | "ALREADY_CHECKED_IN"
+  | "WRONG_GATE"
+  | "INVALID_TICKET"
+  | "INVALID_GUEST"
+  | "CONFLICT"
+  | "DUPLICATE_ITEM"
+  | "ERROR";
 
 export type OfflineSyncResponse = {
   batch_id: string;
+  status: "PENDING" | "SYNCING" | "DONE" | "FAILED";
   accepted_item_count: number;
+  conflict_item_count: number;
   results: Array<{
     client_item_id: string;
     status: OfflineSyncItemStatus;
     message: string;
+    ticket_id?: string | null;
+    guest_id?: string | null;
   }>;
-  placeholders: {
-    idempotency_by_client_item_id: CheckinPlaceholderState;
-    conflict_resolution: CheckinPlaceholderState;
-    gate_zone_validation: CheckinPlaceholderState;
-  };
 };
 
 export type OfflineBatchResponse = {
@@ -149,11 +155,7 @@ export type OfflineBatchResponse = {
   concert_id: string;
   device_id: string;
   gate_id: string;
-  status: "scaffolded";
-  placeholders: {
-    idempotency_by_batch_id: CheckinPlaceholderState;
-    item_sync: CheckinPlaceholderState;
-  };
+  status: "PENDING" | "SYNCING" | "DONE" | "FAILED";
 };
 
 export type GateDto = {

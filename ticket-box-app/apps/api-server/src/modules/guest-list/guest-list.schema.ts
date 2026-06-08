@@ -11,6 +11,7 @@ export function parseGuestImportBody(body: unknown): GuestImportRequest {
   return {
     concert_id: requiredString(value.concert_id, "concert_id"),
     file_object_key: optionalString(value.file_object_key),
+    file_url: optionalString(value.file_url),
     default_zone_id: optionalString(value.default_zone_id),
     dry_run: value.dry_run === true || value.dry_run === "true",
   };
