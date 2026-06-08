@@ -109,7 +109,7 @@ export type ConcertMetadata = {
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/v1";
 
-// Gửi request GET tới API TicketBox và parse JSON response.
+// Sends a GET request to the TicketBox API and parses the JSON response.
 export async function apiGet<TData>(
   path: string,
   init?: RequestInit,

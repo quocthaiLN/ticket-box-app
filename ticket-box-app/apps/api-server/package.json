@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@prisma/client": "6.0.0",
-    "@ticket-box/config": "*",
+    "@ticketbox/config": "*",
+    "@ticketbox/redis": "*",
     "@ticketbox/database": "*",
-    "@ticket-box/redis": "*",
     "@ticketbox/storage": "*",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -21,6 +21,13 @@
     "dotenv": "^16.0.0",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
+    "lodash.includes": "^4.3.0",
+    "lodash.isboolean": "^3.0.3",
+    "lodash.isinteger": "^4.0.4",
+    "lodash.isnumber": "^3.0.3",
+    "lodash.isplainobject": "^4.0.6",
+    "lodash.isstring": "^4.0.1",
+    "lodash.once": "^4.1.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {

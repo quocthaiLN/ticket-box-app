@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
 import { apiGet, apiPost, ApiResponse } from "../../lib/api-client";
 
 type ScanResult = {
@@ -36,7 +36,6 @@ const initialState: CheckerState = {
   phone: ""
 };
 
-// Render màn hình fallback cho checker thao tác preload, scan vé và scan guest.
 export function CheckerPage() {
   const [state, setState] = useState(initialState);
   const [preload, setPreload] = useState<PreloadData | null>(null);
@@ -53,13 +52,11 @@ export function CheckerPage() {
     return headers;
   }, [state.token]);
 
-  // Cập nhật một field trong form checker.
   function update(field: keyof CheckerState, value: string) {
     setState((current) => ({ ...current, [field]: value }));
   }
 
-  // Gọi API preload để tải danh sách zone/ticket/guest hợp lệ cho gate hiện tại.
-  async function loadPreload(event: FormEvent) {
+  async function loadPreload(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     await run(async () => {
       const query = new URLSearchParams({
@@ -74,8 +71,7 @@ export function CheckerPage() {
     });
   }
 
-  // Gọi API scan vé online bằng QR payload hoặc token người dùng nhập.
-  async function scanTicket(event: FormEvent) {
+  async function scanTicket(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     await run(async () => {
       const response = await apiPost<ApiResponse<ScanResult>>(
@@ -94,8 +90,7 @@ export function CheckerPage() {
     });
   }
 
-  // Gọi API scan guest online bằng guest id hoặc số điện thoại.
-  async function scanGuest(event: FormEvent) {
+  async function scanGuest(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     event.preventDefault();
     await run(async () => {
       const response = await apiPost<ApiResponse<ScanResult>>(
@@ -115,7 +110,6 @@ export function CheckerPage() {
     });
   }
 
-  // Bọc các thao tác API để quản lý trạng thái loading và lỗi hiển thị.
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setResult(null);

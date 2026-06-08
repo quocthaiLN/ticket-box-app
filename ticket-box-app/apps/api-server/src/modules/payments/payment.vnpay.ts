@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { env } from '@ticket-box/config';
+import { env } from '@ticketbox/config';
 
 function formatVnpDate(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
