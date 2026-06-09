@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { momoWebhookHandler, retryPaymentHandler, vnpayWebhookHandler } from './payment.controller.js';
 import { paymentHealthHandler } from './payment.health.js';
-import { idempotencyMiddleware, webhookIdempotencyMiddleware, validateBody } from './middlewares/index.js';
-import { validateRetryPaymentRequest } from './payment.schema.js';
-import type { RetryPaymentRequest } from './payment.type.js';
+import { webhookIdempotencyMiddleware } from './middlewares/index.js';
+import { idempotencyMiddleware } from '../../shared/middleware/idempotency.middleware.js';
+import { validateBody } from '../../shared/middleware/validate.middleware.js';
+import { retryPaymentSchema } from './payment.schema.js';
 import { requireAuth } from '../../shared/middleware/auth.middleware.js';
 import { requireRole } from '../../shared/guards/role.guard.js';
 
@@ -14,8 +15,8 @@ router.post(
   '/orders/:order_id/payments',
   requireAuth,
   requireRole('AUDIENCE', 'ADMIN'),
-  idempotencyMiddleware,
-  validateBody<RetryPaymentRequest>(validateRetryPaymentRequest),
+  idempotencyMiddleware('payments'),
+  validateBody(retryPaymentSchema, 'INVALID_REQUEST'),
   retryPaymentHandler,
 );
 

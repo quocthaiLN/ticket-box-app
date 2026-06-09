@@ -6,8 +6,9 @@ import {
   getOrderHandler,
   listAdminOrdersHandler,
 } from './order.controller.js';
-import { idempotencyMiddleware, validateBody } from './middleware/index.js';
-import { validateCreateOrderRequest } from './order.schema.js';
+import { idempotencyMiddleware } from '../../shared/middleware/idempotency.middleware.js';
+import { validateBody } from '../../shared/middleware/validate.middleware.js';
+import { createOrderSchema } from './order.schema.js';
 import { requireAuth } from '../../shared/middleware/auth.middleware.js';
 import { requireRole } from '../../shared/guards/role.guard.js';
 
@@ -18,8 +19,8 @@ router.post(
   '/orders',
   requireAuth,
   requireRole('AUDIENCE', 'ADMIN'),
-  idempotencyMiddleware,
-  validateBody(validateCreateOrderRequest),
+  idempotencyMiddleware('orders'),
+  validateBody(createOrderSchema, 'INVALID_CHECKOUT_REQUEST'),
   createOrderHandler,
 );
 
