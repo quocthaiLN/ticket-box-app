@@ -1,21 +1,23 @@
+import { Link } from "react-router-dom";
+
 export function AdminHomePage() {
   return (
     <main className="shell">
-      <section className="hero admin">
+      <section className="hero hero-compact">
         <p className="eyebrow">Admin</p>
-        <h1>Catalog Dashboard</h1>
-        <p>Placeholder cho quản trị venue, concert, seat zone và ticket type.</p>
+        <h1>TicketBox Operations</h1>
+        <p>Manage venues, concerts, seat zones, ticket types, and operational catalog data.</p>
       </section>
 
-      <section className="grid">
-        <a className="panel" href="/admin/catalog">
+      <section className="dashboard-grid">
+        <Link className="panel dashboard-card" to="/admin/catalog">
           <h2>Catalog</h2>
-          <p>Quản lý concert, venue, seat map và loại vé.</p>
-        </a>
-        <a className="panel" href="/">
-          <h2>Audience Preview</h2>
-          <p>Mở trang public để kiểm tra flow người mua vé.</p>
-        </a>
+          <p>Manage concerts, venues, seat maps, and ticket types.</p>
+        </Link>
+        <Link className="panel dashboard-card" to="/">
+          <h2>Audience Site</h2>
+          <p>Open the public site to verify the buyer experience.</p>
+        </Link>
       </section>
     </main>
   );

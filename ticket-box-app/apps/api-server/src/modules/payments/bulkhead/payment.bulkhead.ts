@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticket-box/config/payment.js';
+import { paymentConfig } from '@ticketbox/config/payment.js';
 
 export class BulkheadRejectedError extends Error {
   readonly statusCode = 503;

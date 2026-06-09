@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { env } from '@ticket-box/config';
+import { env } from '@ticketbox/config';
 import type { QrPayload } from './ticket.type.js';
 
 export function buildQrPayload(

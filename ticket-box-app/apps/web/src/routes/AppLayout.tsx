@@ -1,20 +1,18 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { Footer } from "../components/Footer";
+import { Navbar } from "../components/Navbar";
 
-// Layout chung chứa thanh điều hướng giữa audience, checker và admin.
 export function AppLayout() {
+  const location = useLocation();
+  const hideFooter =
+    location.pathname.startsWith("/admin") || location.pathname.startsWith("/checker");
+
   return (
     <>
-      <header className="topbar">
-        <a className="brand" href="/">
-          TicketBox
-        </a>
-        <nav>
-          <NavLink to="/">Audience</NavLink>
-          <NavLink to="/checker">Checker</NavLink>
-          <NavLink to="/admin">Admin</NavLink>
-        </nav>
-      </header>
+      <Navbar />
       <Outlet />
+      {!hideFooter && <Footer />}
     </>
   );
 }
+

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { env } from '@ticket-box/config';
+import { env } from '@ticketbox/config';
 import { buildVnpayUrl } from './payment.vnpay.js';
 import { buildMomoUrl } from './payment.momo.js';
 import {

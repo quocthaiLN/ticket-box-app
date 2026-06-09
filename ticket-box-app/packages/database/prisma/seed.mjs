@@ -9,87 +9,189 @@ const userIds = {
   admin: "00000000-0000-0000-0000-000000000004",
 };
 
-const zoneCodes = ["SVIP", "VIP", "CAT1", "CAT2", "GA"];
-
-const concerts = [
-  {
-    id: "00000000-0000-0000-0000-000000000201",
-    venueId: "00000000-0000-0000-0000-000000000101",
-    title: "Anh Trai Say Hi",
-    slug: "anh-trai-say-hi",
-    artistBio: "Bio ngắn dùng cho demo catalog Anh Trai Say Hi.",
-    startsAt: "2026-07-25T19:30:00+07:00",
-    endsAt: "2026-07-25T23:00:00+07:00",
-    prices: [3500000, 2500000, 1800000, 1200000, 900000],
-    quantities: [200, 1800, 6000, 10000, 14000],
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000202",
-    venueId: "00000000-0000-0000-0000-000000000102",
-    title: "Anh Trai Vượt Ngàn Chông Gai",
-    slug: "anh-trai-vuot-ngan-chong-gai",
-    artistBio: "Bio ngắn dùng cho demo Anh Trai Vượt Ngàn Chông Gai.",
-    startsAt: "2026-08-08T19:30:00+07:00",
-    endsAt: "2026-08-08T23:00:00+07:00",
-    prices: [3000000, 2200000, 1600000, 1000000, 750000],
-    quantities: [250, 600, 1200, 1500, 1200],
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000203",
-    venueId: "00000000-0000-0000-0000-000000000103",
-    title: "Em Xinh Say Hi",
-    slug: "em-xinh-say-hi",
-    artistBio: "Bio ngắn dùng cho demo Em Xinh Say Hi.",
-    startsAt: "2026-09-12T19:30:00+07:00",
-    endsAt: "2026-09-12T23:00:00+07:00",
-    prices: [3200000, 2300000, 1700000, 1100000, 800000],
-    quantities: [500, 1200, 3000, 3300, 4000],
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000204",
-    venueId: "00000000-0000-0000-0000-000000000104",
-    title: "Chị Đẹp Đạp Gió Rẽ Sóng",
-    slug: "chi-dep-dap-gio-re-song",
-    artistBio: "Bio ngắn dùng cho demo Chị Đẹp Đạp Gió Rẽ Sóng.",
-    startsAt: "2026-10-03T19:30:00+07:00",
-    endsAt: "2026-10-03T23:00:00+07:00",
-    prices: [3400000, 2400000, 1750000, 1150000, 850000],
-    quantities: [400, 1600, 6000, 8000, 9000],
-  },
-];
-
 const venues = [
   {
     id: "00000000-0000-0000-0000-000000000101",
-    name: "Sân vận động Quốc gia Mỹ Đình",
-    address: "Đường Lê Đức Thọ, Nam Từ Liêm",
-    city: "Hà Nội",
+    name: "Hoa Binh Theater",
+    address: "240 3 Thang 2 Street, District 10",
+    city: "Ho Chi Minh City",
+    capacity: 3500,
+    mapUrl: "https://maps.example.com/hoa-binh",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000102",
+    name: "My Dinh National Stadium",
+    address: "Pham Hung Street, Nam Tu Liem",
+    city: "Hanoi",
     capacity: 40000,
     mapUrl: "https://maps.example.com/my-dinh",
   },
   {
-    id: "00000000-0000-0000-0000-000000000102",
-    name: "Nhà thi đấu Phú Thọ",
-    address: "221 Lý Thường Kiệt, Quận 11",
-    city: "TP. Hồ Chí Minh",
-    capacity: 5000,
-    mapUrl: "https://maps.example.com/phu-tho",
-  },
-  {
     id: "00000000-0000-0000-0000-000000000103",
-    name: "SECC Hall A",
-    address: "799 Nguyễn Văn Linh, Quận 7",
-    city: "TP. Hồ Chí Minh",
-    capacity: 12000,
+    name: "SECC - Saigon Exhibition and Convention Center",
+    address: "799 Nguyen Van Linh Boulevard, District 7",
+    city: "Ho Chi Minh City",
+    capacity: 10000,
     mapUrl: "https://maps.example.com/secc",
   },
   {
     id: "00000000-0000-0000-0000-000000000104",
-    name: "Sân vận động Quân khu 7",
-    address: "202 Hoàng Văn Thụ, Tân Bình",
-    city: "TP. Hồ Chí Minh",
-    capacity: 25000,
-    mapUrl: "https://maps.example.com/qk7",
+    name: "Hanoi Opera House",
+    address: "1 Trang Tien Street, Hoan Kiem",
+    city: "Hanoi",
+    capacity: 598,
+    mapUrl: "https://maps.example.com/opera-house",
+  },
+];
+
+const concerts = [
+  {
+    id: "00000000-0000-0000-0000-000000000201",
+    venueId: venues[0].id,
+    title: "Night Lights",
+    slug: "night-lights",
+    description:
+      "A special Grey D live show where ballads and indie songs move between memories, the present, and quiet personal moments.",
+    artistName: "Grey D",
+    artistBio:
+      "Grey D is one of Vietnam's standout indie voices, known for warm vocals and introspective songwriting.",
+    startsAt: "2026-07-15T19:30:00+07:00",
+    endsAt: "2026-07-15T22:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
+    zones: [
+      zone("SVIP", "SVIP", "Front row seats with the best stage view.", 100),
+      zone("VIP", "VIP", "Comfortable seated area near the stage.", 300),
+      zone("CAT1", "CAT 1", "Front standing area.", 800),
+      zone("GA", "General Admission", "General standing area.", 2000),
+    ],
+    tickets: [
+      ticket("SVIP", "SVIP", "Priority entry and exclusive poster.", 2950000, 100, 5, 68, 2),
+      ticket("VIP", "VIP", "Premium seat and gift bag.", 1950000, 300, 12, 201, 2),
+      ticket("CAT1", "CAT 1", "Front standing access.", 1250000, 800, 30, 420, 4),
+      ticket("GA", "GA", "Standard standing ticket.", 750000, 2000, 80, 1100, 4),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000202",
+    venueId: venues[1].id,
+    title: "Passing Through Memories Live Concert",
+    slug: "passing-through-memories",
+    description:
+      "An outdoor pop ballad night that travels through songs loved by multiple generations of audiences.",
+    artistName: "My Tam",
+    artistBio:
+      "My Tam is a Vietnamese music icon with more than 20 years of performing and many landmark live concerts.",
+    startsAt: "2026-08-20T18:00:00+07:00",
+    endsAt: "2026-08-20T21:30:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/di-qua-thuong-nho.jpg",
+    zones: [
+      zone("SVIP", "SVIP Diamond", "Exclusive seats closest to the stage.", 500),
+      zone("VIP", "VIP Gold", "Covered seating with a premium view.", 2000),
+      zone("CAT1", "CAT 1", "Front tribune seating.", 5000),
+      zone("CAT2", "CAT 2", "Rear tribune seating.", 8000),
+      zone("GA", "General Admission", "Open standing area.", 20000),
+    ],
+    tickets: [
+      ticket("SVIP", "SVIP Diamond", "VIP seat, welcoming gift, and early access.", 3500000, 500, 10, 320, 2),
+      ticket("VIP", "VIP Gold", "Covered seating area.", 2200000, 2000, 40, 1450, 4),
+      ticket("CAT1", "CAT 1", "Front tribune seating.", 1500000, 5000, 100, 3200, 4),
+      ticket("CAT2", "CAT 2", "Rear tribune seating.", 1000000, 8000, 150, 5200, 6),
+      ticket("GA", "GA", "Open standing ticket.", 650000, 20000, 500, 12000, 6),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000203",
+    venueId: venues[2].id,
+    title: "Our 20th Moment 2026",
+    slug: "our-20th-moment-2026",
+    description:
+      "A special acoustic and orchestral evening where memories are reimagined through pure musical language.",
+    artistName: "Thanh Lam & Ha Tran",
+    artistBio:
+      "Thanh Lam and Ha Tran are two major Vietnamese voices, coming together for a refined and emotional performance.",
+    startsAt: "2026-09-05T19:00:00+07:00",
+    endsAt: "2026-09-05T22:30:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/our-20th-moment-2026.jpg",
+    zones: [
+      zone("SVIP", "SVIP", "Front row seating with cocktail reception.", 200),
+      zone("VIP", "VIP", "Premium seating.", 800),
+      zone("CAT1", "CAT 1", "Section B seating.", 2500),
+      zone("GA", "Standing", "Rear standing area.", 5000),
+    ],
+    tickets: [
+      ticket("SVIP", "SVIP", "Cocktail reception and meet-and-greet opportunity.", 5500000, 200, 3, 187, 2),
+      ticket("VIP", "VIP", "Premium seat with programme book.", 3200000, 800, 20, 650, 2),
+      ticket("CAT1", "CAT 1", "Standard seated ticket.", 1800000, 2500, 50, 1900, 4),
+      ticket("GA", "Standing", "Open standing area.", 900000, 5000, 120, 3200, 4),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000204",
+    venueId: venues[3].id,
+    title: "Once We Loved",
+    slug: "once-we-loved",
+    description:
+      "An intimate acoustic night with melodies from an earlier era and love songs that have become shared memories.",
+    artistName: "Lam Truong",
+    artistBio:
+      "Lam Truong is one of the most beloved Vietnamese male singers from the 1990s and 2000s.",
+    startsAt: "2026-10-12T19:30:00+07:00",
+    endsAt: "2026-10-12T22:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/mot-thoi-da-yeu.jpg",
+    zones: [
+      zone("VIP", "VIP Front Row", "Front row seats with artist interaction.", 60),
+      zone("CAT1", "CAT 1", "Middle rows.", 200),
+      zone("CAT2", "CAT 2", "Rear rows.", 320),
+    ],
+    tickets: [
+      ticket("VIP", "VIP Front Row", "Post-show interaction and signing.", 2500000, 60, 2, 55, 2),
+      ticket("CAT1", "CAT 1", "Premium seated ticket.", 1500000, 200, 5, 168, 2),
+      ticket("CAT2", "CAT 2", "Standard seated ticket.", 900000, 320, 10, 245, 4),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000205",
+    venueId: venues[0].id,
+    title: "Where Love Begins",
+    slug: "where-love-begins",
+    description:
+      "Bich Phuong performs her newest songs alongside the hits that have stayed close to audiences for years.",
+    artistName: "Bich Phuong",
+    artistBio:
+      "Bich Phuong is a standout Vietnamese pop singer known for catchy songs and a modern stage style.",
+    startsAt: "2026-11-08T19:30:00+07:00",
+    endsAt: "2026-11-08T21:30:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/noi-tinh-yeu-bat-dau.jpg",
+    zones: [
+      zone("SVIP", "SVIP", "VIP stage view.", 150),
+      zone("VIP", "VIP", "Seated section.", 400),
+      zone("GA", "GA", "Standing area.", 2500),
+    ],
+    tickets: [
+      ticket("SVIP", "SVIP", "Gift set and early access.", 2200000, 150, 8, 95, 2),
+      ticket("VIP", "VIP", "Seated section.", 1500000, 400, 15, 280, 2),
+      ticket("GA", "GA", "Standing section.", 850000, 2500, 60, 1800, 4),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000206",
+    venueId: venues[1].id,
+    title: "Coming Soon: Secret Show",
+    slug: "secret-show-2026",
+    description: "A mysterious show is being prepared. Details will be announced soon.",
+    artistName: "TBA",
+    artistBio: "",
+    startsAt: "2026-12-31T20:00:00+07:00",
+    endsAt: "2026-12-31T23:59:00+07:00",
+    status: "DRAFT",
+    coverImageUrl: "/src/img/secret-show-2026.jpg",
+    zones: [],
+    tickets: [],
   },
 ];
 
@@ -98,7 +200,15 @@ const fixedId = (number) =>
 
 const zoneId = (concertIndex, zoneIndex) => fixedId(301 + concertIndex * 5 + zoneIndex);
 const gateId = (concertIndex, zoneIndex) => fixedId(401 + concertIndex * 5 + zoneIndex);
-const ticketTypeId = (concertIndex, zoneIndex) => fixedId(501 + concertIndex * 5 + zoneIndex);
+const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex * 5 + ticketIndex);
+
+function zone(code, name, description, capacity) {
+  return { code, name, description, capacity };
+}
+
+function ticket(zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser) {
+  return { zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser };
+}
 
 async function seedUsers() {
   const users = [
@@ -120,13 +230,7 @@ async function seedUsers() {
         role,
         status: "ACTIVE",
       },
-      update: {
-        email,
-        fullName,
-        phone,
-        role,
-        status: "ACTIVE",
-      },
+      update: { email, fullName, phone, role, status: "ACTIVE" },
     });
   }
 }
@@ -149,51 +253,51 @@ async function seedCatalog() {
         organizerId: userIds.organizer,
         title: concert.title,
         slug: concert.slug,
-        description: "Concert demo cho hệ thống TicketBox.",
-        artistName: "Various Artists",
+        description: concert.description,
+        artistName: concert.artistName,
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
-        status: "PUBLISHED",
-        coverImageUrl: `https://cdn.example.com/ticketbox/${concert.slug}.jpg`,
-        seatMapUrl: `https://cdn.example.com/ticketbox/seat-maps/${concert.slug}.svg`,
+        status: concert.status,
+        coverImageUrl: concert.coverImageUrl,
+        seatMapUrl: null,
       },
       update: {
         venueId: concert.venueId,
         organizerId: userIds.organizer,
         title: concert.title,
         slug: concert.slug,
-        description: "Concert demo cho hệ thống TicketBox.",
-        artistName: "Various Artists",
+        description: concert.description,
+        artistName: concert.artistName,
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
-        status: "PUBLISHED",
-        coverImageUrl: `https://cdn.example.com/ticketbox/${concert.slug}.jpg`,
-        seatMapUrl: `https://cdn.example.com/ticketbox/seat-maps/${concert.slug}.svg`,
+        status: concert.status,
+        coverImageUrl: concert.coverImageUrl,
+        seatMapUrl: null,
       },
     });
 
-    for (const [zoneIndex, code] of zoneCodes.entries()) {
+    for (const [zoneIndex, item] of concert.zones.entries()) {
       await prisma.seatZone.upsert({
         where: { id: zoneId(concertIndex, zoneIndex) },
         create: {
           id: zoneId(concertIndex, zoneIndex),
           concertId: concert.id,
-          code,
-          name: code === "GA" ? "General Admission" : code,
-          description: `Khu ${code} demo.`,
-          capacity: concert.quantities[zoneIndex],
-          svgPath: `M${10 + zoneIndex * 60} 10 H${70 + zoneIndex * 60} V90 H${10 + zoneIndex * 60} Z`,
+          code: item.code,
+          name: item.name,
+          description: item.description,
+          capacity: item.capacity,
+          svgPath: `M${10 + zoneIndex * 72} 10 H${70 + zoneIndex * 72} V90 H${10 + zoneIndex * 72} Z`,
           sortOrder: zoneIndex + 1,
         },
         update: {
           concertId: concert.id,
-          code,
-          name: code === "GA" ? "General Admission" : code,
-          description: `Khu ${code} demo.`,
-          capacity: concert.quantities[zoneIndex],
-          svgPath: `M${10 + zoneIndex * 60} 10 H${70 + zoneIndex * 60} V90 H${10 + zoneIndex * 60} Z`,
+          code: item.code,
+          name: item.name,
+          description: item.description,
+          capacity: item.capacity,
+          svgPath: `M${10 + zoneIndex * 72} 10 H${70 + zoneIndex * 72} V90 H${10 + zoneIndex * 72} Z`,
           sortOrder: zoneIndex + 1,
         },
       });
@@ -203,17 +307,17 @@ async function seedCatalog() {
         create: {
           id: gateId(concertIndex, zoneIndex),
           concertId: concert.id,
-          code: `${code}_GATE`,
-          name: `Cổng ${code}`,
-          description: `Cổng dành cho khu ${code}.`,
+          code: `${item.code}_GATE`,
+          name: `${item.code} Gate`,
+          description: `Gate for the ${item.code} zone.`,
           isActive: true,
           sortOrder: zoneIndex + 1,
         },
         update: {
           concertId: concert.id,
-          code: `${code}_GATE`,
-          name: `Cổng ${code}`,
-          description: `Cổng dành cho khu ${code}.`,
+          code: `${item.code}_GATE`,
+          name: `${item.code} Gate`,
+          description: `Gate for the ${item.code} zone.`,
           isActive: true,
           sortOrder: zoneIndex + 1,
         },
@@ -231,25 +335,28 @@ async function seedCatalog() {
           seatZoneId: zoneId(concertIndex, zoneIndex),
           concertId: concert.id,
         },
-        update: {
-          concertId: concert.id,
-        },
+        update: { concertId: concert.id },
       });
+    }
+
+    for (const [ticketIndex, item] of concert.tickets.entries()) {
+      const zoneIndex = concert.zones.findIndex((zoneItem) => zoneItem.code === item.zoneCode);
+      if (zoneIndex < 0) continue;
 
       await prisma.ticketType.upsert({
-        where: { id: ticketTypeId(concertIndex, zoneIndex) },
+        where: { id: ticketTypeId(concertIndex, ticketIndex) },
         create: {
-          id: ticketTypeId(concertIndex, zoneIndex),
+          id: ticketTypeId(concertIndex, ticketIndex),
           concertId: concert.id,
           seatZoneId: zoneId(concertIndex, zoneIndex),
-          name: `${code} Standard`,
-          description: `Vé ${code} demo.`,
-          price: concert.prices[zoneIndex],
+          name: item.name,
+          description: item.description,
+          price: item.price,
           currency: "VND",
-          totalQuantity: concert.quantities[zoneIndex],
-          heldQuantity: 0,
-          soldQuantity: code === "VIP" ? 1 : 0,
-          maxPerUser: code === "SVIP" || code === "VIP" ? 2 : 4,
+          totalQuantity: item.totalQuantity,
+          heldQuantity: item.heldQuantity,
+          soldQuantity: item.soldQuantity,
+          maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
           status: "ON_SALE",
@@ -257,14 +364,14 @@ async function seedCatalog() {
         update: {
           concertId: concert.id,
           seatZoneId: zoneId(concertIndex, zoneIndex),
-          name: `${code} Standard`,
-          description: `Vé ${code} demo.`,
-          price: concert.prices[zoneIndex],
+          name: item.name,
+          description: item.description,
+          price: item.price,
           currency: "VND",
-          totalQuantity: concert.quantities[zoneIndex],
-          heldQuantity: 0,
-          soldQuantity: code === "VIP" ? 1 : 0,
-          maxPerUser: code === "SVIP" || code === "VIP" ? 2 : 4,
+          totalQuantity: item.totalQuantity,
+          heldQuantity: item.heldQuantity,
+          soldQuantity: item.soldQuantity,
+          maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
           status: "ON_SALE",
@@ -274,15 +381,20 @@ async function seedCatalog() {
   }
 }
 
-async function seedOrdersAndTickets() {
-  for (const [concertIndex, concert] of concerts.entries()) {
-    const orderId = fixedId(601 + concertIndex);
-    const orderItemId = fixedId(611 + concertIndex);
-    const paymentId = fixedId(621 + concertIndex);
-    const ticketId = fixedId(631 + concertIndex);
-    const vipTicketTypeId = ticketTypeId(concertIndex, 1);
-    const vipZoneId = zoneId(concertIndex, 1);
-    const amount = concert.prices[1];
+async function seedDemoTickets() {
+  const publishedConcerts = concerts.filter((concert) => concert.status === "PUBLISHED" && concert.tickets.length > 0);
+
+  for (const [index, concert] of publishedConcerts.slice(0, 3).entries()) {
+    const sourceConcertIndex = concerts.findIndex((item) => item.id === concert.id);
+    const ticketIndex = Math.min(1, concert.tickets.length - 1);
+    const ticketSeed = concert.tickets[ticketIndex];
+    const ticketType = ticketTypeId(sourceConcertIndex, ticketIndex);
+    const sourceZoneIndex = concert.zones.findIndex((item) => item.code === ticketSeed.zoneCode);
+    const amount = ticketSeed.price;
+    const orderId = fixedId(601 + index);
+    const orderItemId = fixedId(611 + index);
+    const paymentId = fixedId(621 + index);
+    const issuedTicketId = fixedId(631 + index);
 
     await prisma.order.upsert({
       where: { id: orderId },
@@ -294,7 +406,7 @@ async function seedOrdersAndTickets() {
         status: "CONFIRMED",
         totalAmount: amount,
         currency: "VND",
-        confirmedAt: new Date("2026-06-02T10:00:00+07:00"),
+        confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
       },
       update: {
         userId: userIds.audience,
@@ -303,7 +415,7 @@ async function seedOrdersAndTickets() {
         status: "CONFIRMED",
         totalAmount: amount,
         currency: "VND",
-        confirmedAt: new Date("2026-06-02T10:00:00+07:00"),
+        confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
       },
     });
 
@@ -312,14 +424,14 @@ async function seedOrdersAndTickets() {
       create: {
         id: orderItemId,
         orderId,
-        ticketTypeId: vipTicketTypeId,
+        ticketTypeId: ticketType,
         quantity: 1,
         unitPrice: amount,
         lineTotal: amount,
       },
       update: {
         orderId,
-        ticketTypeId: vipTicketTypeId,
+        ticketTypeId: ticketType,
         quantity: 1,
         unitPrice: amount,
         lineTotal: amount,
@@ -331,8 +443,8 @@ async function seedOrdersAndTickets() {
       create: {
         id: paymentId,
         orderId,
-        provider: concertIndex < 2 ? "VNPAY" : "MOMO",
-        providerTransactionId: `${concertIndex < 2 ? "VNPAY" : "MOMO"}-SEED-00${concertIndex + 1}`,
+        provider: index < 2 ? "VNPAY" : "MOMO",
+        providerTransactionId: `SEED-PAYMENT-${index + 1}`,
         idempotencyKey: `seed-payment-${concert.slug}`,
         amount,
         currency: "VND",
@@ -340,67 +452,49 @@ async function seedOrdersAndTickets() {
         checkoutUrl: `https://sandbox-payments.example.com/${concert.slug}`,
         providerPayload: { seed: true },
         webhookPayload: { seed: true, status: "success" },
-        webhookReceivedAt: new Date("2026-06-02T10:03:00+07:00"),
+        webhookReceivedAt: new Date("2026-06-08T10:03:00+07:00"),
         webhookSignatureValid: true,
-        paidAt: new Date("2026-06-02T10:03:00+07:00"),
+        paidAt: new Date("2026-06-08T10:03:00+07:00"),
       },
       update: {
-        orderId,
         amount,
         status: "SUCCEEDED",
-        paidAt: new Date("2026-06-02T10:03:00+07:00"),
-        webhookReceivedAt: new Date("2026-06-02T10:03:00+07:00"),
+        webhookReceivedAt: new Date("2026-06-08T10:03:00+07:00"),
         webhookSignatureValid: true,
+        paidAt: new Date("2026-06-08T10:03:00+07:00"),
       },
     });
 
     await prisma.ticket.upsert({
-      where: { id: ticketId },
+      where: { id: issuedTicketId },
       create: {
-        id: ticketId,
+        id: issuedTicketId,
         orderId,
         orderItemId,
         userId: userIds.audience,
         concertId: concert.id,
-        ticketTypeId: vipTicketTypeId,
-        seatZoneId: vipZoneId,
-        qrTokenHash: `qr-seed-${concert.slug}-vip-001`,
-        qrPayload: { ticket_id: ticketId },
+        ticketTypeId: ticketType,
+        seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+        qrTokenHash: `qr-seed-${concert.slug}-001`,
+        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
         qrSignature: "demo-signature",
-        status: "ISSUED",
-        issuedAt: new Date("2026-06-02T10:05:00+07:00"),
+        status: index === 2 ? "CHECKED_IN" : "ISSUED",
+        issuedAt: new Date("2026-06-08T10:05:00+07:00"),
+        checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,
       },
       update: {
         orderId,
         orderItemId,
         userId: userIds.audience,
         concertId: concert.id,
-        ticketTypeId: vipTicketTypeId,
-        seatZoneId: vipZoneId,
-        qrTokenHash: `qr-seed-${concert.slug}-vip-001`,
-        qrPayload: { ticket_id: ticketId },
+        ticketTypeId: ticketType,
+        seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+        qrTokenHash: `qr-seed-${concert.slug}-001`,
+        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
         qrSignature: "demo-signature",
-        status: "ISSUED",
-        issuedAt: new Date("2026-06-02T10:05:00+07:00"),
-      },
-    });
-
-    await prisma.userTicketTypeCounter.upsert({
-      where: {
-        userId_ticketTypeId: {
-          userId: userIds.audience,
-          ticketTypeId: vipTicketTypeId,
-        },
-      },
-      create: {
-        userId: userIds.audience,
-        ticketTypeId: vipTicketTypeId,
-        heldQuantity: 0,
-        paidQuantity: 1,
-      },
-      update: {
-        heldQuantity: 0,
-        paidQuantity: 1,
+        status: index === 2 ? "CHECKED_IN" : "ISSUED",
+        issuedAt: new Date("2026-06-08T10:05:00+07:00"),
+        checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,
       },
     });
   }
@@ -408,77 +502,31 @@ async function seedOrdersAndTickets() {
 
 async function seedOperations() {
   for (const [concertIndex, concert] of concerts.entries()) {
+    if (concert.zones.length === 0) continue;
+    const gateIndex = Math.max(0, concert.zones.findIndex((item) => item.code === "VIP"));
+
     await prisma.checkinDevice.upsert({
       where: { id: fixedId(641 + concertIndex) },
       create: {
         id: fixedId(641 + concertIndex),
-        deviceCode: `CHECKER-${concert.slug}-VIP`,
+        deviceCode: `CHECKER-${concert.slug}`,
         staffId: userIds.checker,
         concertId: concert.id,
-        gateId: gateId(concertIndex, 1),
+        gateId: gateId(concertIndex, gateIndex),
         name: `Demo checker device - ${concert.title}`,
         status: "ACTIVE",
-        lastSeenAt: new Date("2026-06-02T11:00:00+07:00"),
+        lastSeenAt: new Date("2026-06-08T11:00:00+07:00"),
       },
       update: {
-        deviceCode: `CHECKER-${concert.slug}-VIP`,
+        deviceCode: `CHECKER-${concert.slug}`,
         staffId: userIds.checker,
         concertId: concert.id,
-        gateId: gateId(concertIndex, 1),
+        gateId: gateId(concertIndex, gateIndex),
         name: `Demo checker device - ${concert.title}`,
         status: "ACTIVE",
-        lastSeenAt: new Date("2026-06-02T11:00:00+07:00"),
+        lastSeenAt: new Date("2026-06-08T11:00:00+07:00"),
       },
     });
-
-    const importJobId = fixedId(651 + concertIndex);
-    await prisma.guestImportJob.upsert({
-      where: { id: importJobId },
-      create: {
-        id: importJobId,
-        concertId: concert.id,
-        uploadedById: userIds.organizer,
-        fileUrl: `https://storage.example.com/imports/${concert.slug}-guests.csv`,
-        status: concertIndex === 0 ? "PARTIAL" : "DONE",
-        totalRows: concertIndex === 0 ? 3 : 2,
-        successRows: 2,
-        errorRows: concertIndex === 0 ? 1 : 0,
-        startedAt: new Date("2026-06-02T09:00:00+07:00"),
-        completedAt: new Date("2026-06-02T09:01:00+07:00"),
-      },
-      update: {
-        fileUrl: `https://storage.example.com/imports/${concert.slug}-guests.csv`,
-        status: concertIndex === 0 ? "PARTIAL" : "DONE",
-        totalRows: concertIndex === 0 ? 3 : 2,
-        successRows: 2,
-        errorRows: concertIndex === 0 ? 1 : 0,
-      },
-    });
-
-    for (const [guestOffset, code] of ["VIP", "SVIP"].entries()) {
-      const guestId = fixedId(661 + concertIndex * 2 + guestOffset);
-      await prisma.guestList.upsert({
-        where: { id: guestId },
-        create: {
-          id: guestId,
-          concertId: concert.id,
-          seatZoneId: zoneId(concertIndex, code === "VIP" ? 1 : 0),
-          importJobId,
-          fullName: `Demo Guest ${concertIndex + 1}-${guestOffset + 1}`,
-          phone: `+84910000${concertIndex + 1}${String(guestOffset + 1).padStart(2, "0")}`,
-          email: `guest-${concertIndex + 1}-${guestOffset + 1}@example.com`,
-          code: `GUEST-${concert.slug.toUpperCase()}-${guestOffset + 1}`,
-          status: "INVITED",
-          note: "Demo guest",
-        },
-        update: {
-          seatZoneId: zoneId(concertIndex, code === "VIP" ? 1 : 0),
-          importJobId,
-          status: "INVITED",
-          note: "Demo guest",
-        },
-      });
-    }
 
     await prisma.artistBioJob.upsert({
       where: { id: fixedId(681 + concertIndex) },
@@ -486,154 +534,16 @@ async function seedOperations() {
         id: fixedId(681 + concertIndex),
         concertId: concert.id,
         requestedById: userIds.organizer,
-        status: concertIndex < 2 ? "DONE" : concertIndex === 2 ? "PROCESSING" : "PENDING",
-        sourceFileUrl: `https://storage.example.com/artist-bio/${concert.slug}.pdf`,
-        extractedText: concertIndex < 3 ? "Press kit demo." : null,
-        generatedBio: concertIndex < 2 ? `Generated bio for ${concert.title}.` : null,
+        status: concertIndex < 2 ? "DONE" : "PENDING",
+        sourceFileUrl: `/press-kit/${concert.slug}.pdf`,
+        extractedText: concert.description,
+        generatedBio: concert.artistBio || null,
       },
       update: {
-        status: concertIndex < 2 ? "DONE" : concertIndex === 2 ? "PROCESSING" : "PENDING",
-        sourceFileUrl: `https://storage.example.com/artist-bio/${concert.slug}.pdf`,
-        extractedText: concertIndex < 3 ? "Press kit demo." : null,
-        generatedBio: concertIndex < 2 ? `Generated bio for ${concert.title}.` : null,
-      },
-    });
-  }
-
-  await prisma.guestImportError.upsert({
-    where: { id: fixedId(671) },
-    create: {
-      id: fixedId(671),
-      jobId: fixedId(651),
-      rowNumber: 3,
-      rawData: { phone: "" },
-      errorCode: "PHONE_REQUIRED",
-      errorMessage: "Phone is required for guest deduplication.",
-    },
-    update: {
-      rawData: { phone: "" },
-      errorCode: "PHONE_REQUIRED",
-      errorMessage: "Phone is required for guest deduplication.",
-    },
-  });
-
-  await prisma.offlineCheckinBatch.upsert({
-    where: { id: fixedId(721) },
-    create: {
-      id: fixedId(721),
-      batchToken: "offline-batch-demo-001",
-      deviceId: fixedId(641),
-      staffId: userIds.checker,
-      concertId: concerts[0].id,
-      gateId: gateId(0, 1),
-      status: "PENDING",
-      itemCount: 1,
-      acceptedCount: 0,
-      conflictCount: 0,
-    },
-    update: {
-      batchToken: "offline-batch-demo-001",
-      deviceId: fixedId(641),
-      staffId: userIds.checker,
-      concertId: concerts[0].id,
-      gateId: gateId(0, 1),
-      status: "PENDING",
-      itemCount: 1,
-      acceptedCount: 0,
-      conflictCount: 0,
-    },
-  });
-
-  await prisma.offlineCheckinItem.upsert({
-    where: { id: fixedId(731) },
-    create: {
-      id: fixedId(731),
-      batchId: fixedId(721),
-      ticketId: fixedId(631),
-      qrTokenHash: "qr-seed-anh-trai-say-hi-vip-001",
-      gateId: gateId(0, 1),
-      seatZoneId: zoneId(0, 1),
-      result: "PENDING",
-      scannedAt: new Date("2026-06-02T11:05:00+07:00"),
-      metadata: { source: "mobile-offline-demo" },
-    },
-    update: {
-      ticketId: fixedId(631),
-      qrTokenHash: "qr-seed-anh-trai-say-hi-vip-001",
-      gateId: gateId(0, 1),
-      seatZoneId: zoneId(0, 1),
-      result: "PENDING",
-      scannedAt: new Date("2026-06-02T11:05:00+07:00"),
-      metadata: { source: "mobile-offline-demo" },
-    },
-  });
-}
-
-async function seedNotificationsAndAudit() {
-  const notificationRows = [
-    [691, userIds.audience, concerts[0].id, fixedId(631), "EMAIL", "TICKET_ISSUED", "SENT", 1],
-    [692, userIds.audience, concerts[1].id, fixedId(632), "APP", "ORDER_CONFIRMED", "PENDING", 0],
-    [693, userIds.organizer, concerts[2].id, null, "APP", "ARTIST_BIO_READY", "PENDING", 0],
-    [694, userIds.checker, concerts[3].id, null, "SMS", "CHECKIN_ALERT", "FAILED", 2],
-  ];
-
-  for (const [id, userId, concertId, ticketId, channel, type, status, attempts] of notificationRows) {
-    await prisma.notification.upsert({
-      where: { id: fixedId(id) },
-      create: {
-        id: fixedId(id),
-        userId,
-        concertId,
-        ticketId,
-        channel,
-        type,
-        status,
-        payload: { seed: true, type },
-        attempts,
-        sentAt: status === "SENT" ? new Date("2026-06-02T10:06:00+07:00") : null,
-      },
-      update: {
-        userId,
-        concertId,
-        ticketId,
-        channel,
-        type,
-        status,
-        payload: { seed: true, type },
-        attempts,
-        sentAt: status === "SENT" ? new Date("2026-06-02T10:06:00+07:00") : null,
-      },
-    });
-  }
-
-  const auditRows = [
-    [701, userIds.organizer, "CONCERT_PUBLISHED", "concert", concerts[0].id],
-    [702, userIds.organizer, "GUEST_IMPORT_DONE", "guest_import_job", fixedId(652)],
-    [703, userIds.admin, "USER_ROLE_SET", "user", userIds.checker],
-    [704, userIds.organizer, "ARTIST_BIO_JOB_CREATED", "artist_bio_job", fixedId(681)],
-  ];
-
-  for (const [id, actorUserId, action, entityType, entityId] of auditRows) {
-    await prisma.auditLog.upsert({
-      where: { id: fixedId(id) },
-      create: {
-        id: fixedId(id),
-        actorUserId,
-        action,
-        entityType,
-        entityId,
-        metadata: { source: "seed" },
-        ipAddress: "127.0.0.1",
-        userAgent: "seed.mjs",
-      },
-      update: {
-        actorUserId,
-        action,
-        entityType,
-        entityId,
-        metadata: { source: "seed" },
-        ipAddress: "127.0.0.1",
-        userAgent: "seed.mjs",
+        status: concertIndex < 2 ? "DONE" : "PENDING",
+        sourceFileUrl: `/press-kit/${concert.slug}.pdf`,
+        extractedText: concert.description,
+        generatedBio: concert.artistBio || null,
       },
     });
   }
@@ -642,9 +552,8 @@ async function seedNotificationsAndAudit() {
 async function main() {
   await seedUsers();
   await seedCatalog();
-  await seedOrdersAndTickets();
+  await seedDemoTickets();
   await seedOperations();
-  await seedNotificationsAndAudit();
 }
 
 main()
