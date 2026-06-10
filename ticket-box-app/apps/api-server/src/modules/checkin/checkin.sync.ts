@@ -54,19 +54,22 @@ export async function processOfflineSyncBatch(
     data: { status: "SYNCING" },
   });
 
-  const seenKeys = new Set<string>();
+  const seenClientKeys = new Set<string>();
+  const seenTargetKeys = new Set<string>();
   const results: ItemProcessResult[] = [];
 
   for (const item of input.items) {
-    const duplicateKey = itemIdentity(item);
+    const clientKey = `client:${item.client_item_id}`;
+    const targetKey = itemTargetIdentity(item);
 
-    if (seenKeys.has(duplicateKey)) {
+    if (seenClientKeys.has(clientKey) || seenTargetKeys.has(targetKey)) {
       const duplicateResult = await recordDuplicateOfflineItem(batch, item, results.length);
       results.push(duplicateResult);
       continue;
     }
 
-    seenKeys.add(duplicateKey);
+    seenClientKeys.add(clientKey);
+    seenTargetKeys.add(targetKey);
 
     const itemGateId = item.gate_id || batch.gateId;
     if (itemGateId !== batch.gateId || item.concert_id !== batch.concertId) {
@@ -563,7 +566,7 @@ function mapTicketError(error: unknown): {
 
     if (error.code === "TICKET_ALREADY_CHECKED_IN") {
       return {
-        status: "CONFLICT",
+        status: "ALREADY_CHECKED_IN",
         message: "Ticket has already been checked in before this offline batch.",
         errorCode: error.code,
       };
@@ -591,10 +594,9 @@ function mapTicketError(error: unknown): {
   };
 }
 
-function itemIdentity(item: OfflineSyncItemRequest) {
+function itemTargetIdentity(item: OfflineSyncItemRequest) {
   return [
     item.type ?? resolveItemType(item),
-    item.client_item_id,
     item.ticket_id,
     item.guest_id,
     item.phone,
