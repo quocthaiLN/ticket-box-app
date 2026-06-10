@@ -10,20 +10,9 @@ import {
   NotificationType,
 } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
+import { ApiError } from "../../shared/http/problem-details.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
-
-export class PaymentError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-
-  constructor(code: string, message: string, statusCode = 400) {
-    super(message);
-    this.name = "PaymentError";
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
 
 type OrderForRetryRow = {
   id: string;
@@ -72,24 +61,36 @@ export async function getOrderForRetry(
   `);
 
   if (!row) {
-    throw new PaymentError("ORDER_NOT_FOUND", "Order not found", 404);
+    throw new ApiError({
+      title: "ORDER_NOT_FOUND",
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      detail: "Order not found",
+    });
   }
   if (row.userId !== userId) {
-    throw new PaymentError(
-      "ORDER_ACCESS_DENIED",
-      "Access denied to this order",
-      403,
-    );
+    throw new ApiError({
+      title: "ORDER_ACCESS_DENIED",
+      status: 403,
+      code: "ORDER_ACCESS_DENIED",
+      detail: "Access denied to this order",
+    });
   }
   if (row.status !== OrderStatus.HELD) {
-    throw new PaymentError(
-      "ORDER_NOT_HELD",
-      `Order is in status ${row.status} and cannot create a new payment`,
-      422,
-    );
+    throw new ApiError({
+      title: "ORDER_NOT_HELD",
+      status: 422,
+      code: "ORDER_NOT_HELD",
+      detail: `Order is in status ${row.status} and cannot create a new payment`,
+    });
   }
   if (row.holdExpiresAt && row.holdExpiresAt < new Date()) {
-    throw new PaymentError("ORDER_NOT_HELD", "Order hold has expired", 422);
+    throw new ApiError({
+      title: "ORDER_NOT_HELD",
+      status: 422,
+      code: "ORDER_NOT_HELD",
+      detail: "Order hold has expired",
+    });
   }
 
   return row;
@@ -210,7 +211,12 @@ export async function confirmOrderPayment(
     `);
 
       if (!orderRow)
-        throw new PaymentError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new ApiError({
+          title: "ORDER_NOT_FOUND",
+          status: 404,
+          code: "ORDER_NOT_FOUND",
+          detail: "Order not found",
+        });
 
       // Idempotent: already confirmed — still ensure payment is SUCCEEDED
       if (orderRow.status === OrderStatus.CONFIRMED) {
@@ -226,11 +232,12 @@ export async function confirmOrderPayment(
       }
 
       if (orderRow.status !== OrderStatus.HELD) {
-        throw new PaymentError(
-          "ORDER_NOT_HELD",
-          `Order is in status ${orderRow.status}`,
-          409,
-        );
+        throw new ApiError({
+          title: "ORDER_NOT_HELD",
+          status: 409,
+          code: "ORDER_NOT_HELD",
+          detail: `Order is in status ${orderRow.status}`,
+        });
       }
 
       const now = new Date();

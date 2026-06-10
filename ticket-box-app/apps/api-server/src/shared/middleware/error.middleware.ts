@@ -16,27 +16,6 @@ export const errorMiddleware: ErrorRequestHandler = (err, req, res, _next) => {
     return;
   }
 
-  // Domain errors mang sẵn statusCode + code (vd TicketError, InventoryError, ...).
-  // Yêu cầu cả hai để không bắt nhầm lỗi Prisma/Node (có `code` nhưng không có statusCode).
-  if (typeof err?.statusCode === "number" && typeof err?.code === "string") {
-    res
-      .status(err.statusCode)
-      .type("application/problem+json")
-      .json(
-        problem({
-          title: typeof err.title === "string" ? err.title : err.code,
-          status: err.statusCode,
-          code: err.code,
-          detail:
-            typeof err.message === "string" ? err.message : "Request failed.",
-          errors: Array.isArray(err.errors) ? err.errors : undefined,
-          instance: req.originalUrl,
-          request_id: req.requestId,
-        }),
-      );
-    return;
-  }
-
   res
     .status(500)
     .type("application/problem+json")

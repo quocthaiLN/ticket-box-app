@@ -1,5 +1,6 @@
 import { prisma, Prisma, OrderStatus } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
+import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   HoldRequest,
   ReleaseRequest,
@@ -42,18 +43,6 @@ type OrderWithItemsRow = {
   quantity: number;
 };
 
-export class InventoryError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-
-  constructor(code: string, message: string, statusCode = 409) {
-    super(message);
-    this.name = "InventoryError";
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
-
 export async function getInventoryByTicketTypeId(ticketTypeId: string) {
   const [row] = await prisma.$queryRaw<TicketTypeRow[]>(Prisma.sql`
     SELECT
@@ -75,11 +64,12 @@ export async function getInventoryByTicketTypeId(ticketTypeId: string) {
   `);
 
   if (!row) {
-    throw new InventoryError(
-      "TICKET_TYPE_NOT_FOUND",
-      "Ticket type not found",
-      404,
-    );
+    throw new ApiError({
+      title: "TICKET_TYPE_NOT_FOUND",
+      status: 404,
+      code: "TICKET_TYPE_NOT_FOUND",
+      detail: "Ticket type not found",
+    });
   }
 
   return row;
@@ -120,11 +110,12 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
     `);
 
       if (ticketTypes.length !== ticketTypeIds.length) {
-        throw new InventoryError(
-          "TICKET_TYPE_NOT_FOUND",
-          "One or more ticket types not found",
-          404,
-        );
+        throw new ApiError({
+          title: "TICKET_TYPE_NOT_FOUND",
+          status: 404,
+          code: "TICKET_TYPE_NOT_FOUND",
+          detail: "One or more ticket types not found",
+        });
       }
 
       const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
@@ -134,34 +125,38 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
         const tt = typeMap.get(item.ticket_type_id)!;
 
         if (tt.concertId !== req.concert_id) {
-          throw new InventoryError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} does not belong to concert`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} does not belong to concert`,
+          });
         }
         if (tt.status !== "ON_SALE") {
-          throw new InventoryError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is not on sale`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} is not on sale`,
+          });
         }
         if (now < tt.saleStartAt || now > tt.saleEndAt) {
-          throw new InventoryError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is outside the sale window`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} is outside the sale window`,
+          });
         }
 
         const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
         if (available < item.quantity) {
-          throw new InventoryError(
-            "TICKET_SOLD_OUT",
-            `Not enough available tickets for type ${item.ticket_type_id}`,
-            409,
-          );
+          throw new ApiError({
+            title: "TICKET_SOLD_OUT",
+            status: 409,
+            code: "TICKET_SOLD_OUT",
+            detail: `Not enough available tickets for type ${item.ticket_type_id}`,
+          });
         }
       }
 
@@ -185,11 +180,12 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
           counter.heldQuantity + counter.paidQuantity + item.quantity >
           tt.maxPerUser
         ) {
-          throw new InventoryError(
-            "PER_USER_LIMIT_EXCEEDED",
-            `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
-            409,
-          );
+          throw new ApiError({
+            title: "PER_USER_LIMIT_EXCEEDED",
+            status: 409,
+            code: "PER_USER_LIMIT_EXCEEDED",
+            detail: `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
+          });
         }
       }
 
@@ -292,7 +288,12 @@ export async function releaseInventory(req: ReleaseRequest) {
     `);
 
       if (rows.length === 0) {
-        throw new InventoryError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new ApiError({
+          title: "ORDER_NOT_FOUND",
+          status: 404,
+          code: "ORDER_NOT_FOUND",
+          detail: "Order not found",
+        });
       }
 
       const orderStatus = rows[0].orderStatus;
@@ -384,17 +385,23 @@ export async function confirmPayment(req: PaymentConfirmationRequest) {
     `);
 
       if (rows.length === 0) {
-        throw new InventoryError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new ApiError({
+          title: "ORDER_NOT_FOUND",
+          status: 404,
+          code: "ORDER_NOT_FOUND",
+          detail: "Order not found",
+        });
       }
 
       const orderStatus = rows[0].orderStatus;
 
       if (orderStatus !== OrderStatus.HELD) {
-        throw new InventoryError(
-          "ORDER_NOT_HELD",
-          `Order is in status ${orderStatus} and cannot be confirmed`,
-          409,
-        );
+        throw new ApiError({
+          title: "ORDER_NOT_HELD",
+          status: 409,
+          code: "ORDER_NOT_HELD",
+          detail: `Order is in status ${orderStatus} and cannot be confirmed`,
+        });
       }
 
       const now = new Date();
@@ -479,11 +486,12 @@ export async function adjustInventory(
     `);
 
       if (!row) {
-        throw new InventoryError(
-          "TICKET_TYPE_NOT_FOUND",
-          "Ticket type not found",
-          404,
-        );
+        throw new ApiError({
+          title: "TICKET_TYPE_NOT_FOUND",
+          status: 404,
+          code: "TICKET_TYPE_NOT_FOUND",
+          detail: "Ticket type not found",
+        });
       }
 
       const newTotal = row.totalQuantity + req.delta_total_quantity;
@@ -491,19 +499,21 @@ export async function adjustInventory(
       const newAvailable = available + req.delta_total_quantity;
 
       if (newAvailable < 0) {
-        throw new InventoryError(
-          "INVENTORY_INVARIANT_VIOLATED",
-          "Adjustment would make available_quantity negative",
-          422,
-        );
+        throw new ApiError({
+          title: "INVENTORY_INVARIANT_VIOLATED",
+          status: 422,
+          code: "INVENTORY_INVARIANT_VIOLATED",
+          detail: "Adjustment would make available_quantity negative",
+        });
       }
 
       if (newTotal < 0) {
-        throw new InventoryError(
-          "INVENTORY_INVARIANT_VIOLATED",
-          "total_quantity cannot be negative",
-          422,
-        );
+        throw new ApiError({
+          title: "INVENTORY_INVARIANT_VIOLATED",
+          status: 422,
+          code: "INVENTORY_INVARIANT_VIOLATED",
+          detail: "total_quantity cannot be negative",
+        });
       }
 
       // Check against seat zone capacity
@@ -514,11 +524,12 @@ export async function adjustInventory(
     `);
 
       if (zone && newTotal > zone.capacity) {
-        throw new InventoryError(
-          "ZONE_CAPACITY_EXCEEDED",
-          `New total_quantity ${newTotal} exceeds seat zone capacity ${zone.capacity}`,
-          422,
-        );
+        throw new ApiError({
+          title: "ZONE_CAPACITY_EXCEEDED",
+          status: 422,
+          code: "ZONE_CAPACITY_EXCEEDED",
+          detail: `New total_quantity ${newTotal} exceeds seat zone capacity ${zone.capacity}`,
+        });
       }
 
       await tx.$executeRaw(Prisma.sql`

@@ -2,18 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { prisma, Prisma, TicketStatus, NotificationChannel, NotificationType } from '@ticketbox/database';
 import { buildQrPayload, signQrPayload } from './ticket.qr.js';
 import type { QrPayload, TicketListQuery } from './ticket.type.js';
-
-export class TicketError extends Error {
-  readonly statusCode: number;
-  readonly code: string;
-
-  constructor(code: string, message: string, statusCode = 400) {
-    super(message);
-    this.name = 'TicketError';
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
+import { ApiError } from '../../shared/http/problem-details.js';
 
 // ── Row types ──────────────────────────────────────────────────────────────────
 
@@ -131,8 +120,8 @@ export async function getTicketDetailForUser(ticketId: string, userId: string) {
     WHERE t.id = ${ticketId}::uuid
   `);
 
-  if (!row) throw new TicketError('TICKET_NOT_FOUND', 'Ticket not found', 404);
-  if (row.userId !== userId) throw new TicketError('TICKET_ACCESS_DENIED', 'Access denied to this ticket', 403);
+  if (!row) throw new ApiError({ title: 'TICKET_NOT_FOUND', status: 404, code: 'TICKET_NOT_FOUND', detail: 'Ticket not found' });
+  if (row.userId !== userId) throw new ApiError({ title: 'TICKET_ACCESS_DENIED', status: 403, code: 'TICKET_ACCESS_DENIED', detail: 'Access denied to this ticket' });
 
   return row;
 }
@@ -146,7 +135,12 @@ export async function getTicketQrForUser(
   const row = await getTicketDetailForUser(ticketId, userId);
 
   if (row.status === 'CANCELLED' || row.status === 'REFUNDED') {
-    throw new TicketError('TICKET_NOT_USABLE', 'Ticket is cancelled or refunded', 422);
+    throw new ApiError({
+      title: 'TICKET_NOT_USABLE',
+      status: 422,
+      code: 'TICKET_NOT_USABLE',
+      detail: 'Ticket is cancelled or refunded',
+    });
   }
 
   if (row.qrPayload && row.qrSignature) {
@@ -174,9 +168,14 @@ export async function issueTicketsForOrder(orderId: string) {
       FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
     `);
 
-    if (!orderRow) throw new TicketError('ORDER_NOT_FOUND', 'Order not found', 404);
+    if (!orderRow) throw new ApiError({ title: 'ORDER_NOT_FOUND', status: 404, code: 'ORDER_NOT_FOUND', detail: 'Order not found' });
     if (orderRow.status !== 'CONFIRMED') {
-      throw new TicketError('ORDER_NOT_CONFIRMED', `Order is in status ${orderRow.status}`, 422);
+      throw new ApiError({
+        title: 'ORDER_NOT_CONFIRMED',
+        status: 422,
+        code: 'ORDER_NOT_CONFIRMED',
+        detail: `Order is in status ${orderRow.status}`,
+      });
     }
 
     const [paymentRow] = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -185,7 +184,7 @@ export async function issueTicketsForOrder(orderId: string) {
       LIMIT 1
     `);
 
-    if (!paymentRow) throw new TicketError('PAYMENT_NOT_SUCCEEDED', 'No succeeded payment found for this order', 422);
+    if (!paymentRow) throw new ApiError({ title: 'PAYMENT_NOT_SUCCEEDED', status: 422, code: 'PAYMENT_NOT_SUCCEEDED', detail: 'No succeeded payment found for this order' });
 
     const items = await tx.$queryRaw<OrderItemRow[]>(Prisma.sql`
       SELECT
@@ -225,7 +224,12 @@ export async function issueTicketsForOrder(orderId: string) {
     }
 
     if (existing.length > 0) {
-      throw new TicketError('TICKETS_ALREADY_ISSUED', 'Partial ticket records exist', 409);
+      throw new ApiError({
+        title: 'TICKETS_ALREADY_ISSUED',
+        status: 409,
+        code: 'TICKETS_ALREADY_ISSUED',
+        detail: 'Partial ticket records exist',
+      });
     }
 
     // Create tickets
@@ -287,7 +291,7 @@ export async function voidTicketById(ticketId: string) {
       FROM tickets WHERE id = ${ticketId}::uuid FOR UPDATE
     `);
 
-    if (!row) throw new TicketError('TICKET_NOT_FOUND', 'Ticket not found', 404);
+    if (!row) throw new ApiError({ title: 'TICKET_NOT_FOUND', status: 404, code: 'TICKET_NOT_FOUND', detail: 'Ticket not found' });
 
     if (row.status === 'CANCELLED' || row.status === 'REFUNDED') {
       return { id: row.id, status: row.status, voidedAt: new Date() };
