@@ -9,8 +9,14 @@ import inventoryRouter from "./modules/inventory/inventory.router.js";
 import orderRouter from "./modules/orders/order.router.js";
 import paymentRouter from "./modules/payments/payment.router.js";
 import ticketRouter from "./modules/tickets/ticket.router.js";
+import { notificationsRouter } from "./modules/notifications/notifications.router.js";
 import { errorMiddleware } from "./shared/middleware/error.middleware.js";
 import { requestIdMiddleware } from "./shared/middleware/request-id.middleware.js";
+import {
+  orderRateLimit,
+  webhookRateLimit,
+  publicReadRateLimit,
+} from "./shared/middleware/rate-limit.middleware.js";
 import { ok } from "./shared/http/response.js";
 
 export function createApp() {
@@ -21,6 +27,7 @@ export function createApp() {
   app.use(cookieParser());
   app.use(requestIdMiddleware);
 
+  // ── Health ──────────────────────────────────────────────────────────────────
   app.get("/health", (_req, res) => {
     res.json({ status: "OK" });
   });
@@ -29,15 +36,37 @@ export function createApp() {
     res.json(ok({ status: "OK" }, req.requestId));
   });
 
+  // ── Auth ────────────────────────────────────────────────────────────────────
   app.use("/v1/auth", authRouter);
+
+  // ── Catalog (public reads) — rate limited ───────────────────────────────────
+  app.use("/v1/concerts", publicReadRateLimit);
   app.use("/v1", catalogRouter);
+
+  // ── Notifications (admin + internal) ───────────────────────────────────────
+  app.use("/v1", notificationsRouter);
+
+  // ── Check-in ───────────────────────────────────────────────────────────────
   app.use("/v1", checkinRouter);
+
+  // ── Guest list ─────────────────────────────────────────────────────────────
   app.use("/v1", guestListRouter);
+
+  // ── Inventory ──────────────────────────────────────────────────────────────
   app.use("/v1", inventoryRouter);
+
+  // ── Orders — strict rate limit chống scalper ───────────────────────────────
+  app.use("/v1/orders", orderRateLimit);
   app.use("/v1", orderRouter);
+
+  // ── Payments — webhook rate limit ──────────────────────────────────────────
+  app.use("/v1/payments/webhook", webhookRateLimit);
   app.use("/v1", paymentRouter);
+
+  // ── Tickets ────────────────────────────────────────────────────────────────
   app.use("/v1", ticketRouter);
 
+  // ── Error handler (must be last) ───────────────────────────────────────────
   app.use(errorMiddleware);
 
   return app;

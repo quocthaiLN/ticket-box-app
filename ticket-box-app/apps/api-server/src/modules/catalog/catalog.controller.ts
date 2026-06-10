@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
 import { collection, ok } from "../../shared/http/response.js";
 import {
   parseAdminConcertsQuery,
@@ -13,9 +14,12 @@ import {
   parseUpdateVenueBody
 } from "./catalog.schema.js";
 import { CatalogService } from "./catalog.service.js";
+import { catalogCacheKeys } from "./catalog.cache.js";
 
 export class CatalogController {
   constructor(private readonly service = new CatalogService()) {}
+
+  // ── Public read endpoints ──────────────────────────────────────────────────
 
   listPublishedConcerts = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -76,6 +80,8 @@ export class CatalogController {
     }
   };
 
+  // ── Admin read endpoints ───────────────────────────────────────────────────
+
   listVenues = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const query = parseCatalogListQuery(req.query);
@@ -108,6 +114,8 @@ export class CatalogController {
     }
   };
 
+  // ── Admin write endpoints ──────────────────────────────────────────────────
+
   createVenue = async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.status(201).json(ok(await this.service.createVenue(parseCreateVenueBody(req.body)), req.requestId));
@@ -126,12 +134,12 @@ export class CatalogController {
 
   createConcert = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.status(201).json(
-        ok(
-          await this.service.createConcert(parseCreateConcertBody(req.body), res.locals.auth?.user_id),
-          req.requestId
-        )
+      const result = await this.service.createConcert(
+        parseCreateConcertBody(req.body),
+        res.locals.auth?.user_id,
       );
+      void invalidateConcertListCache();
+      res.status(201).json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -139,7 +147,10 @@ export class CatalogController {
 
   updateConcert = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json(ok(await this.service.updateConcert(req.params.concert_id, parseUpdateConcertBody(req.body)), req.requestId));
+      const concertId = req.params.concert_id;
+      const result = await this.service.updateConcert(concertId, parseUpdateConcertBody(req.body));
+      void invalidateConcertCache(concertId);
+      res.json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -147,7 +158,10 @@ export class CatalogController {
 
   publishConcert = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json(ok(await this.service.publishConcert(req.params.concert_id), req.requestId));
+      const concertId = req.params.concert_id;
+      const result = await this.service.publishConcert(concertId);
+      void invalidateConcertCache(concertId);
+      res.json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -155,7 +169,10 @@ export class CatalogController {
 
   cancelConcert = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json(ok(await this.service.cancelConcert(req.params.concert_id), req.requestId));
+      const concertId = req.params.concert_id;
+      const result = await this.service.cancelConcert(concertId);
+      void invalidateConcertCache(concertId);
+      res.json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -163,9 +180,10 @@ export class CatalogController {
 
   createSeatZone = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.status(201).json(
-        ok(await this.service.createSeatZone(req.params.concert_id, parseCreateSeatZoneBody(req.body)), req.requestId)
-      );
+      const concertId = req.params.concert_id;
+      const result = await this.service.createSeatZone(concertId, parseCreateSeatZoneBody(req.body));
+      void invalidateSeatMapCache(concertId);
+      res.status(201).json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -173,7 +191,11 @@ export class CatalogController {
 
   updateSeatZone = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json(ok(await this.service.updateSeatZone(req.params.seat_zone_id, parseUpdateSeatZoneBody(req.body)), req.requestId));
+      const result = await this.service.updateSeatZone(req.params.seat_zone_id, parseUpdateSeatZoneBody(req.body));
+      // Invalidate by concertId if available in the returned data
+      const concertId = (result as { concert_id?: string })?.concert_id;
+      if (concertId) void invalidateSeatMapCache(concertId);
+      res.json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -181,9 +203,10 @@ export class CatalogController {
 
   createTicketType = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.status(201).json(
-        ok(await this.service.createTicketType(req.params.concert_id, parseCreateTicketTypeBody(req.body)), req.requestId)
-      );
+      const concertId = req.params.concert_id;
+      const result = await this.service.createTicketType(concertId, parseCreateTicketTypeBody(req.body));
+      void invalidateTicketTypeCache(concertId);
+      res.status(201).json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -191,9 +214,46 @@ export class CatalogController {
 
   updateTicketType = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json(ok(await this.service.updateTicketType(req.params.ticket_type_id, parseUpdateTicketTypeBody(req.body)), req.requestId));
+      const result = await this.service.updateTicketType(req.params.ticket_type_id, parseUpdateTicketTypeBody(req.body));
+      const concertId = (result as { concert_id?: string })?.concert_id;
+      if (concertId) void invalidateTicketTypeCache(concertId);
+      res.json(ok(result, req.requestId));
     } catch (err) {
       next(err);
     }
   };
+}
+
+// ── Cache invalidation helpers ─────────────────────────────────────────────
+
+async function invalidateConcertListCache(): Promise<void> {
+  await cacheDeletePattern("catalog:list:*").catch((e) =>
+    console.error("[catalog] cache list invalidation error:", e),
+  );
+}
+
+async function invalidateConcertCache(concertId: string): Promise<void> {
+  await Promise.allSettled([
+    cacheDelete(catalogCacheKeys.concert(concertId)),
+    cacheDelete(catalogCacheKeys.metadata(concertId)),
+    cacheDelete(catalogCacheKeys.seatMap(concertId)),
+    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
+    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
+    cacheDelete(catalogCacheKeys.inventory(concertId)),
+    cacheDeletePattern("catalog:list:*"),
+  ]);
+}
+
+async function invalidateSeatMapCache(concertId: string): Promise<void> {
+  await cacheDelete(catalogCacheKeys.seatMap(concertId)).catch((e) =>
+    console.error("[catalog] cache seatmap invalidation error:", e),
+  );
+}
+
+async function invalidateTicketTypeCache(concertId: string): Promise<void> {
+  await Promise.allSettled([
+    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
+    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
+    cacheDelete(catalogCacheKeys.inventory(concertId)),
+  ]);
 }

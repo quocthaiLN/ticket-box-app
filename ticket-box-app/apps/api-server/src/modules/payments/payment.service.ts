@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { env } from '@ticket-box/config';
+import { enqueueNotification } from '@ticketbox/queue';
 import { buildVnpayUrl } from './payment.vnpay.js';
 import { buildMomoUrl } from './payment.momo.js';
 import {
@@ -163,8 +164,9 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
   const isSuccess = responseCode === '00';
 
   if (isSuccess && payment) {
-    await confirmOrderPayment(payment.id, orderId);
+    const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('VNPAY').recordSuccess();
+    void enqueueIssuedTicketNotifications(issuedNotifications);
   } else if (!isSuccess && payment) {
     const failureReason = `VNPAY_${responseCode}`;
     await failPayment(payment.id, orderId, failureReason);
@@ -230,8 +232,9 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
   const isSuccess = resultCode === 0;
 
   if (isSuccess && payment) {
-    await confirmOrderPayment(payment.id, orderId);
+    const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('MOMO').recordSuccess();
+    void enqueueIssuedTicketNotifications(issuedNotifications);
   } else if (!isSuccess && payment) {
     const failureReason = `MOMO_${resultCode}`;
     await failPayment(payment.id, orderId, failureReason);
@@ -239,4 +242,30 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
   }
 
   return { status: 200, message: 'success' };
+}
+
+// ── Internal helpers ───────────────────────────────────────────────────────────
+
+type IssuedNotification = {
+  id: string;
+  userId: string;
+  channel: string;
+  payload: Record<string, unknown>;
+};
+
+async function enqueueIssuedTicketNotifications(
+  notifications: IssuedNotification[],
+): Promise<void> {
+  await Promise.allSettled(
+    notifications.map((n) =>
+      enqueueNotification({
+        notification_id: n.id,
+        channel: n.channel as 'EMAIL' | 'PUSH' | 'IN_APP',
+        recipient_user_id: n.userId,
+        body: (n.payload.body as string | undefined) ?? '',
+      }).catch((err: unknown) =>
+        console.error(`[payment] Failed to enqueue notification ${n.id}:`, err),
+      ),
+    ),
+  );
 }

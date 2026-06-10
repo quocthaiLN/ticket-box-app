@@ -191,11 +191,22 @@ export async function saveWebhookRawPayload(
   });
 }
 
+export type ConfirmOrderPaymentResult = {
+  issuedNotifications: Array<{
+    id: string;
+    userId: string;
+    channel: string;
+    payload: Record<string, unknown>;
+  }>;
+};
+
 export async function confirmOrderPayment(
   paymentId: string,
   orderId: string,
-): Promise<void> {
+): Promise<ConfirmOrderPaymentResult> {
   let affectedTicketTypeIds: string[] = [];
+  let issuedNotifications: ConfirmOrderPaymentResult["issuedNotifications"] =
+    [];
 
   await prisma.$transaction(
     async (tx) => {
@@ -313,19 +324,30 @@ export async function confirmOrderPayment(
         }
       }
 
-      if (issuedTickets.length > 0) {
-        await tx.notification.createMany({
-          data: issuedTickets.map((t) => ({
+      const createdNotifications: typeof issuedNotifications = [];
+      for (const t of issuedTickets) {
+        const notifPayload = {
+          ticket_id: t.id,
+          order_id: orderId,
+        } as Prisma.InputJsonValue;
+        const notif = await tx.notification.create({
+          data: {
             userId: t.userId,
             concertId: t.concertId,
             ticketId: t.id,
             channel: NotificationChannel.EMAIL,
             type: NotificationType.TICKET_ISSUED,
-            payload: { ticket_id: t.id, order_id: orderId } as Prisma.InputJsonValue,
-          })),
+            payload: notifPayload,
+          },
+        });
+        createdNotifications.push({
+          id: notif.id,
+          userId: t.userId,
+          channel: "EMAIL",
+          payload: { ticket_id: t.id, order_id: orderId },
         });
       }
-
+      issuedNotifications = createdNotifications;
       affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -334,6 +356,8 @@ export async function confirmOrderPayment(
   await Promise.allSettled(
     affectedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
   );
+
+  return { issuedNotifications };
 }
 
 export async function failPayment(
