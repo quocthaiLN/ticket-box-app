@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticket-box/config/payment.js';
+import { paymentConfig } from '@ticketbox/config/payment.js';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 

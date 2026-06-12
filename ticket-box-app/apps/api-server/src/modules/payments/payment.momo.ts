@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { env } from '@ticket-box/config';
+import { env } from '@ticketbox/config';
 
 export function buildMomoUrl(
   orderId: string,

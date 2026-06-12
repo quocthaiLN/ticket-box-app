@@ -8,7 +8,7 @@ import {
   Prisma,
   TicketStatus,
 } from "@ticketbox/database";
-import { env } from "@ticket-box/config";
+import { env } from "@ticketbox/config";
 import type {
   CheckinPreloadQuery,
   CheckinPreloadResponse,

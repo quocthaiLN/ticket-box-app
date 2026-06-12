@@ -24,7 +24,7 @@ describe('VNPAY webhook – success path', () => {
 
   beforeAll(async () => {
     fixture = await createFixture({ totalQuantity: 5, maxPerUser: 5 });
-    order   = await createTestOrder(fixture);
+    order = await createTestOrder(fixture);
   });
 
   afterAll(async () => {
@@ -34,7 +34,7 @@ describe('VNPAY webhook – success path', () => {
 
   it('returns RspCode 00 on valid IPN', async () => {
     const payload = buildVnpayWebhookPayload(order.orderId, order.totalAmount, transactionNo);
-    const result  = await handleVnpayWebhook(payload);
+    const result = await handleVnpayWebhook(payload);
     expect(result.RspCode).toBe('00');
   });
 
@@ -73,7 +73,7 @@ describe('VNPAY webhook – idempotent on retry', () => {
 
   beforeAll(async () => {
     fixture = await createFixture({ totalQuantity: 5, maxPerUser: 5 });
-    order   = await createTestOrder(fixture);
+    order = await createTestOrder(fixture);
 
     // First webhook: confirms order
     const payload = buildVnpayWebhookPayload(order.orderId, order.totalAmount, transactionNo);
@@ -87,7 +87,7 @@ describe('VNPAY webhook – idempotent on retry', () => {
 
   it('second webhook with same transactionNo returns 00 without error', async () => {
     const payload = buildVnpayWebhookPayload(order.orderId, order.totalAmount, transactionNo);
-    const result  = await handleVnpayWebhook(payload);
+    const result = await handleVnpayWebhook(payload);
     expect(result.RspCode).toBe('00');
   });
 
@@ -105,7 +105,7 @@ describe('VNPAY webhook – invalid signature', () => {
 
   beforeAll(async () => {
     fixture = await createFixture({ totalQuantity: 5, maxPerUser: 5 });
-    order   = await createTestOrder(fixture);
+    order = await createTestOrder(fixture);
   });
 
   afterAll(async () => {
@@ -133,7 +133,7 @@ describe('VNPAY webhook – payment failure (responseCode ≠ 00)', () => {
 
   beforeAll(async () => {
     fixture = await createFixture({ totalQuantity: 5, maxPerUser: 5 });
-    order   = await createTestOrder(fixture);
+    order = await createTestOrder(fixture);
   });
 
   afterAll(async () => {

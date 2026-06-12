@@ -1,10 +1,10 @@
 import { createHmac } from 'node:crypto';
-import { env } from '@ticket-box/config';
+import { env } from '@ticketbox/config';
 import { enqueueNotification } from '@ticketbox/queue';
 import { buildVnpayUrl } from './payment.vnpay.js';
 import { buildMomoUrl } from './payment.momo.js';
+import { ApiError } from '../../shared/http/problem-details.js';
 import {
-  PaymentError,
   confirmOrderPayment,
   createRetryPaymentRecord,
   failPayment,
@@ -84,7 +84,12 @@ export async function retryPayment(
 
   const existing = await getActivePendingPayment(orderId);
   if (existing) {
-    throw new PaymentError('PAYMENT_ALREADY_PENDING', 'An active pending payment already exists for this order', 409);
+    throw new ApiError({
+      title: 'PAYMENT_ALREADY_PENDING',
+      status: 409,
+      code: 'PAYMENT_ALREADY_PENDING',
+      detail: 'An active pending payment already exists for this order',
+    });
   }
 
   const orderInfo = `Payment for order ${orderId}`;

@@ -6,12 +6,13 @@ import {
   holdInventoryHandler,
   releaseInventoryHandler,
 } from "./inventory.controller.js";
-import { idempotencyMiddleware, validateBody } from "./middleware/index.js";
+import { idempotencyMiddleware } from "../../shared/middleware/idempotency.middleware.js";
+import { validateBody } from "../../shared/middleware/validate.middleware.js";
 import {
-  validateHoldRequest,
-  validateInventoryAdjustmentRequest,
-  validatePaymentConfirmationRequest,
-  validateReleaseRequest,
+  holdSchema,
+  inventoryAdjustmentSchema,
+  paymentConfirmationSchema,
+  releaseSchema,
 } from "./inventory.schema.js";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import { requireRole } from "../../shared/guards/role.guard.js";
@@ -29,22 +30,22 @@ router.get(
 // Internal: hold tickets when creating an order (called by order service — no user JWT)
 router.post(
   "/internal/inventory/holds",
-  idempotencyMiddleware,
-  validateBody(validateHoldRequest),
+  idempotencyMiddleware("inventory"),
+  validateBody(holdSchema),
   holdInventoryHandler,
 );
 
 // Internal: release held tickets when order expires or is cancelled (worker — no user JWT)
 router.post(
   "/internal/inventory/releases",
-  validateBody(validateReleaseRequest),
+  validateBody(releaseSchema),
   releaseInventoryHandler,
 );
 
 // Internal: confirm payment, move held → sold (payment module — no user JWT)
 router.post(
   "/internal/inventory/payment-confirmations",
-  validateBody(validatePaymentConfirmationRequest),
+  validateBody(paymentConfirmationSchema),
   confirmPaymentHandler,
 );
 
@@ -53,7 +54,7 @@ router.post(
   "/admin/ticket-types/:ticket_type_id/inventory-adjustments",
   requireAuth,
   requireRole("ADMIN"),
-  validateBody(validateInventoryAdjustmentRequest),
+  validateBody(inventoryAdjustmentSchema),
   adjustInventoryHandler,
 );
 

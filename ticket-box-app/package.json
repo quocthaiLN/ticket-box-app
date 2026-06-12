@@ -21,9 +21,11 @@
     "build:storage": "npm run build -w @ticketbox/storage",
     "build:redis": "npm run build -w @ticketbox/redis",
     "build:queue": "npm run build -w @ticketbox/queue",
-    "db:validate": "npm run prisma:validate -w @ticketbox/database",
-    "db:generate": "npm run prisma:generate -w @ticketbox/database",
-    "db:seed": "npm run prisma:seed -w @ticketbox/database"
+    "db:validate": "prisma validate --schema=packages/database/prisma/schema.prisma",
+    "db:generate": "prisma generate --schema=packages/database/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=packages/database/prisma/schema.prisma",
+    "db:seed": "node --env-file=.env packages/database/prisma/seed.mjs",
+    "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma"
   },
   "devDependencies": {
     "@types/node": "^25.9.1"
