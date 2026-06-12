@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       // Point workspace packages to their TypeScript source so tests don't
       // require a dist rebuild before running.
       alias: {
-        '@ticket-box/redis': resolve(__dirname, '../packages/redis/src/index.ts'),
+        '@ticketbox/redis': resolve(__dirname, '../packages/redis/src/index.ts'),
         '@ticketbox/database': resolve(__dirname, '../packages/database/src/index.ts'),
       },
       // Resolve .js imports to .ts sources (NodeNext TypeScript pattern)

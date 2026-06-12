@@ -22,7 +22,18 @@ import { ok } from "./shared/http/response.js";
 export function createApp() {
   const app = express();
 
-  app.use(cors());
+  app.use(
+    cors({
+      credentials: true,
+      origin(origin, callback) {
+        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(null, false);
+      },
+    }),
+  );
   app.use(express.json());
   app.use(cookieParser());
   app.use(requestIdMiddleware);

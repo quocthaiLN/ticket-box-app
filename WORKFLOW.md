@@ -183,3 +183,95 @@ Khi mở context mới:
 7. Khi cài đặt thêm kiến thức, module, pattern hoặc dependency mới trong `apps/api-server`, `apps/web`, `packages/database`, `packages/storage`, phải cập nhật `description.md` tương ứng trong folder đó. Mỗi file `description.md` là sổ tay sống của folder: vai trò, hiện trạng, cách đọc, quy ước cần giữ, nguồn học thêm và ghi chú cần update ở sprint sau.
 
 ## 11. Trạng thái ghi nhận hiện tại
+
+### 2026-06-08 - Sprint 4 kickoff / Web UI integration
+
+- Da doc `TEAMWORK.md`; vai tro hien tai cua Thanh la Lead, Catalog, Web admin/Web client, storage wrapper, integration/review/demo.
+- Da ra soat nhiem vu Sprint 1, Sprint 2, Sprint 3 cua Thanh trong `ticket-box-app/`:
+  - Sprint 1 va Sprint 2: Catalog API, storage wrapper, web skeleton/admin catalog co ban da hoan thanh o muc kha.
+  - Sprint 3: chua hoan thanh day du vi web chua co auth integration, checkout/order that, polling order status va ticket view/QR that.
+- Da ra soat folder `fe/`; day la UI Web client chuan bi san tu Figma/Make, co Home, Events, Concert Detail, Seat Selection, Checkout, My Tickets, Auth, Admin Dashboard, Admin Concerts, Admin Guest List, Artist Bio mock.
+- Da bat dau tich hop UI `fe/` vao app chinh `ticket-box-app/apps/web` theo thu tu:
+  - Home page da dung UI moi va noi `listConcerts()` cua Catalog API.
+  - Events page da them route `/events`, dung UI filter/search va noi Catalog API.
+  - Concert Detail page da dung UI moi va noi `getConcert`, `getConcertMetadata`, `getInventory`.
+  - Them `Navbar`, `Footer`, `ConcertCard`, `ImageWithFallback`, `AnimatedSection`.
+  - Them mapper `apps/web/src/lib/catalog-ui.ts` de chuyen DTO Catalog API sang shape UI.
+  - Them Tailwind 4, `@tailwindcss/vite`, `lucide-react`, `motion`, `tw-animate-css` cho web UI.
+- Kiem chung: `npm run build:web` pass.
+- Dev server web da chay o `http://localhost:3001`; neu Home/Events/Detail bao loi Catalog API thi can chay API server o `http://localhost:3000/v1`.
+- Theo yeu cau moi, toan bo file `description.md` trong `ticket-box-app/ticket-box-app/` da bi xoa. Tu thoi diem nay, tien do/ghi chu chuyen giao nen ghi truc tiep vao `WORKFLOW.md` de tranh lech nguon thong tin.
+- Viec tich hop tiep theo nen la: Auth login/register -> Seat Selection/Checkout -> My Tickets/QR -> Admin Concerts -> Admin Guest List/Artist Bio cho Sprint 4.
+
+### 2026-06-08 - API dev startup va React event type fixes
+
+- Fix loi `Cannot find module 'lodash.isboolean'` khi chay `npm run dev -w @ticketbox/api-server`:
+  - Them cac lodash helper ma `jsonwebtoken` require truc tiep vao `apps/api-server/package.json` de dependency tree on dinh trong npm workspace.
+  - Doi dependency scope cu `@ticket-box/config`, `@ticket-box/redis` sang workspace scope dung `@ticketbox/config`, `@ticketbox/redis`.
+  - Doi cac import config con sot trong API tu `@ticket-box/config` sang `@ticketbox/config`.
+  - Them `require` condition cho `packages/redis` va `packages/queue` exports de `tsx`/Node CJS resolver khong bao `No exports main defined`.
+- Fix warning deprecated `FormEvent<HTMLFormElement>` trong Web:
+  - Doi form submit handlers o `AdminCatalogPage.tsx` va `CheckerPage.tsx` sang `SyntheticEvent<HTMLFormElement, SubmitEvent>`.
+- Kiem chung:
+  - `npm run build:web` pass.
+  - `npm run build:api` pass.
+  - Smoke test import API bang `tsx` pass; chay entrypoint API da vuot loi module va chi bao `EADDRINUSE` khi port 3000 dang bi dev watcher chiem.
+
+### 2026-06-08 - Concert Detail fallback va nav cleanup
+
+- Fix Concert Detail UI de khong fail ca trang khi metadata hoac inventory endpoint loi/chua san sang:
+  - `getCatalogConcertDetail()` bat buoc load `/concerts/:id` truoc.
+  - Metadata va inventory duoc fetch theo `concert.id`; neu loi thi fallback sang metadata/inventory rong de van hien thi thong tin concert chinh.
+- Xoa link/nut `Admin` khoi desktop va mobile navbar; sau nay login role admin se redirect thang sang `/admin`.
+- Kiem chung: `npm run build:web` pass.
+
+### 2026-06-09 - Queue Redis import va Concert Detail seed UUID fix
+
+- Fix loi `Cannot find module '@ticketbox/redis'` khi build `@ticketbox/queue`:
+  - Doi dependency/alias con sot trong `tests` tu scope cu `@ticket-box/redis` sang `@ticketbox/redis`.
+  - Chay lai `npm install` de package-lock va workspace symlink trong `node_modules` bo entry cu `@ticket-box/redis`.
+  - Kiem chung: `npm ls @ticketbox/redis` hop le, `npm ls @ticket-box/redis` rong, `npm run build:queue` pass.
+- Fix Concert Detail 404 voi seed id dang `00000000-0000-0000-0000-000000000201`:
+  - Backend Catalog truoc do chi xem id la UUID neu co RFC version/variant, nen id seed deterministic bi hieu nham la slug.
+  - Noi matcher `isUuid()` thanh UUID-like 5 nhom hex trong Catalog, Check-in va Guest List de cac id seed/local van lookup theo `id`.
+  - Smoke test API: `/v1/concerts`, `/v1/concerts/:id`, `/metadata`, `/inventory` cho `Night Lights` deu tra du lieu.
+- Kiem chung:
+  - `npm run build:api` pass.
+  - `npm run build:web` pass.
+  - Web dev server dang chay tai `http://localhost:3001`, API tai `http://localhost:3000/v1`.
+  - Deep link `http://localhost:3001/concerts/00000000-0000-0000-0000-000000000201` tra 200.
+
+### 2026-06-09 - Auth UI integration
+
+- Tich hop UI login/register tu `fe/` vao `apps/web`:
+  - Them route `/login` va `/register`.
+  - Them `apps/web/src/routes/auth/AuthPage.tsx` dung style TicketBox UI, goi Auth API that.
+  - Them `apps/web/src/services/auth.service.ts` cho `login`, `register`, `logout`, `loadCurrentUser`.
+  - Them `apps/web/src/lib/auth-session.ts` de luu `access_token`, expiry va user vao `localStorage`.
+  - `api-client` tu dong gan `Authorization: Bearer ...` neu co token trong session, va parse problem-details thanh message de doc hon.
+  - `api-client` xu ly dung response `204 No Content` de logout khong bi loi parse JSON.
+  - Navbar hien Sign in/Register khi chua login; hien user va nut Sign out khi da login.
+- Cap nhat API CORS de chap nhan credentials cho localhost, phuc vu refresh cookie cua Auth API.
+- Them `JWT_SECRET` va `JWT_REFRESH_SECRET` vao `.env.example`, README va `.env` local; thieu secret nay se lam `/v1/auth/login` tra 500 khi sign JWT.
+- Kiem chung:
+  - Smoke test API register -> login -> `/auth/me` pass voi user moi role `AUDIENCE`.
+  - Smoke test `/v1/auth/logout` tra `204`.
+  - Web `/login` va `/register` tra 200 tren `http://localhost:3001`.
+  - `npm run build` pass toan bo workspace.
+
+### 2026-06-10 - Admin UI redesign va role routing cleanup
+
+- Cai dat lai `apps/web/src/routes/admin/AdminHomePage.tsx` theo huong operations dashboard cho admin la nguoi dieu hanh website:
+  - Lay du lieu that tu `getAdminCatalogData()`.
+  - Hien thong ke events, published, drafts, venues va danh sach event gan day.
+  - Them access state ro rang neu user khong phai `ADMIN`.
+- Cai dat lai `apps/web/src/routes/admin/AdminCatalogPage.tsx` theo UI admin mau trong `fe/src/app/pages/admin` nhung van noi API that:
+  - Bang event dark UI co search, status filter, selected event, publish action.
+  - Form tabs tao event, venue, seat zone, ticket type.
+  - Chi cho `ADMIN` xem workspace `/admin`; organizer/checker/audience thay access state.
+- Sua role routing tren Web:
+  - Login `ADMIN` -> `/admin`.
+  - Login `CHECKER` -> `/checker`.
+  - Login `ORGANIZER` va `AUDIENCE` -> `/`.
+  - Navbar desktop/mobile chi hien admin entry cho `ADMIN`; checker entry rieng cho `CHECKER`.
+- Kiem chung: `npm run build:web` pass. Vite con warning chunk > 500kB sau minify.

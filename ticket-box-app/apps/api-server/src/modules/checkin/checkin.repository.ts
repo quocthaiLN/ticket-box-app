@@ -905,9 +905,7 @@ function asString(value: unknown) {
 
 // Kiểm tra chuỗi có đúng định dạng UUID hay không.
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 // Tạo lỗi API theo chuẩn problem-details của hệ thống.

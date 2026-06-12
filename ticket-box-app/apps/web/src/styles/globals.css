@@ -121,6 +121,46 @@ textarea {
   padding: 10px 12px;
 }
 
+.auth-input-shell,
+.auth-input-shell:hover,
+.auth-input-shell:focus-within {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  transition: none !important;
+}
+
+.auth-input,
+.auth-input:hover,
+.auth-input:focus,
+.auth-input:active {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #f0edeb !important;
+  outline: none !important;
+  transition: none !important;
+}
+
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #f0edeb !important;
+  box-shadow: 0 0 0 1000px #171720 inset !important;
+  caret-color: #f0edeb;
+  transition: background-color 9999s ease-out 0s !important;
+}
+
+.auth-social-button:hover {
+  background: rgba(245, 200, 66, 0.12) !important;
+  border-color: rgba(245, 200, 66, 0.32) !important;
+  color: #f5c842 !important;
+}
+
+.auth-social-button:hover span {
+  background: rgba(245, 200, 66, 0.18) !important;
+}
+
 textarea {
   min-height: 88px;
   resize: vertical;

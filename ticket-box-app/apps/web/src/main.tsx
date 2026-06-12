@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
 import { AdminCatalogPage } from "./routes/admin/AdminCatalogPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
+import { AuthPage } from "./routes/auth/AuthPage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
 import { EventsPage } from "./routes/audience/EventsPage";
@@ -26,6 +27,14 @@ const router = createBrowserRouter([
       {
         path: "concerts/:concertId",
         element: <ConcertDetailPage />
+      },
+      {
+        path: "login",
+        element: <AuthPage mode="login" />
+      },
+      {
+        path: "register",
+        element: <AuthPage mode="register" />
       },
       {
         path: "admin",

@@ -23,6 +23,8 @@ Nếu dùng PostgreSQL local trên port `5432`, có thể giữ cấu hình:
 ```env
 DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5432/ticketbox?schema=public
 UPSTASH_REDIS_URL=redis://localhost:6379
+JWT_SECRET=ticketbox-local-access-secret
+JWT_REFRESH_SECRET=ticketbox-local-refresh-secret
 ```
 
 Nếu dùng database container từ `docker-compose.yml` của repo, PostgreSQL đang được expose ra `localhost:5433`, nên cần dùng:
@@ -30,6 +32,8 @@ Nếu dùng database container từ `docker-compose.yml` của repo, PostgreSQL 
 ```env
 DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5433/ticketbox?schema=public
 UPSTASH_REDIS_URL=redis://localhost:6379
+JWT_SECRET=ticketbox-local-access-secret
+JWT_REFRESH_SECRET=ticketbox-local-refresh-secret
 ```
 
 ## 3. Start database và Redis

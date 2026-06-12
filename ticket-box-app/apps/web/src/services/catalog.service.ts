@@ -3,6 +3,9 @@ import {
   getConcertMetadata,
   getInventory,
   listConcerts,
+  type ConcertDetail,
+  type ConcertMetadata,
+  type Inventory,
 } from "../lib/api-client";
 import {
   mapDetailConcert,
@@ -31,13 +34,42 @@ export async function getEventsCatalog(input: LoadEventsInput = {}): Promise<UiC
 }
 
 export async function getCatalogConcertDetail(concertId: string): Promise<UiConcert> {
-  const [concert, metadata, inventory] = await Promise.all([
-    getConcert(concertId),
-    getConcertMetadata(concertId),
-    getInventory(concertId),
+  const concert = await getConcert(concertId);
+  const [metadataResult, inventoryResult] = await Promise.allSettled([
+    getConcertMetadata(concert.id),
+    getInventory(concert.id),
   ]);
+  const metadata =
+    metadataResult.status === "fulfilled"
+      ? metadataResult.value
+      : emptyMetadata(concert);
+  const inventory =
+    inventoryResult.status === "fulfilled"
+      ? inventoryResult.value
+      : emptyInventory(concert.id);
 
   return mapDetailConcert(concert, metadata, inventory);
+}
+
+function emptyMetadata(concert: ConcertDetail): ConcertMetadata {
+  return {
+    concert,
+    venue: concert.venue,
+    seat_zones: [],
+    ticket_types: [],
+    seat_map: {
+      svg_url: concert.seat_map_url,
+    },
+    artist_bio: concert.artist_bio,
+  };
+}
+
+function emptyInventory(concertId: string): Inventory {
+  return {
+    concert_id: concertId,
+    as_of: new Date().toISOString(),
+    items: [],
+  };
 }
 
 export function getCityFilters(concerts: UiConcert[], allLabel = "All") {
