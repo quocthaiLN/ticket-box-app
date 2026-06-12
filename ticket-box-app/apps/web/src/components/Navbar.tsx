@@ -90,7 +90,7 @@ export function Navbar() {
             {session ? (
               <>
                 <Link
-                  to={session.user.role === "CHECKER" ? "/checker" : session.user.role === "AUDIENCE" ? "/" : "/admin"}
+                  to={profilePathForRole(session.user.role)}
                   className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-[#F0EDEB]"
                 >
                   <User className="h-4 w-4 text-[#F5C842]" />
@@ -134,8 +134,11 @@ export function Navbar() {
           <MobileNavLink to="/events" label="Explore" onClick={() => setMenuOpen(false)} />
           {session ? (
             <>
-              {session.user.role !== "AUDIENCE" && (
+              {session.user.role === "ADMIN" && (
                 <MobileNavLink to="/admin" label="Admin" onClick={() => setMenuOpen(false)} />
+              )}
+              {session.user.role === "CHECKER" && (
+                <MobileNavLink to="/checker" label="Checker" onClick={() => setMenuOpen(false)} />
               )}
               <button
                 type="button"
@@ -155,6 +158,12 @@ export function Navbar() {
       )}
     </nav>
   );
+}
+
+function profilePathForRole(role: AuthSession["user"]["role"]) {
+  if (role === "ADMIN") return "/admin";
+  if (role === "CHECKER") return "/checker";
+  return "/";
 }
 
 function NavItem({

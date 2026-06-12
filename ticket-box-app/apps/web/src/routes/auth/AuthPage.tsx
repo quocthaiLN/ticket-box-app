@@ -363,7 +363,7 @@ function SocialButton({ icon, label }: { icon: string; label: string }) {
 }
 
 function nextPathForUser(user: AuthUser) {
-  if (user.role === "ADMIN" || user.role === "ORGANIZER") return "/admin";
+  if (user.role === "ADMIN") return "/admin";
   if (user.role === "CHECKER") return "/checker";
   return "/";
 }
