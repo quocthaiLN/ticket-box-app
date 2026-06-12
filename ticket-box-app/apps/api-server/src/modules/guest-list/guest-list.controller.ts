@@ -9,6 +9,7 @@ const service = new GuestListService();
 export async function importGuests(req: Request, res: Response, next: NextFunction) {
   try {
     const body = parseGuestImportBody(withRouteConcertId(req.body, req.params.concert_id));
+    body.uploaded_by_user_id = res.locals.auth?.user_id;
     res.status(202).json(ok(await service.importGuests(body), req.requestId));
   } catch (err) {
     next(err);

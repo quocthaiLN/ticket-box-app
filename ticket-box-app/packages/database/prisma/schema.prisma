@@ -110,9 +110,14 @@ enum OfflineBatchStatus {
 enum OfflineItemStatus {
   PENDING
   ACCEPTED
+  SUCCESS
+  ALREADY_CHECKED_IN
   CONFLICT
   INVALID
+  INVALID_TICKET
+  INVALID_GUEST
   WRONG_GATE
+  DUPLICATE_ITEM
   ERROR
 
   @@map("offline_item_status")
@@ -568,6 +573,7 @@ model OfflineCheckinBatch {
 model OfflineCheckinItem {
   id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchId      String            @map("batch_id") @db.Uuid
+  clientItemId String?           @map("client_item_id") @db.VarChar(128)
   ticketId     String?           @map("ticket_id") @db.Uuid
   guestId      String?           @map("guest_id") @db.Uuid
   qrTokenHash  String?           @map("qr_token_hash") @db.VarChar(255)
@@ -588,6 +594,7 @@ model OfflineCheckinItem {
   seatZone SeatZone?           @relation(fields: [seatZoneId], references: [id], onDelete: SetNull)
 
   @@unique([batchId, qrTokenHash])
+  @@unique([batchId, clientItemId])
   @@index([batchId, result])
   @@index([ticketId])
   @@index([guestId])
@@ -604,6 +611,7 @@ model GuestImportJob {
   totalRows    Int          @default(0) @map("total_rows")
   successRows  Int          @default(0) @map("success_rows")
   errorRows    Int          @default(0) @map("error_rows")
+  skippedRows  Int          @default(0) @map("skipped_rows")
   startedAt    DateTime?    @map("started_at")
   completedAt  DateTime?    @map("completed_at")
   errorMessage String?      @map("error_message")

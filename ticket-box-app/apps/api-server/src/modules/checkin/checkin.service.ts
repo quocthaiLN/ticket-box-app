@@ -25,7 +25,7 @@ export class CheckinService {
     return this.repository.getPreloadSnapshot(query);
   }
 
-  // Gọi repository để xử lý batch sync offline dạng scaffold.
+  // Gọi repository để xử lý batch sync offline.
   syncOfflineBatch(input: OfflineSyncRequest) {
     return this.repository.recordOfflineSyncBatch(input);
   }
