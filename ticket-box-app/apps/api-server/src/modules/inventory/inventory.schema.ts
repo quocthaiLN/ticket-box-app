@@ -54,7 +54,11 @@ export const holdSchema = z.object({
       required_error: 'items must be a non-empty array',
       invalid_type_error: 'items must be a non-empty array',
     })
-    .min(1, 'items must be a non-empty array'),
+    .min(1, 'items must be a non-empty array')
+    .refine(
+      (items) => new Set(items.map((i) => i.ticket_type_id)).size === items.length,
+      'items must not contain duplicate ticket_type_id',
+    ),
 });
 
 export const releaseSchema = z.object({

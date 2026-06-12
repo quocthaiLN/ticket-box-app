@@ -10,6 +10,18 @@ import type {
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
+async function withSerializableRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (err?.code === 'P2034' && attempt < maxRetries - 1) continue;
+      throw err;
+    }
+  }
+  throw new Error('unreachable');
+}
+
 type TicketTypeRow = {
   id: string;
   concertId: string;
@@ -79,15 +91,16 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
   const holdExpiresAt = new Date(req.hold_expires_at);
   const now = new Date();
 
-  // Sort outside transaction so we can reference after commit for cache invalidation
+  // Sort để khóa theo thứ tự -> tránh deadlock
   const sortedItems = [...req.items].sort((a, b) =>
     a.ticket_type_id.localeCompare(b.ticket_type_id),
   );
 
-  const result = await prisma.$transaction(
+  const result = await withSerializableRetry(() => prisma.$transaction(
     async (tx) => {
       const ticketTypeIds = sortedItems.map((i) => i.ticket_type_id);
 
+      // Lấy thông tin số lượng, trạng thái của các ticket type
       const ticketTypes = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
       SELECT
         id,
@@ -124,6 +137,7 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
       for (const item of sortedItems) {
         const tt = typeMap.get(item.ticket_type_id)!;
 
+        // Nhầm concert
         if (tt.concertId !== req.concert_id) {
           throw new ApiError({
             title: "TICKET_TYPE_NOT_ON_SALE",
@@ -132,6 +146,7 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
             detail: `Ticket type ${item.ticket_type_id} does not belong to concert`,
           });
         }
+        // Trạng thái không bán
         if (tt.status !== "ON_SALE") {
           throw new ApiError({
             title: "TICKET_TYPE_NOT_ON_SALE",
@@ -140,6 +155,7 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
             detail: `Ticket type ${item.ticket_type_id} is not on sale`,
           });
         }
+        // Không nằm trong thời gian bán
         if (now < tt.saleStartAt || now > tt.saleEndAt) {
           throw new ApiError({
             title: "TICKET_TYPE_NOT_ON_SALE",
@@ -149,7 +165,10 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
           });
         }
 
+        // Tính số lượng vé có thể mua
         const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
+
+        // Không đủ vé thì quăng lỗi hết vé
         if (available < item.quantity) {
           throw new ApiError({
             title: "TICKET_SOLD_OUT",
@@ -161,13 +180,16 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
       }
 
       // Lock user counters and enforce per-user limits
+
       for (const item of sortedItems) {
+        // Tạo user_ticket_type_counters với held_quantity, paid_quantity đều là 0, phục vụ FOR UPDATE
         await tx.$executeRaw(Prisma.sql`
         INSERT INTO user_ticket_type_counters (user_id, ticket_type_id, held_quantity, paid_quantity)
         VALUES (${req.user_id}::uuid, ${item.ticket_type_id}::uuid, 0, 0)
         ON CONFLICT (user_id, ticket_type_id) DO NOTHING
       `);
 
+        // Tương tự như trên phục vụ FOR UPDATE
         const [counter] = await tx.$queryRaw<UserCounterRow[]>(Prisma.sql`
         SELECT held_quantity AS "heldQuantity", paid_quantity AS "paidQuantity"
         FROM user_ticket_type_counters
@@ -175,6 +197,7 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
         FOR UPDATE
       `);
 
+        // Kiểm tra MAX PER USER
         const tt = typeMap.get(item.ticket_type_id)!;
         if (
           counter.heldQuantity + counter.paidQuantity + item.quantity >
@@ -199,17 +222,30 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
       }
 
       // Create order
-      const order = await tx.order.create({
-        data: {
-          userId: req.user_id,
-          concertId: req.concert_id,
-          idempotencyKey,
-          status: OrderStatus.HELD,
-          holdExpiresAt,
-          totalAmount,
-          currency: typeMap.values().next().value!.currency,
-        },
-      });
+      let order: Awaited<ReturnType<typeof tx.order.create>>;
+      try {
+        order = await tx.order.create({
+          data: {
+            userId: req.user_id,
+            concertId: req.concert_id,
+            idempotencyKey,
+            status: OrderStatus.HELD,
+            holdExpiresAt,
+            totalAmount,
+            currency: typeMap.values().next().value!.currency,
+          },
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002' && err?.meta?.target?.includes('idempotency_key')) {
+          throw new ApiError({
+            title: 'DUPLICATE_REQUEST',
+            status: 409,
+            code: 'DUPLICATE_REQUEST',
+            detail: 'A request with this Idempotency-Key already exists.',
+          });
+        }
+        throw err;
+      }
 
       const itemResults: Array<{
         ticket_type_id: string;
@@ -230,12 +266,15 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
           },
         });
 
+
+        // Cập nhật database
         await tx.$executeRaw(Prisma.sql`
         UPDATE ticket_types
         SET held_quantity = held_quantity + ${item.quantity}
         WHERE id = ${item.ticket_type_id}::uuid
       `);
 
+        // Cập nhật database
         await tx.$executeRaw(Prisma.sql`
         UPDATE user_ticket_type_counters
         SET held_quantity = held_quantity + ${item.quantity}
@@ -254,8 +293,9 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
       return { order, itemResults };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  ));
 
+  // Cập nhật lại cache
   await Promise.allSettled(
     sortedItems.map((item) =>
       cacheDelete(inventoryCacheKey(item.ticket_type_id)),
