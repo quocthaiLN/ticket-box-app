@@ -1,3 +1,5 @@
+import { getAccessToken } from "./auth-session";
+
 export type ApiResponse<TData> = {
   data: TData;
   meta: {
@@ -223,17 +225,25 @@ async function apiRequest<TData>(
   path: string,
   init: RequestInit,
 ): Promise<TData> {
+  const token = getAccessToken();
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...init.headers,
-    },
+    credentials: init.credentials ?? "same-origin",
+    headers,
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `TicketBox API request failed: ${response.status}`);
+    throw new Error(await errorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return undefined as TData;
   }
 
   return response.json() as Promise<TData>;
@@ -262,4 +272,23 @@ function queryString(params: Record<string, string>) {
   }
   const text = search.toString();
   return text ? `?${text}` : "";
+}
+
+async function errorMessage(response: Response) {
+  const fallback = `TicketBox API request failed: ${response.status}`;
+  const text = await response.text();
+  if (!text) return fallback;
+
+  try {
+    const problem = JSON.parse(text) as {
+      detail?: string;
+      title?: string;
+      errors?: Array<{ field?: string; message?: string }>;
+    };
+    const firstFieldError = problem.errors?.find((item) => item.message);
+    if (firstFieldError?.message) return firstFieldError.message;
+    return problem.detail ?? problem.title ?? fallback;
+  } catch {
+    return text;
+  }
 }

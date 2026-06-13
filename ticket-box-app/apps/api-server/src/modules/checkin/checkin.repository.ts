@@ -28,7 +28,7 @@ import type {
   UpdateDeviceRequest,
   UpdateGateRequest,
 } from "./checkin.types.js";
-import { buildScaffoldOfflineSyncResponse } from "./checkin.sync.js";
+import { processOfflineSyncBatch } from "./checkin.sync.js";
 import { ApiError } from "../../shared/http/problem-details.js";
 
 type DeviceContext = {
@@ -278,10 +278,8 @@ export class CheckinRepository {
       })),
       offline: {
         qr_signature_supported: true,
-        full_offline_sync_ready: false,
-        notes: [
-          "Sprint 3 supports online scan demo; batch conflict sync remains Sprint 4 scope.",
-        ],
+        full_offline_sync_ready: true,
+        notes: ["Sprint 4 offline batch sync is enabled."],
       },
     };
   }
@@ -554,11 +552,11 @@ export class CheckinRepository {
     return toMappingDto(existing);
   }
 
-  // Trả response scaffold cho sync offline item, phần xử lý chi tiết để Sprint sau.
+  // Xử lý batch sync offline và trả kết quả từng item.
   async recordOfflineSyncBatch(
     input: OfflineSyncRequest,
   ): Promise<OfflineSyncResponse> {
-    return buildScaffoldOfflineSyncResponse(input);
+    return processOfflineSyncBatch(input);
   }
 
   // Tạo batch sync offline idempotent theo batch token.
@@ -580,11 +578,7 @@ export class CheckinRepository {
         concert_id: existing.concertId,
         device_id: existing.deviceId,
         gate_id: existing.gateId,
-        status: "scaffolded",
-        placeholders: {
-          idempotency_by_batch_id: "pending_sprint_2",
-          item_sync: "pending_sprint_2",
-        },
+        status: existing.status,
       };
     }
 
@@ -603,11 +597,7 @@ export class CheckinRepository {
       concert_id: batch.concertId,
       device_id: batch.deviceId,
       gate_id: batch.gateId,
-      status: "scaffolded",
-      placeholders: {
-        idempotency_by_batch_id: "pending_sprint_2",
-        item_sync: "pending_sprint_2",
-      },
+      status: batch.status,
     };
   }
 
@@ -915,9 +905,7 @@ function asString(value: unknown) {
 
 // Kiểm tra chuỗi có đúng định dạng UUID hay không.
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 // Tạo lỗi API theo chuẩn problem-details của hệ thống.

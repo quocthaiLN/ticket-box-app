@@ -1,4 +1,5 @@
 import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma } from "@ticketbox/database";
+import { enqueueGuestImport } from "@ticketbox/queue";
 import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   GuestImportRequest,
@@ -26,19 +27,91 @@ type DeviceContext = {
 };
 
 export class GuestListRepository {
-  // Tạo job import guest dạng scaffold, phần CSV thật để Sprint sau xử lý.
+  // Tạo job import guest và đẩy CSV sang worker xử lý nền.
   async createImportJob(input: GuestImportRequest): Promise<GuestImportResponse> {
-    return {
-      job_id: `guest_import_stub:${input.concert_id}`,
-      concert_id: input.concert_id,
-      status: "scaffolded",
-      dry_run: input.dry_run,
-      placeholders: {
-        csv_parser: "pending_sprint_2",
-        import_worker: "pending_sprint_2",
-        row_validation: "pending_sprint_2"
+    const fileUrl = input.file_url ?? input.file_object_key;
+
+    if (!fileUrl) {
+      throw new ApiError({
+        title: "INVALID_CSV",
+        status: 400,
+        code: "INVALID_CSV",
+        detail: "file_object_key or file_url is required to create a guest import job."
+      });
+    }
+
+    if (!input.uploaded_by_user_id) {
+      throw new ApiError({
+        title: "UNAUTHORIZED",
+        status: 401,
+        code: "UNAUTHORIZED",
+        detail: "Authenticated user is required to create a guest import job."
+      });
+    }
+
+    await this.assertConcertExists(input.concert_id);
+
+    const importJob = await prisma.guestImportJob.create({
+      data: {
+        concertId: input.concert_id,
+        uploadedById: input.uploaded_by_user_id,
+        fileUrl,
+        status: "PENDING"
       }
-    };
+    });
+
+    try {
+      const queueJobId = await enqueueGuestImport({
+        job_id: importJob.id,
+        concert_id: input.concert_id,
+        csv_object_key: fileUrl,
+        uploaded_by_user_id: input.uploaded_by_user_id
+      });
+
+      return {
+        job_id: importJob.id,
+        concert_id: input.concert_id,
+        status: "PENDING",
+        file_url: fileUrl,
+        queue_job_id: queueJobId,
+        dry_run: input.dry_run
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.guestImportJob.update({
+        where: { id: importJob.id },
+        data: {
+          status: "FAILED",
+          errorMessage: `Failed to enqueue guest import job: ${message}`,
+          completedAt: new Date()
+        }
+      });
+
+      return {
+        job_id: importJob.id,
+        concert_id: input.concert_id,
+        status: "FAILED",
+        file_url: fileUrl,
+        dry_run: input.dry_run,
+        error_message: message
+      };
+    }
+  }
+
+  private async assertConcertExists(concertId: string) {
+    const concert = await prisma.concert.findUnique({
+      where: { id: concertId },
+      select: { id: true }
+    });
+
+    if (!concert) {
+      throw new ApiError({
+        title: "CONCERT_NOT_FOUND",
+        status: 404,
+        code: "CONCERT_NOT_FOUND",
+        detail: "Concert was not found."
+      });
+    }
   }
 
   // Tìm guest theo tên/số điện thoại và lọc theo zone được gate cho phép.
@@ -298,5 +371,5 @@ function maskPhone(phone: string) {
 
 // Kiểm tra chuỗi có đúng định dạng UUID hay không.
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }

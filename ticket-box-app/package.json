@@ -14,6 +14,7 @@
     "dev:api": "npm run dev -w @ticketbox/api-server",
     "dev:web": "npm run dev -w @ticketbox/web",
     "dev:worker": "npm run dev -w @ticketbox/worker-server",
+    "dev:mock-payments": "npm run dev -w @ticketbox/payment-mocks",
     "build:api": "npm run build -w @ticketbox/api-server",
     "build:web": "npm run build -w @ticketbox/web",
     "build:worker": "npm run build -w @ticketbox/worker-server",

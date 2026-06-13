@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import type { ReleaseReason } from './inventory.constants.js';
 
 declare global {
   namespace Express {
@@ -22,7 +23,7 @@ export interface HoldRequest {
 
 export interface ReleaseRequest {
   order_id: string;
-  reason: string;
+  reason: ReleaseReason;
 }
 
 export interface PaymentConfirmationRequest {

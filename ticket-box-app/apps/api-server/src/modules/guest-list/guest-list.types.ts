@@ -1,8 +1,10 @@
 export type GuestImportRequest = {
   concert_id: string;
   file_object_key?: string;
+  file_url?: string;
   default_zone_id?: string;
   dry_run: boolean;
+  uploaded_by_user_id?: string;
 };
 
 export type GuestSearchQuery = {
@@ -31,13 +33,11 @@ export type GuestListPlaceholderState = "pending_sprint_2";
 export type GuestImportResponse = {
   job_id: string;
   concert_id: string;
-  status: "scaffolded";
+  status: "PENDING" | "FAILED";
+  file_url: string;
+  queue_job_id?: string;
   dry_run: boolean;
-  placeholders: {
-    csv_parser: GuestListPlaceholderState;
-    import_worker: GuestListPlaceholderState;
-    row_validation: GuestListPlaceholderState;
-  };
+  error_message?: string;
 };
 
 export type GuestSummary = {

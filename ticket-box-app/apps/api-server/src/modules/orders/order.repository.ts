@@ -4,6 +4,9 @@ import {
   OrderStatus,
   PaymentStatus,
   PaymentProvider,
+  createHeldOrder,
+  releaseHeldOrder,
+  InventoryReservationError,
 } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
 import { ApiError } from "../../shared/http/problem-details.js";
@@ -14,27 +17,6 @@ import type {
 } from "./order.type.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
-
-type TicketTypeRow = {
-  id: string;
-  concertId: string;
-  seatZoneId: string;
-  name: string;
-  totalQuantity: number;
-  heldQuantity: number;
-  soldQuantity: number;
-  maxPerUser: number;
-  price: string;
-  currency: string;
-  saleStartAt: Date;
-  saleEndAt: Date;
-  status: string;
-};
-
-type UserCounterRow = {
-  heldQuantity: number;
-  paidQuantity: number;
-};
 
 type OrderItemRow = {
   id: string;
@@ -117,233 +99,100 @@ export type OrderWithDetails = {
   tickets: TicketRow[];
 };
 
+// Map typed InventoryReservationError (từ createHeldOrder) sang ApiError của
+// module orders. Lỗi khác (kể cả P2002 idempotency) propagate nguyên vẹn để
+// service createOrder xử lý replay.
+function mapReservationErrorToApi(err: unknown): unknown {
+  if (!(err instanceof InventoryReservationError)) return err;
+  switch (err.code) {
+    case "TICKET_TYPE_NOT_FOUND":
+      return new ApiError({
+        title: "TICKET_TYPE_NOT_FOUND",
+        status: 404,
+        code: "TICKET_TYPE_NOT_FOUND",
+        detail: err.message,
+      });
+    case "TICKET_TYPE_NOT_ON_SALE":
+    case "SALE_WINDOW_CLOSED":
+      return new ApiError({
+        title: "TICKET_TYPE_NOT_ON_SALE",
+        status: 422,
+        code: "TICKET_TYPE_NOT_ON_SALE",
+        detail: err.message,
+      });
+    case "INSUFFICIENT_INVENTORY":
+      return new ApiError({
+        title: "TICKET_SOLD_OUT",
+        status: 409,
+        code: "TICKET_SOLD_OUT",
+        detail: err.message,
+      });
+    case "MAX_PER_USER_EXCEEDED":
+      return new ApiError({
+        title: "PER_USER_LIMIT_EXCEEDED",
+        status: 409,
+        code: "PER_USER_LIMIT_EXCEEDED",
+        detail: err.message,
+      });
+    default:
+      // INVALID_QUANTITY / DUPLICATE_ITEMS / INVALID_EXPIRATION — thường đã bị
+      // Zod chặn trước; map phòng thủ.
+      return new ApiError({
+        title: "VALIDATION_ERROR",
+        status: 422,
+        code: "VALIDATION_ERROR",
+        detail: err.message,
+      });
+  }
+}
+
+// Wrapper mỏng quanh nguồn sự thật createHeldOrder (@ticketbox/database).
+// Chính sách hold của orders: server tự đặt hạn giữ 15 phút.
 export async function createOrderHeld(
   userId: string,
   req: CreateOrderRequest,
   idempotencyKey: string,
 ): Promise<CreateOrderResult> {
-  const sortedItems = [...req.items].sort((a, b) =>
-    a.ticket_type_id.localeCompare(b.ticket_type_id),
-  );
-
-  const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  const now = new Date();
-
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const ticketTypeIds = sortedItems.map((i) => i.ticket_type_id);
-
-      const ticketTypes = await tx.$queryRaw<TicketTypeRow[]>(Prisma.sql`
-      SELECT
-        id,
-        concert_id AS "concertId",
-        seat_zone_id AS "seatZoneId",
-        name,
-        total_quantity AS "totalQuantity",
-        held_quantity AS "heldQuantity",
-        sold_quantity AS "soldQuantity",
-        max_per_user AS "maxPerUser",
-        price::text AS "price",
-        currency,
-        sale_start_at AS "saleStartAt",
-        sale_end_at AS "saleEndAt",
-        status::text AS "status"
-      FROM ticket_types
-      WHERE id = ANY(${ticketTypeIds}::uuid[])
-      ORDER BY id
-      FOR UPDATE
-    `);
-
-      if (ticketTypes.length !== ticketTypeIds.length) {
-        throw new ApiError({
-          title: "TICKET_TYPE_NOT_FOUND",
-          status: 404,
-          code: "TICKET_TYPE_NOT_FOUND",
-          detail: "One or more ticket types not found",
-        });
-      }
-
-      const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
-
-      for (const item of sortedItems) {
-        const tt = typeMap.get(item.ticket_type_id);
-        if (!tt) {
-          throw new ApiError({
-            title: "TICKET_TYPE_NOT_FOUND",
-            status: 404,
-            code: "TICKET_TYPE_NOT_FOUND",
-            detail: `Ticket type ${item.ticket_type_id} not found`,
-          });
-        }
-
-        if (tt.concertId !== req.concert_id) {
-          throw new ApiError({
-            title: "TICKET_TYPE_NOT_ON_SALE",
-            status: 422,
-            code: "TICKET_TYPE_NOT_ON_SALE",
-            detail: `Ticket type ${item.ticket_type_id} does not belong to concert ${req.concert_id}`,
-          });
-        }
-
-        if (tt.status !== "ON_SALE") {
-          throw new ApiError({
-            title: "TICKET_TYPE_NOT_ON_SALE",
-            status: 422,
-            code: "TICKET_TYPE_NOT_ON_SALE",
-            detail: `Ticket type ${item.ticket_type_id} is not on sale`,
-          });
-        }
-
-        if (now < tt.saleStartAt || now > tt.saleEndAt) {
-          throw new ApiError({
-            title: "TICKET_TYPE_NOT_ON_SALE",
-            status: 422,
-            code: "TICKET_TYPE_NOT_ON_SALE",
-            detail: `Ticket type ${item.ticket_type_id} is outside the sale window`,
-          });
-        }
-
-        const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
-        if (available < item.quantity) {
-          throw new ApiError({
-            title: "TICKET_SOLD_OUT",
-            status: 409,
-            code: "TICKET_SOLD_OUT",
-            detail: `Not enough available tickets for type ${item.ticket_type_id}`,
-          });
-        }
-      }
-
-      // Lock user counters and enforce per-user limits
-      for (const item of sortedItems) {
-        await tx.$executeRaw(Prisma.sql`
-        INSERT INTO user_ticket_type_counters (user_id, ticket_type_id, held_quantity, paid_quantity)
-        VALUES (${userId}::uuid, ${item.ticket_type_id}::uuid, 0, 0)
-        ON CONFLICT (user_id, ticket_type_id) DO NOTHING
-      `);
-
-        const [counter] = await tx.$queryRaw<UserCounterRow[]>(Prisma.sql`
-        SELECT held_quantity AS "heldQuantity", paid_quantity AS "paidQuantity"
-        FROM user_ticket_type_counters
-        WHERE user_id = ${userId}::uuid AND ticket_type_id = ${item.ticket_type_id}::uuid
-        FOR UPDATE
-      `);
-
-        if (!counter) {
-          throw new ApiError({
-            title: "INVENTORY_ERROR",
-            status: 500,
-            code: "INVENTORY_ERROR",
-            detail: `Could not lock user counter for ticket type ${item.ticket_type_id}`,
-          });
-        }
-        const tt = typeMap.get(item.ticket_type_id)!;
-        if (
-          counter.heldQuantity + counter.paidQuantity + item.quantity >
-          tt.maxPerUser
-        ) {
-          throw new ApiError({
-            title: "PER_USER_LIMIT_EXCEEDED",
-            status: 422,
-            code: "PER_USER_LIMIT_EXCEEDED",
-            detail: `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
-          });
-        }
-      }
-
-      // Calculate total amount
-      let totalAmount = new Prisma.Decimal(0);
-      for (const item of sortedItems) {
-        const tt = typeMap.get(item.ticket_type_id)!;
-        totalAmount = totalAmount.plus(
-          new Prisma.Decimal(tt.price).times(item.quantity),
-        );
-      }
-
-      const currency = typeMap.get(sortedItems[0].ticket_type_id)!.currency;
-
-      // Create order
-      const order = await tx.order.create({
-        data: {
-          userId,
-          concertId: req.concert_id,
-          idempotencyKey,
-          status: OrderStatus.HELD,
-          holdExpiresAt,
-          totalAmount,
-          currency,
-        },
-      });
-
-      const createdItems: Array<{
-        id: string;
-        ticketTypeId: string;
-        quantity: number;
-        unitPrice: string;
-        lineTotal: string;
-      }> = [];
-
-      for (const item of sortedItems) {
-        const tt = typeMap.get(item.ticket_type_id)!;
-        const unitPrice = new Prisma.Decimal(tt.price);
-        const lineTotal = unitPrice.times(item.quantity);
-
-        const orderItem = await tx.orderItem.create({
-          data: {
-            orderId: order.id,
-            ticketTypeId: item.ticket_type_id,
-            quantity: item.quantity,
-            unitPrice,
-            lineTotal,
-          },
-        });
-
-        createdItems.push({
-          id: orderItem.id,
-          ticketTypeId: item.ticket_type_id,
-          quantity: item.quantity,
-          unitPrice: unitPrice.toString(),
-          lineTotal: lineTotal.toString(),
-        });
-
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE ticket_types
-        SET held_quantity = held_quantity + ${item.quantity}
-        WHERE id = ${item.ticket_type_id}::uuid
-      `);
-
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE user_ticket_type_counters
-        SET held_quantity = held_quantity + ${item.quantity}
-        WHERE user_id = ${userId}::uuid AND ticket_type_id = ${item.ticket_type_id}::uuid
-      `);
-      }
-
-      return {
-        order: {
-          id: order.id,
-          userId: order.userId,
-          concertId: order.concertId,
-          status: order.status,
-          totalAmount: order.totalAmount.toString(),
-          currency: order.currency,
-          holdExpiresAt: order.holdExpiresAt!,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-        },
-        items: createdItems,
-      };
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  let result;
+  try {
+    result = await createHeldOrder({
+      userId,
+      concertId: req.concert_id,
+      items: req.items.map((i) => ({
+        ticketTypeId: i.ticket_type_id,
+        quantity: i.quantity,
+      })),
+      holdExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      idempotencyKey,
+    });
+  } catch (err) {
+    throw mapReservationErrorToApi(err);
+  }
 
   await Promise.allSettled(
-    sortedItems.map((item) =>
-      cacheDelete(inventoryCacheKey(item.ticket_type_id)),
-    ),
+    result.items.map((i) => cacheDelete(inventoryCacheKey(i.ticketTypeId))),
   );
 
-  return result;
+  return {
+    order: {
+      id: result.orderId,
+      userId: result.userId,
+      concertId: result.concertId,
+      status: result.status,
+      totalAmount: result.totalAmount,
+      currency: result.currency,
+      holdExpiresAt: result.holdExpiresAt,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+    },
+    items: result.items.map((i) => ({
+      id: i.orderItemId,
+      ticketTypeId: i.ticketTypeId,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      lineTotal: i.lineTotal,
+    })),
+  };
 }
 
 export async function createPaymentRecord(
@@ -472,6 +321,8 @@ export async function getOrderByIdempotencyKey(
   return row ?? null;
 }
 
+// Wrapper mỏng quanh releaseHeldOrder. Ownership check chạy nguyên tử trong
+// transaction qua callback authorize; not-held -> 409 ORDER_ALREADY_FINALIZED.
 export async function cancelOrderById(
   orderId: string,
   userId: string,
@@ -481,45 +332,11 @@ export async function cancelOrderById(
   cancelledAt: Date;
   releasedItems: Array<{ ticket_type_id: string; quantity: number }>;
 }> {
-  type OrderItemsRow = {
-    orderId: string;
-    userId: string;
-    orderStatus: string;
-    itemId: string;
-    ticketTypeId: string;
-    quantity: number;
-  };
-
-  let releasedTicketTypeIds: string[] = [];
-
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
-      SELECT
-        o.id AS "orderId",
-        o.user_id AS "userId",
-        o.status::text AS "orderStatus",
-        oi.id AS "itemId",
-        oi.ticket_type_id AS "ticketTypeId",
-        oi.quantity
-      FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
-      WHERE o.id = ${orderId}::uuid
-      FOR UPDATE OF o
-    `);
-
-      if (rows.length === 0) {
-        throw new ApiError({
-          title: "ORDER_NOT_FOUND",
-          status: 404,
-          code: "ORDER_NOT_FOUND",
-          detail: "Order not found",
-        });
-      }
-
-      const { orderStatus, userId: orderUserId } = rows[0];
-
-      if (orderUserId !== userId) {
+  const result = await releaseHeldOrder({
+    orderId,
+    reason: "USER_CANCELLED",
+    authorize: (order) => {
+      if (order.userId !== userId) {
         throw new ApiError({
           title: "ORDER_ACCESS_DENIED",
           status: 403,
@@ -527,172 +344,75 @@ export async function cancelOrderById(
           detail: "Access denied to this order",
         });
       }
-
-      if (orderStatus !== OrderStatus.HELD) {
-        throw new ApiError({
-          title: "ORDER_ALREADY_FINALIZED",
-          status: 409,
-          code: "ORDER_ALREADY_FINALIZED",
-          detail: `Order is in status ${orderStatus} and cannot be cancelled`,
-        });
-      }
-
-      const now = new Date();
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: OrderStatus.CANCELLED,
-          cancelledAt: now,
-          cancelledReason: "USER_CANCELLED",
-        },
-      });
-
-      const releasedItems: Array<{ ticket_type_id: string; quantity: number }> =
-        [];
-
-      for (const row of rows) {
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE ticket_types
-        SET held_quantity = GREATEST(0, held_quantity - ${row.quantity})
-        WHERE id = ${row.ticketTypeId}::uuid
-      `);
-
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE user_ticket_type_counters utc
-        SET held_quantity = GREATEST(0, utc.held_quantity - ${row.quantity})
-        FROM orders o
-        WHERE o.id = ${orderId}::uuid
-          AND utc.user_id = o.user_id
-          AND utc.ticket_type_id = ${row.ticketTypeId}::uuid
-      `);
-
-        releasedItems.push({
-          ticket_type_id: row.ticketTypeId,
-          quantity: row.quantity,
-        });
-      }
-
-      releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
-
-      return {
-        orderId,
-        status: OrderStatus.CANCELLED,
-        cancelledAt: now,
-        releasedItems,
-      };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  });
+
+  if (result.outcome === "NOT_FOUND") {
+    throw new ApiError({
+      title: "ORDER_NOT_FOUND",
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      detail: "Order not found",
+    });
+  }
+  if (result.outcome === "NOT_HELD") {
+    throw new ApiError({
+      title: "ORDER_ALREADY_FINALIZED",
+      status: 409,
+      code: "ORDER_ALREADY_FINALIZED",
+      detail: `Order is in status ${result.status} and cannot be cancelled`,
+    });
+  }
+
+  const releasedItems = result.releasedItems.map((i) => ({
+    ticket_type_id: i.ticketTypeId,
+    quantity: i.quantity,
+  }));
 
   await Promise.allSettled(
-    releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
+    releasedItems.map((i) => cacheDelete(inventoryCacheKey(i.ticket_type_id))),
   );
 
-  return result;
+  return {
+    orderId: result.orderId,
+    status: result.status,
+    cancelledAt: result.timestamp!,
+    releasedItems,
+  };
 }
 
+// Wrapper mỏng quanh releaseHeldOrder. not-held -> idempotent (trả trạng thái
+// hiện tại, không lỗi); chỉ not-found mới ném 404.
 export async function expireOrderById(orderId: string): Promise<{
   orderId: string;
   status: string;
   releasedItems: Array<{ ticket_type_id: string; quantity: number }>;
 }> {
-  type OrderItemsRow = {
-    orderId: string;
-    orderStatus: string;
-    itemId: string;
-    ticketTypeId: string;
-    quantity: number;
-  };
+  const result = await releaseHeldOrder({ orderId, reason: "HOLD_EXPIRED" });
 
-  let releasedTicketTypeIds: string[] = [];
+  if (result.outcome === "NOT_FOUND") {
+    throw new ApiError({
+      title: "ORDER_NOT_FOUND",
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      detail: "Order not found",
+    });
+  }
 
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const rows = await tx.$queryRaw<OrderItemsRow[]>(Prisma.sql`
-      SELECT
-        o.id AS "orderId",
-        o.status::text AS "orderStatus",
-        oi.id AS "itemId",
-        oi.ticket_type_id AS "ticketTypeId",
-        oi.quantity
-      FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
-      WHERE o.id = ${orderId}::uuid
-      FOR UPDATE OF o
-    `);
-
-      if (rows.length === 0) {
-        throw new ApiError({
-          title: "ORDER_NOT_FOUND",
-          status: 404,
-          code: "ORDER_NOT_FOUND",
-          detail: "Order not found",
-        });
-      }
-
-      const { orderStatus } = rows[0];
-
-      // Idempotent: already expired/cancelled/confirmed
-      if (orderStatus !== OrderStatus.HELD) {
-        return {
-          orderId,
-          status: orderStatus,
-          releasedItems: [],
-        };
-      }
-
-      const now = new Date();
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: OrderStatus.EXPIRED,
-          expiredAt: now,
-        },
-      });
-
-      const releasedItems: Array<{ ticket_type_id: string; quantity: number }> =
-        [];
-
-      for (const row of rows) {
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE ticket_types
-        SET held_quantity = GREATEST(0, held_quantity - ${row.quantity})
-        WHERE id = ${row.ticketTypeId}::uuid
-      `);
-
-        await tx.$executeRaw(Prisma.sql`
-        UPDATE user_ticket_type_counters utc
-        SET held_quantity = GREATEST(0, utc.held_quantity - ${row.quantity})
-        FROM orders o
-        WHERE o.id = ${orderId}::uuid
-          AND utc.user_id = o.user_id
-          AND utc.ticket_type_id = ${row.ticketTypeId}::uuid
-      `);
-
-        releasedItems.push({
-          ticket_type_id: row.ticketTypeId,
-          quantity: row.quantity,
-        });
-      }
-
-      releasedTicketTypeIds = releasedItems.map((i) => i.ticket_type_id);
-
-      return {
-        orderId,
-        status: OrderStatus.EXPIRED,
-        releasedItems,
-      };
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  const releasedItems = result.releasedItems.map((i) => ({
+    ticket_type_id: i.ticketTypeId,
+    quantity: i.quantity,
+  }));
 
   await Promise.allSettled(
-    releasedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
+    releasedItems.map((i) => cacheDelete(inventoryCacheKey(i.ticket_type_id))),
   );
 
-  return result;
+  return {
+    orderId: result.orderId,
+    status: result.status,
+    releasedItems,
+  };
 }
 
 export async function findAdminOrders(query: AdminOrdersQuery): Promise<{

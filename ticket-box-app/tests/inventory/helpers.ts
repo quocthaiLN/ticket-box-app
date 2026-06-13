@@ -1,5 +1,6 @@
 import { PrismaClient, TicketTypeStatus, ConcertStatus } from '@prisma/client';
 import type { HoldRequest, ReleaseRequest } from '../../apps/api-server/src/modules/inventory/inventory.type.js';
+import type { ReleaseReason } from '../../apps/api-server/src/modules/inventory/inventory.constants.js';
 import type { Role } from '../../apps/api-server/src/shared/guards/role.guard.js';
 
 // Singleton for test fixtures (separate from the app's prisma singleton)
@@ -110,7 +111,7 @@ export function makeHoldRequest(
   };
 }
 
-export function makeReleaseRequest(orderId: string, reason = 'USER_CANCELLED'): ReleaseRequest {
+export function makeReleaseRequest(orderId: string, reason: ReleaseReason = 'USER_CANCELLED'): ReleaseRequest {
   return { order_id: orderId, reason };
 }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RELEASE_REASONS } from './inventory.constants.js';
 
 const holdItemSchema = z.object({
   ticket_type_id: z
@@ -68,12 +69,10 @@ export const releaseSchema = z.object({
       invalid_type_error: 'order_id is required',
     })
     .min(1, 'order_id is required'),
-  reason: z
-    .string({
-      required_error: 'reason is required',
-      invalid_type_error: 'reason is required',
-    })
-    .min(1, 'reason is required'),
+  reason: z.enum(RELEASE_REASONS, {
+    required_error: 'reason is required',
+    invalid_type_error: `reason must be one of: ${RELEASE_REASONS.join(', ')}`,
+  }),
 });
 
 export const paymentConfirmationSchema = z.object({

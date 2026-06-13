@@ -181,5 +181,3 @@ Khi mở context mới:
 5. Nếu sửa code trong `ticket-box-app/`, bám theo cấu trúc hiện có; không tự ý đổi stack hoặc refactor rộng khi không cần.
 6. Sau mỗi thay đổi đáng kể, cập nhật `WORKFLOW.md` nếu có quyết định mới, thay đổi phạm vi, hoặc phát hiện ràng buộc quan trọng.
 7. Khi cài đặt thêm kiến thức, module, pattern hoặc dependency mới trong `apps/api-server`, `apps/web`, `packages/database`, `packages/storage`, phải cập nhật `description.md` tương ứng trong folder đó. Mỗi file `description.md` là sổ tay sống của folder: vai trò, hiện trạng, cách đọc, quy ước cần giữ, nguồn học thêm và ghi chú cần update ở sprint sau.
-
-## 11. Trạng thái ghi nhận hiện tại
