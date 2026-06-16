@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import { requireRole } from "../../shared/guards/role.guard.js";
 import { collection, ok } from "../../shared/http/response.js";
-import { ApiError, Errors } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { notificationsService } from "./notifications.service.js";
 import {
   AdminNotificationsQuerySchema,
@@ -60,14 +60,7 @@ notificationsRouter.get(
         req.params.notification_id,
       );
       if (!notification) {
-        next(
-          new ApiError({
-            title: "Notification not found",
-            status: 404,
-            code: "NOTIFICATION_NOT_FOUND",
-            detail: `Notification ${req.params.notification_id} not found.`,
-          }),
-        );
+        next(Errors.notificationNotFound(req.params.notification_id));
         return;
       }
       res.json(ok(notification, req.requestId));
@@ -87,28 +80,12 @@ notificationsRouter.post(
         req.params.notification_id,
       );
       if (!existing) {
-        next(
-          new ApiError({
-            title: "Notification not found",
-            status: 404,
-            code: "NOTIFICATION_NOT_FOUND",
-            detail: `Notification ${req.params.notification_id} not found.`,
-          }),
-        );
+        next(Errors.notificationNotFound(req.params.notification_id));
         return;
       }
 
       if (existing.status !== "FAILED") {
-        next(
-          new ApiError({
-            title: "Notification not retryable",
-            status: 409,
-            code: "NOTIFICATION_NOT_RETRYABLE",
-            detail:
-              "Only FAILED notifications can be retried. Current status: " +
-              existing.status,
-          }),
-        );
+        next(Errors.notificationNotRetryable(existing.status));
         return;
       }
 

@@ -1,4 +1,4 @@
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import type {
   GuestImportRequest,
   GuestScanRequest,
@@ -98,12 +98,6 @@ function optionalIsoString(value: unknown, field: string) {
   return parsed;
 }
 
-function validationError(field: string, message: string): ApiError {
-  return new ApiError({
-    title: "Validation error",
-    status: 422,
-    code: "VALIDATION_ERROR",
-    detail: message,
-    errors: [{ field, message }],
-  });
+function validationError(field: string, message: string) {
+  return Errors.fieldValidationError(field, message);
 }

@@ -9,7 +9,7 @@ import {
   getOrderByIdempotencyKey,
   getOrderWithDetails,
 } from "./order.repository.js";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { buildCheckoutUrlWithFallback } from "../payments/payment.service.js";
 import type {
   AdminOrderListResponse,
@@ -186,21 +186,11 @@ export async function getOrder(
   const details = await getOrderWithDetails(orderId);
 
   if (!details) {
-    throw new ApiError({
-      title: "ORDER_NOT_FOUND",
-      status: 404,
-      code: "ORDER_NOT_FOUND",
-      detail: "Order not found",
-    });
+    throw Errors.orderNotFoundById();
   }
 
   if (details.order.userId !== userId) {
-    throw new ApiError({
-      title: "ORDER_ACCESS_DENIED",
-      status: 403,
-      code: "ORDER_ACCESS_DENIED",
-      detail: "Access denied to this order",
-    });
+    throw Errors.orderAccessDenied();
   }
 
   return mapOrderWithDetailsToResponse(details);

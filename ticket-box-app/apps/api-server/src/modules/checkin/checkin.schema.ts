@@ -1,4 +1,4 @@
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import type {
   CheckinPreloadQuery,
   CheckinScanRequest,
@@ -311,13 +311,6 @@ function parseOfflineItemType(value: unknown): "TICKET" | "GUEST" | undefined {
   throw validationError("type", "type must be TICKET or GUEST.");
 }
 
-// Tạo lỗi validation theo chuẩn problem-details.
-function validationError(field: string, message: string): ApiError {
-  return new ApiError({
-    title: "Validation error",
-    status: 422,
-    code: "VALIDATION_ERROR",
-    detail: message,
-    errors: [{ field, message }]
-  });
+function validationError(field: string, message: string) {
+  return Errors.fieldValidationError(field, message);
 }

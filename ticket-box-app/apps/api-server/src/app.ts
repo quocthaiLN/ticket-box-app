@@ -18,6 +18,8 @@ import {
   publicReadRateLimit,
 } from "./shared/middleware/rate-limit.middleware.js";
 import { ok } from "./shared/http/response.js";
+import morgan from "morgan";
+import helmet from "helmet";
 
 export function createApp() {
   const app = express();
@@ -37,6 +39,8 @@ export function createApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use(requestIdMiddleware);
+  app.use(helmet());
+  app.use(morgan("dev"));
 
   // ── Health ──────────────────────────────────────────────────────────────────
   app.get("/health", (_req, res) => {

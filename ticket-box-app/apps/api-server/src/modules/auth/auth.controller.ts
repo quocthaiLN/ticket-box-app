@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ok } from "../../shared/http/response.js";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { authService } from "./auth.service.js";
 import {
   loginSchema,
@@ -28,16 +28,10 @@ export async function handleRegister(
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Request body failed validation.",
-          errors: err.errors.map((e) => ({
-            field: e.path.join("."),
-            message: e.message,
-          })),
-        }),
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+        ),
       );
       return;
     }
@@ -75,16 +69,10 @@ export async function handleLogin(
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Request body failed validation.",
-          errors: err.errors.map((e) => ({
-            field: e.path.join("."),
-            message: e.message,
-          })),
-        }),
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+        ),
       );
       return;
     }
@@ -130,12 +118,7 @@ export async function handleRefresh(
   try {
     const refreshToken: string | undefined = req.cookies?.[REFRESH_COOKIE];
     if (!refreshToken) {
-      throw new ApiError({
-        title: "Unauthorized",
-        status: 401,
-        code: "UNAUTHORIZED",
-        detail: "Refresh token cookie is missing.",
-      });
+      throw Errors.unauthorized("Refresh token cookie is missing.");
     }
     const result = await authService.refresh(refreshToken);
     res.status(200).json(ok(result, req.requestId));
@@ -205,14 +188,7 @@ export async function handleAdminUpdateRole(
       );
   } catch (err) {
     if (err instanceof z.ZodError) {
-      next(
-        new ApiError({
-          title: "Invalid role",
-          status: 422,
-          code: "INVALID_ROLE",
-          detail: "Role must be one of AUDIENCE, ORGANIZER, CHECKER, ADMIN.",
-        }),
-      );
+      next(Errors.invalidRole());
       return;
     }
     next(err);
@@ -248,14 +224,7 @@ export async function handleAdminUpdateStatus(
     );
   } catch (err) {
     if (err instanceof z.ZodError) {
-      next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Status must be ACTIVE, LOCKED, or DISABLED.",
-        }),
-      );
+      next(Errors.validationError("Status must be ACTIVE, LOCKED, or DISABLED."));
       return;
     }
     next(err);

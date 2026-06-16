@@ -15,6 +15,7 @@ import { requireRole } from "../../shared/guards/role.guard.js";
 export const authRouter = Router();
 
 // Public
+authRouter.post("/otp/request");
 authRouter.post("/register", handleRegister);
 authRouter.post("/login", handleLogin);
 authRouter.post("/refresh", handleRefresh);
@@ -24,16 +25,21 @@ authRouter.post("/logout", requireAuth, handleLogout);
 authRouter.get("/me", requireAuth, handleMe);
 
 // Admin-only
-authRouter.get("/admin/users", requireAuth, requireRole("ADMIN"), handleAdminListUsers);
+authRouter.get(
+  "/admin/users",
+  requireAuth,
+  requireRole("ADMIN"),
+  handleAdminListUsers,
+);
 authRouter.patch(
   "/admin/users/:user_id/role",
   requireAuth,
   requireRole("ADMIN"),
-  handleAdminUpdateRole
+  handleAdminUpdateRole,
 );
 authRouter.patch(
   "/admin/users/:user_id/status",
   requireAuth,
   requireRole("ADMIN"),
-  handleAdminUpdateStatus
+  handleAdminUpdateStatus,
 );
