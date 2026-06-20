@@ -18,3 +18,10 @@ export {
   isTokenRevoked,
   type IdempotencyRecord,
 } from "./idempotency.js";
+export {
+  setOtp,
+  getOtp,
+  deleteOtp,
+  checkResendCooldown,
+  setResendCooldown,
+} from "./otp.js";

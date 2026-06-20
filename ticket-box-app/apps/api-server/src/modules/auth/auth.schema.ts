@@ -11,6 +11,10 @@ export const emailSchema = z
   .max(255, "Email is too long")
   .email("Invalid email address");
 
+export const requestOtpSchema = z.object({
+  email: emailSchema,
+});
+
 export const registerSchema = z
   .object({
     email: emailSchema,
@@ -32,6 +36,11 @@ export const registerSchema = z
       .string({ required_error: "Full name is required" })
       .min(1, "Full name is required")
       .max(255, "Full name is too long"),
+
+    otp: z
+      .string({ required_error: "OTP is required" })
+      .length(6, "OTP must be exactly 6 digits")
+      .regex(/^\d{6}$/, "OTP must contain only digits"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -48,6 +57,7 @@ export const updateRoleSchema = z.object({
   role: z.enum(["AUDIENCE", "ORGANIZER", "CHECKER", "ADMIN"] as const),
 });
 
+export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;

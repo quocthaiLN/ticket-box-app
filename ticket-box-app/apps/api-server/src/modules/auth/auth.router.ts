@@ -5,6 +5,7 @@ import {
   handleMe,
   handleRefresh,
   handleRegister,
+  handleRequestOtp,
   handleAdminListUsers,
   handleAdminUpdateRole,
   handleAdminUpdateStatus,
@@ -15,7 +16,7 @@ import { requireRole } from "../../shared/guards/role.guard.js";
 export const authRouter = Router();
 
 // Public
-authRouter.post("/otp/request");
+authRouter.post("/otp/request", handleRequestOtp);
 authRouter.post("/register", handleRegister);
 authRouter.post("/login", handleLogin);
 authRouter.post("/refresh", handleRefresh);

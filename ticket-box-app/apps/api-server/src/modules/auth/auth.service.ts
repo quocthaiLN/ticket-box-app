@@ -17,7 +17,16 @@ import {
   verifyRefreshToken,
   verifyToken,
 } from "./auth.utils.js";
-import { addToDenylist, isTokenRevoked } from "@ticketbox/redis";
+import {
+  addToDenylist,
+  isTokenRevoked,
+  setOtp,
+  getOtp,
+  deleteOtp,
+  checkResendCooldown,
+  setResendCooldown,
+} from "@ticketbox/redis";
+import { sendOtpEmail } from "../../shared/utils/email.js";
 
 function toAuthUser(user: {
   id: string;
@@ -38,7 +47,31 @@ function toAuthUser(user: {
 }
 
 export const authService = {
+  async requestOtp(email: string): Promise<{ message: string }> {
+    const hasCooldown = await checkResendCooldown(email);
+    if (hasCooldown) {
+      throw Errors.otpResendCooldown();
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await setOtp(email, code);
+    await setResendCooldown(email);
+    void sendOtpEmail(email, code).catch((err: unknown) =>
+      console.error("[auth] Failed to send OTP email:", err),
+    );
+
+    return { message: "OTP đã được gửi tới email của bạn." };
+  },
+
   async register(input: RegisterInput): Promise<AuthUser> {
+    const storedCode = await getOtp(input.email);
+    if (!storedCode) {
+      throw Errors.otpExpired();
+    }
+    if (storedCode !== input.otp) {
+      throw Errors.otpInvalid();
+    }
+
     const existing = await authRepository.findByEmail(input.email);
     if (existing) {
       throw Errors.emailAlreadyExists();
@@ -50,6 +83,8 @@ export const authService = {
       passwordHash,
       fullName: input.full_name,
     });
+
+    await deleteOtp(input.email);
 
     return toAuthUser(user);
   },

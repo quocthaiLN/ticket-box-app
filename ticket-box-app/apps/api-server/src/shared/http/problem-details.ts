@@ -72,6 +72,30 @@ export const Errors = {
       detail: "An account with this email already exists.",
     }),
 
+  otpInvalid: () =>
+    new ApiError({
+      title: "Invalid OTP",
+      status: 400,
+      code: "OTP_INVALID",
+      detail: "The OTP code is incorrect.",
+    }),
+
+  otpExpired: () =>
+    new ApiError({
+      title: "OTP expired",
+      status: 400,
+      code: "OTP_EXPIRED",
+      detail: "The OTP code has expired or was not requested. Please request a new OTP.",
+    }),
+
+  otpResendCooldown: () =>
+    new ApiError({
+      title: "OTP resend too soon",
+      status: 429,
+      code: "OTP_RESEND_COOLDOWN",
+      detail: "An OTP was already sent recently. Please wait 60 seconds before requesting again.",
+    }),
+
   invalidRole: () =>
     new ApiError({
       title: "Invalid role",

@@ -5,12 +5,36 @@ import { authService } from "./auth.service.js";
 import {
   loginSchema,
   registerSchema,
+  requestOtpSchema,
   updateRoleSchema,
 } from "./auth.schema.js";
 import { z } from "zod";
 
 const REFRESH_COOKIE = "refresh_token";
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export async function handleRequestOtp(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const body = requestOtpSchema.parse(req.body);
+    const result = await authService.requestOtp(body.email);
+    res.status(200).json(ok(result, req.requestId));
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+        ),
+      );
+      return;
+    }
+    next(err);
+  }
+}
 
 export async function handleRegister(
   req: Request,
@@ -23,6 +47,7 @@ export async function handleRegister(
       email: body.email,
       password: body.password,
       full_name: body.full_name ?? "",
+      otp: body.otp,
     });
     res.status(201).json(ok(user, req.requestId));
   } catch (err) {
