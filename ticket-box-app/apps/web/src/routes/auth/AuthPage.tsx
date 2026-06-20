@@ -3,12 +3,13 @@ import {
   EyeOff,
   Lock,
   Mail,
+  ShieldCheck,
   Ticket,
   User,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login, register } from "../../services/auth.service";
+import { login, register, requestOtp } from "../../services/auth.service";
 import type { AuthUser } from "../../lib/auth-session";
 
 type AuthMode = "login" | "register";
@@ -20,10 +21,36 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     password: "",
     confirmPassword: "",
     fullName: "",
+    otp: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpLoading, setOtpLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setTimeout(() => setOtpCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [otpCooldown]);
+
+  async function handleSendCode() {
+    if (!form.email) {
+      setError("Please enter your email before requesting a code.");
+      return;
+    }
+    setOtpLoading(true);
+    setError("");
+    try {
+      await requestOtp(form.email);
+      setOtpCooldown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send verification code.");
+    } finally {
+      setOtpLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,6 +69,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               password: form.password,
               confirmPassword: form.confirmPassword,
               full_name: form.fullName,
+              otp: form.otp,
             });
 
       navigate(nextPathForUser(user), { replace: true });
@@ -143,6 +171,63 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               onChange={(value) => setForm({ ...form, email: value })}
               autoComplete="email"
             />
+
+            {!isLogin && (
+              <div className="flex gap-2">
+                <div
+                  className="auth-input-shell flex flex-1 items-center gap-2 rounded-xl px-3 py-3"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    minHeight: "46px",
+                  }}
+                >
+                  <span
+                    className="flex shrink-0 items-center justify-center"
+                    style={{ color: "#8585A0", width: "18px", height: "18px" }}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Verification code *"
+                    value={form.otp}
+                    onChange={(e) => setForm({ ...form, otp: e.target.value })}
+                    required
+                    className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+                    style={{
+                      border: 0,
+                      background: "transparent",
+                      color: "#F0EDEB",
+                      fontSize: "0.95rem",
+                      lineHeight: "1.25rem",
+                      padding: 0,
+                      letterSpacing: "0.1em",
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={otpCooldown > 0 || otpLoading}
+                  className="shrink-0 rounded-xl px-4 text-xs font-semibold transition-all hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    background:
+                      otpCooldown > 0
+                        ? "rgba(255,255,255,0.06)"
+                        : "linear-gradient(135deg, #F5C842, #E8A020)",
+                    color: otpCooldown > 0 ? "#8585A0" : "#0D0D14",
+                    border: otpCooldown > 0 ? "1px solid rgba(255,255,255,0.08)" : "none",
+                    minWidth: "88px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {otpLoading ? "Sending..." : otpCooldown > 0 ? `Resend (${otpCooldown}s)` : "Send code"}
+                </button>
+              </div>
+            )}
 
             <PasswordField
               placeholder="Password *"

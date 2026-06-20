@@ -17,7 +17,12 @@ export type LoginInput = {
 export type RegisterInput = LoginInput & {
   full_name: string;
   confirmPassword: string;
+  otp: string;
 };
+
+export async function requestOtp(email: string) {
+  await apiPost<ApiResponse<unknown>>("/auth/otp/request", { email });
+}
 
 type LoginResponse = {
   access_token: string;
