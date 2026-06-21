@@ -2,7 +2,7 @@
 
 Tài liệu này là **bản đồ route → role chuẩn** sau đợt refactor role/route (sprint 6). Mục tiêu: **mỗi route chỉ đúng 1 role**, tách `/organizer/*` riêng cho ban tổ chức (BTC), `/admin/*` chỉ cho admin, và bổ sung luồng duyệt hồ sơ tổ chức concert.
 
-Tài liệu này là nguồn tham chiếu quyền cho toàn bộ API. Khi một module có file thiết kế riêng (`*-api.md`) hoặc file chỉnh sửa (`*-api.changes.md`), route map ở đây vẫn là chuẩn cuối cùng nếu có khác biệt.
+Tài liệu này là nguồn tham chiếu quyền cho toàn bộ API. Khi một module có file thiết kế riêng (`*-api.md`), route map ở đây vẫn là chuẩn cuối cùng nếu có khác biệt.
 
 Nguồn:
 
@@ -14,7 +14,7 @@ Nguồn:
 
 ## 1. Nguyên tắc
 
-1. **Một route — một role.** Không còn route nhận đồng thời nhiều role nghiệp vụ (ví dụ `ORGANIZER` + `ADMIN`). Ngoại lệ duy nhất là nhóm cross-cutting ở §7.
+1. **Một route — một role.** Không còn route nhận đồng thời nhiều role nghiệp vụ (ví dụ `ORGANIZER` + `ADMIN`). Ngoại lệ duy nhất là nhóm cross-cutting ở §8.
 2. **`requireAuth` luôn đứng trước `requireRole`.** Gateway/middleware xác thực JWT trước, kiểm tra role sau.
 3. **Backend vẫn kiểm tra ownership.** Đúng role chưa đủ; ví dụ `ORGANIZER` chỉ thao tác concert do mình sở hữu, `AUDIENCE` chỉ xem order/vé của mình.
 4. **Route nội bộ (`/internal/*`)** không dùng JWT người dùng; được bảo vệ ở tầng network/service mesh, chỉ cho worker và module nội bộ gọi.
@@ -47,7 +47,7 @@ Nguồn:
 | `POST` | `/v1/payments/webhooks/momo` | IPN MoMo (verify chữ ký, không JWT). |
 | `GET` | `/v1/payments/health` | Health/circuit-breaker (diagnostic). |
 
-Chi tiết auth public: xem [`auth-api.md`](auth-api.md). Chi tiết catalog public: xem [`catalog-api.md`](catalog-api.md).
+Chi tiết auth public: xem [`auth-rbac-api.md`](auth-rbac-api.md). Chi tiết catalog public: xem [`catalog-api.md`](catalog-api.md).
 
 ---
 
@@ -78,7 +78,7 @@ Chi tiết auth public: xem [`auth-api.md`](auth-api.md). Chi tiết catalog pub
 | `POST` | `/v1/check-in/offline-batches/:batch_id/items` | Gửi item offline vào batch. |
 | `GET` | `/v1/check-in/guests/search` | Tra cứu guest tại cổng. |
 
-Chi tiết: xem [`check-in-api.changes.md`](check-in-api.changes.md) và [`guest-list-api.changes.md`](guest-list-api.changes.md).
+Chi tiết: xem [`check-in-api.md`](check-in-api.md) và [`guest-list-api.md`](guest-list-api.md).
 
 ---
 
@@ -131,7 +131,7 @@ Chi tiết: xem [`organizer-api.md`](organizer-api.md).
 | `GET` | `/v1/admin/notifications/:notification_id` | Chi tiết notification. |
 | `POST` | `/v1/admin/notifications/:notification_id/retry` | Retry notification lỗi. |
 
-> Guard đổi từ `('ORGANIZER','ADMIN')` → **`ADMIN`** (quyết định "suy nghĩ sau" trong `template2.md`). Xem [`notification-api.changes.md`](notification-api.changes.md).
+> Guard đổi từ `('ORGANIZER','ADMIN')` → **`ADMIN`** (quyết định "suy nghĩ sau" trong `template2.md`). Xem [`notification-api.md`](notification-api.md).
 
 ### 7.4. Users (auth admin)
 
@@ -162,7 +162,7 @@ Chi tiết: xem [`organizer-api.md`](organizer-api.md).
 | `GET` | `/v1/admin/orders` | List toàn bộ order. | `('ORGANIZER','ADMIN')` → **`ADMIN`**. Order theo concert của BTC nay dùng `GET /v1/organizer/orders`. |
 | `POST` | `/v1/internal/tickets/:ticket_id/void` | Void vé (refund/cancel). | Giữ `ADMIN`. |
 
-Chi tiết duyệt hồ sơ: xem [`organizer-admin-api.md`](organizer-admin-api.md). Chi tiết catalog admin: xem [`catalog-api.changes.md`](catalog-api.changes.md).
+Chi tiết duyệt hồ sơ: xem [`organizer-admin-api.md`](organizer-admin-api.md). Chi tiết catalog admin: xem [`catalog-api.md`](catalog-api.md).
 
 ---
 
@@ -180,7 +180,7 @@ Nhóm ngoại lệ có chủ đích: mọi role đã đăng nhập đều cần,
 
 ## 9. Module guard-only (order / payment / ticket / inventory)
 
-Bốn module này **chưa có file thiết kế riêng** và đợt refactor chỉ siết guard về single-role + bỏ vài route. Ghi nhận đầy đủ ở đây thay vì tạo doc riêng.
+Bốn module này có file thiết kế riêng — [`order-checkout-api.md`](order-checkout-api.md), [`e-ticket-api.md`](e-ticket-api.md), [`inventory-api.md`](inventory-api.md). Đợt refactor siết guard về single-role + bỏ vài route; bảng dưới tóm tắt thay đổi đã áp vào các doc đó.
 
 ### 9.1. Đổi guard sang single-role
 

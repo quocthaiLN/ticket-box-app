@@ -9,7 +9,7 @@ Nguồn:
 - Kế hoạch refactor `template2.md` (Bước 6, 7)
 - `blueprint/api-design/base-api.md`, `blueprint/api-design/rbac-route-map.md`
 - `blueprint/api-design/catalog-api.md` (tái dùng `createSeatZone`/`createTicketType`/`setConcertStatus`)
-- `blueprint/api-design/auth-api.md` (tái dùng `hashPassword`, status user)
+- `blueprint/api-design/auth-rbac-api.md` (tái dùng `hashPassword`, status user)
 
 ---
 
@@ -256,7 +256,7 @@ Trong `catalog.repository.setConcertStatus`, sau khi cập nhật concert sang `
 1. Lấy `user_id[]` từ `ConcertCheckerAccount.findMany({ where: { concert_id } })`.
 2. `prisma.user.updateMany({ where: { id: { in: userIds } }, data: { status: "DISABLED" } })`.
 
-Áp dụng cho cả `cancelConcert` (admin) và `approveDeletion` (qua `setConcertStatus`). Nếu sau này có endpoint chuyển `COMPLETED` thì tự động hưởng. Checker bị `DISABLED` không đăng nhập được (xem `auth-api.md` §8.4).
+Áp dụng cho cả `cancelConcert` (admin) và `approveDeletion` (qua `setConcertStatus`). Nếu sau này có endpoint chuyển `COMPLETED` thì tự động hưởng. Checker bị `DISABLED` không đăng nhập được (xem `auth-rbac-api.md`).
 
 ---
 

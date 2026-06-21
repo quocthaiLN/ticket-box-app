@@ -15,7 +15,7 @@ Nguồn nghiệp vụ chính:
 - Worker consume event từ BullMQ/Message Broker và gọi provider Email/App/SMS/Zalo.
 - Mỗi lần gửi hoặc lịch gửi được ghi vào `notifications`.
 - Retry lỗi provider bằng `attempts`, queue delay và `error_message`.
-- Admin/Organizer tra cứu trạng thái gửi, không cần bảng template hoặc bảng lỗi riêng trong MVP.
+- Admin tra cứu trạng thái gửi, không cần bảng template hoặc bảng lỗi riêng trong MVP.
 
 ---
 
@@ -34,9 +34,9 @@ Nguồn nghiệp vụ chính:
 
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
-| `GET` | `/admin/notifications` | `ORGANIZER`, `ADMIN` | Tra cứu notification theo concert/channel/status. |
-| `GET` | `/admin/notifications/{notification_id}` | `ORGANIZER`, `ADMIN` | Chi tiết notification. |
-| `POST` | `/admin/notifications/{notification_id}/retry` | `ORGANIZER`, `ADMIN` | Retry notification lỗi. |
+| `GET` | `/admin/notifications` | `ADMIN` | Tra cứu notification theo concert/channel/status. |
+| `GET` | `/admin/notifications/{notification_id}` | `ADMIN` | Chi tiết notification. |
+| `POST` | `/admin/notifications/{notification_id}/retry` | `ADMIN` | Retry notification lỗi. |
 | `POST` | `/internal/notifications/enqueue` | Internal | Module khác enqueue notification event. |
 
 ---
@@ -157,8 +157,8 @@ Rules:
 
 | Endpoint group | `GUEST` | `AUDIENCE` | `ORGANIZER` | `ADMIN` |
 | --- | --- | --- | --- | --- |
-| Notification list/detail | 401 | 403 | Allow scoped by concert | Allow |
-| Retry notification | 401 | 403 | Allow scoped by concert | Allow |
+| Notification list/detail | 401 | 403 | 403 | Allow |
+| Retry notification | 401 | 403 | 403 | Allow |
 | Internal enqueue | Internal only | Internal only | Internal only | Internal only |
 
 ---
@@ -180,4 +180,4 @@ Rules:
 - Payment/ticket issuing không phụ thuộc provider notification.
 - Mỗi notification được lưu trong `notifications` với status rõ ràng.
 - Retry không gửi trùng do click lặp.
-- Organizer chỉ thấy notification thuộc concert mình quản lý.
+- Notification tra cứu chỉ dành cho `ADMIN`; `ORGANIZER` nhận 403.
