@@ -14,6 +14,8 @@ import type { AuthUser } from "../../lib/auth-session";
 
 type AuthMode = "login" | "register";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -27,6 +29,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState("");
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,8 +39,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }, [otpCooldown]);
 
   async function handleSendCode() {
-    if (!form.email) {
-      setError("Please enter your email before requesting a code.");
+    if (!EMAIL_PATTERN.test(form.email)) {
+      setError("Please enter a valid email before requesting a code.");
       return;
     }
     setOtpLoading(true);
@@ -45,6 +48,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     try {
       await requestOtp(form.email);
       setOtpCooldown(60);
+      setOtpSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send verification code.");
     } finally {
@@ -168,7 +172,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               placeholder="Email *"
               type="email"
               value={form.email}
-              onChange={(value) => setForm({ ...form, email: value })}
+              onChange={(value) => {
+                setForm({ ...form, email: value });
+                setOtpSent(false);
+              }}
               autoComplete="email"
             />
 
@@ -194,7 +201,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     maxLength={6}
                     placeholder="Verification code *"
                     value={form.otp}
-                    onChange={(e) => setForm({ ...form, otp: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
+                    }
                     required
                     className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
                     style={{
@@ -229,6 +238,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               </div>
             )}
 
+            {!isLogin && otpSent && (
+              <p className="text-xs" style={{ color: "#8585A0", marginTop: "-0.25rem" }}>
+                A 6-digit code was sent to{" "}
+                <span style={{ color: "#F0EDEB" }}>{form.email}</span>. Check your
+                inbox and spam folder.
+              </p>
+            )}
+
             <PasswordField
               placeholder="Password *"
               value={form.password}
@@ -248,6 +265,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 autoComplete="new-password"
               />
             )}
+
+            {!isLogin &&
+              form.confirmPassword.length > 0 &&
+              form.confirmPassword !== form.password && (
+                <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
+                  Passwords do not match.
+                </p>
+              )}
 
             {isLogin && (
               <div className="text-right">

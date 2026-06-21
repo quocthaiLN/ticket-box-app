@@ -1,7 +1,9 @@
+import "dotenv/config";
 import { Queue } from "bullmq";
-import { getRedisConnection, QUEUE_NAMES } from "@ticketbox/queue";
+import { createRedisConnection, QUEUE_NAMES } from "@ticketbox/queue";
 import { closeRedis } from "@ticketbox/redis";
 import { createAiBioWorker } from "./workers/ai-bio.worker.js";
+import { createEmailWorker } from "./workers/email.worker.js";
 import { createExpireHoldsWorker } from "./workers/expire-holds.worker.js";
 import { createGuestImportWorker } from "./workers/guest-import.worker.js";
 import { createNotificationWorker } from "./workers/notification.worker.js";
@@ -12,7 +14,12 @@ import { startReminderScheduler } from "./schedulers/reminder.scheduler.js";
 // ---------------------------------------------------------------------------
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("[worker-server] Unhandled rejection at:", promise, "reason:", reason);
+  console.error(
+    "[worker-server] Unhandled rejection at:",
+    promise,
+    "reason:",
+    reason,
+  );
   // Do NOT exit — isolate the error so other workers keep running
 });
 
@@ -31,6 +38,7 @@ const workers = [
   createNotificationWorker(),
   createAiBioWorker(),
   createGuestImportWorker(),
+  createEmailWorker(),
 ];
 
 // ---------------------------------------------------------------------------
@@ -49,21 +57,22 @@ const reminderTimer = startReminderScheduler(notificationQueue);
 const expireHoldsIntervalMs = Number(
   process.env.EXPIRE_HOLDS_INTERVAL_MS ?? 60_000,
 );
-const expireHoldsBatchSize = Number(
-  process.env.EXPIRE_HOLDS_BATCH_SIZE ?? 50,
-);
+const expireHoldsBatchSize = Number(process.env.EXPIRE_HOLDS_BATCH_SIZE ?? 50);
 const expireHoldsDryRun = process.env.EXPIRE_HOLDS_DRY_RUN === "true";
 
-const expireHoldsTimer = setInterval(() => {
-  expireHoldsQueue
-    .add("expire-held-orders", {
-      batch_size: expireHoldsBatchSize,
-      dry_run: expireHoldsDryRun,
-    })
-    .catch((err: unknown) =>
-      console.error("[worker-server] Failed to enqueue expire-holds:", err),
-    );
-}, Math.max(expireHoldsIntervalMs, 5_000));
+const expireHoldsTimer = setInterval(
+  () => {
+    expireHoldsQueue
+      .add("expire-held-orders", {
+        batch_size: expireHoldsBatchSize,
+        dry_run: expireHoldsDryRun,
+      })
+      .catch((err: unknown) =>
+        console.error("[worker-server] Failed to enqueue expire-holds:", err),
+      );
+  },
+  Math.max(expireHoldsIntervalMs, 5_000),
+);
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown

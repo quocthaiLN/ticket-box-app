@@ -6,12 +6,14 @@
 
 import {
   getAiBioQueue,
+  getEmailQueue,
   getExpireHoldsQueue,
   getGuestImportQueue,
   getNotificationsQueue,
 } from "./queues.js";
 import type {
   AiBioJobData,
+  EmailJobData,
   ExpireHoldsJobData,
   GuestImportJobData,
   NotificationJobData,
@@ -71,5 +73,14 @@ export async function enqueueAiBio(data: AiBioJobData): Promise<string> {
 export async function enqueueGuestImport(data: GuestImportJobData): Promise<string> {
   const queue = getGuestImportQueue();
   const job = await queue.add("import-guest-csv", data, DEFAULT_WORKER_OPTS);
+  return job.id ?? "";
+}
+
+/**
+ * Enqueue một email transactional (OTP, ...). Worker-server sẽ gửi qua SMTP.
+ */
+export async function enqueueEmail(data: EmailJobData): Promise<string> {
+  const queue = getEmailQueue();
+  const job = await queue.add("send-email", data, DEFAULT_NOTIFICATION_OPTS);
   return job.id ?? "";
 }

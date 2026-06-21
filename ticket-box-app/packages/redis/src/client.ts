@@ -9,7 +9,7 @@ import { Redis } from "ioredis";
 
 let _client: Redis | null = null;
 
-function createRedisClient(): Redis | null {
+export function createRedisClient(): Redis | null {
   const url = process.env.REDIS_URL || "redis://localhost:6379";
 
   if (!url) {

@@ -26,7 +26,8 @@ import {
   checkResendCooldown,
   setResendCooldown,
 } from "@ticketbox/redis";
-import { sendOtpEmail } from "../../shared/utils/email.js";
+import { enqueueEmail } from "@ticketbox/queue";
+import { buildOtpEmail } from "../../shared/utils/email.js";
 
 function toAuthUser(user: {
   id: string;
@@ -56,9 +57,7 @@ export const authService = {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await setOtp(email, code);
     await setResendCooldown(email);
-    void sendOtpEmail(email, code).catch((err: unknown) =>
-      console.error("[auth] Failed to send OTP email:", err),
-    );
+    await enqueueEmail({ to: email, ...buildOtpEmail(code) });
 
     return { message: "OTP đã được gửi tới email của bạn." };
   },
