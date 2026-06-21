@@ -179,6 +179,34 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               autoComplete="email"
             />
 
+            <PasswordField
+              placeholder="Password *"
+              value={form.password}
+              visible={showPassword}
+              onVisibleChange={() => setShowPassword((value) => !value)}
+              onChange={(value) => setForm({ ...form, password: value })}
+              autoComplete={isLogin ? "current-password" : "new-password"}
+            />
+
+            {!isLogin && (
+              <PasswordField
+                placeholder="Confirm password *"
+                value={form.confirmPassword}
+                visible={showPassword}
+                onVisibleChange={() => setShowPassword((value) => !value)}
+                onChange={(value) => setForm({ ...form, confirmPassword: value })}
+                autoComplete="new-password"
+              />
+            )}
+
+            {!isLogin &&
+              form.confirmPassword.length > 0 &&
+              form.confirmPassword !== form.password && (
+                <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
+                  Passwords do not match.
+                </p>
+              )}
+
             {!isLogin && (
               <div className="flex gap-2">
                 <div
@@ -245,34 +273,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 inbox and spam folder.
               </p>
             )}
-
-            <PasswordField
-              placeholder="Password *"
-              value={form.password}
-              visible={showPassword}
-              onVisibleChange={() => setShowPassword((value) => !value)}
-              onChange={(value) => setForm({ ...form, password: value })}
-              autoComplete={isLogin ? "current-password" : "new-password"}
-            />
-
-            {!isLogin && (
-              <PasswordField
-                placeholder="Confirm password *"
-                value={form.confirmPassword}
-                visible={showPassword}
-                onVisibleChange={() => setShowPassword((value) => !value)}
-                onChange={(value) => setForm({ ...form, confirmPassword: value })}
-                autoComplete="new-password"
-              />
-            )}
-
-            {!isLogin &&
-              form.confirmPassword.length > 0 &&
-              form.confirmPassword !== form.password && (
-                <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
-                  Passwords do not match.
-                </p>
-              )}
 
             {isLogin && (
               <div className="text-right">
