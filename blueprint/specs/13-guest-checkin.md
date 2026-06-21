@@ -48,7 +48,7 @@ Khách mời cũng phải tuân thủ kiểm tra khu/cổng: guest thuộc `seat
 
 - `guest_list(concert_id, phone)` unique để deduplicate khách mời.
 - Guest có `seat_zone_id` thì phải check đúng gate-zone.
-- Nếu `seat_zone_id` null, chỉ admin/organizer được cấu hình cổng fallback; mặc định không cho offline check-in để tránh lọt sai khu.
+- Nếu `seat_zone_id` null, chỉ admin được cấu hình cổng fallback; mặc định không cho offline check-in để tránh lọt sai khu.
 - Mọi lần check-in guest phải có log.
 - Offline guest sync phải idempotent theo `batch_token` và guest id/phone.
 

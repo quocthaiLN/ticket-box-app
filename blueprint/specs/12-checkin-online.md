@@ -55,7 +55,7 @@
 
 - Update ticket và ghi log phải cùng transaction hoặc có cơ chế đảm bảo không mất log.
 - Mọi lần quét phải lưu log, kể cả thất bại.
-- Check-in endpoint chỉ cho `CHECKER` hoặc `ADMIN`.
+- Check-in endpoint chỉ cho `CHECKER` (admin chỉ còn xem danh sách cổng).
 - Không cho check-in ticket `CANCELLED`/`REFUNDED`.
 - Không cho check-in ticket có `seat_zone_id` không nằm trong danh sách zone của gate.
 - `status = CHECKED_IN` thì `checked_in_at` bắt buộc khác null.
