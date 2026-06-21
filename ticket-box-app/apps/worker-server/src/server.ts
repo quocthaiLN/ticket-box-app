@@ -1,6 +1,9 @@
 import "dotenv/config";
-import { Queue } from "bullmq";
-import { createRedisConnection, QUEUE_NAMES } from "@ticketbox/queue";
+import {
+  getExpireHoldsQueue,
+  getNotificationsQueue,
+  QUEUE_NAMES,
+} from "@ticketbox/queue";
 import { closeRedis } from "@ticketbox/redis";
 import { createAiBioWorker } from "./workers/ai-bio.worker.js";
 import { createEmailWorker } from "./workers/email.worker.js";
@@ -45,12 +48,8 @@ const workers = [
 // Khởi tạo schedulers
 // ---------------------------------------------------------------------------
 
-const notificationQueue = new Queue(QUEUE_NAMES.NOTIFICATIONS, {
-  connection: getRedisConnection(),
-});
-const expireHoldsQueue = new Queue(QUEUE_NAMES.EXPIRE_HOLDS, {
-  connection: getRedisConnection(),
-});
+const notificationQueue = getNotificationsQueue();
+const expireHoldsQueue = getExpireHoldsQueue();
 
 const reminderTimer = startReminderScheduler(notificationQueue);
 

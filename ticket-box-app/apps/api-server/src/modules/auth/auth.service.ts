@@ -92,7 +92,6 @@ export const authService = {
     input: LoginInput,
   ): Promise<{ user: AuthUser; tokens: TokenPair }> {
     const user = await authRepository.findByEmail(input.email);
-
     // Không tiết lộ email có tồn tại hay không
     if (!user) {
       throw Errors.invalidCredentials();
@@ -103,6 +102,7 @@ export const authService = {
     }
 
     const valid = await verifyPassword(input.password, user.passwordHash);
+
     if (!valid) {
       throw Errors.invalidCredentials();
     }
@@ -111,6 +111,7 @@ export const authService = {
       sub: user.id,
       role: user.role as Role,
     });
+
     const refreshToken = signRefreshToken({ sub: user.id });
 
     return {

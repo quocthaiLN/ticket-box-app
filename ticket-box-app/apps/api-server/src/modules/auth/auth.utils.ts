@@ -15,7 +15,7 @@ function getJwtSecret(): string {
 }
 
 function getRefreshSecret(): string {
-  const secret = process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET env variable is not set");
   return secret;
 }
@@ -24,24 +24,31 @@ export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, BCRYPT_ROUNDS);
 }
 
-export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+export async function verifyPassword(
+  plain: string,
+  hash: string,
+): Promise<boolean> {
   return bcrypt.compare(plain, hash);
 }
 
 export function signAccessToken(payload: { sub: string; role: Role }): string {
-  return jwt.sign(
-    { sub: payload.sub, role: payload.role, jti: randomUUID() },
-    getJwtSecret(),
-    { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
-  );
+  try {
+    const accessToken = jwt.sign(
+      { sub: payload.sub, role: payload.role, jti: randomUUID() },
+      getJwtSecret(),
+      { expiresIn: ACCESS_TOKEN_EXPIRES_IN },
+    );
+    return accessToken;
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
 }
 
 export function signRefreshToken(payload: { sub: string }): string {
-  return jwt.sign(
-    { sub: payload.sub, jti: randomUUID() },
-    getRefreshSecret(),
-    { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
-  );
+  return jwt.sign({ sub: payload.sub, jti: randomUUID() }, getRefreshSecret(), {
+    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+  });
 }
 
 export function verifyToken(token: string): AuthPayload {
@@ -49,19 +56,31 @@ export function verifyToken(token: string): AuthPayload {
     return jwt.verify(token, getJwtSecret()) as AuthPayload;
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {
-      const e = Object.assign(new Error("Token expired"), { code: "TOKEN_EXPIRED" });
+      const e = Object.assign(new Error("Token expired"), {
+        code: "TOKEN_EXPIRED",
+      });
       throw e;
     }
-    const e = Object.assign(new Error("Invalid token"), { code: "UNAUTHORIZED" });
+    const e = Object.assign(new Error("Invalid token"), {
+      code: "UNAUTHORIZED",
+    });
     throw e;
   }
 }
 
-export function verifyRefreshToken(token: string): { sub: string; jti: string } {
+export function verifyRefreshToken(token: string): {
+  sub: string;
+  jti: string;
+} {
   try {
-    return jwt.verify(token, getRefreshSecret()) as { sub: string; jti: string };
+    return jwt.verify(token, getRefreshSecret()) as {
+      sub: string;
+      jti: string;
+    };
   } catch {
-    const e = Object.assign(new Error("Invalid refresh token"), { code: "UNAUTHORIZED" });
+    const e = Object.assign(new Error("Invalid refresh token"), {
+      code: "UNAUTHORIZED",
+    });
     throw e;
   }
 }

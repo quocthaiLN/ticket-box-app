@@ -27,7 +27,10 @@ export async function handleRequestOtp(
       next(
         Errors.validationError(
           "Request body failed validation.",
-          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+          err.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
         ),
       );
       return;
@@ -55,7 +58,10 @@ export async function handleRegister(
       next(
         Errors.validationError(
           "Request body failed validation.",
-          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+          err.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
         ),
       );
       return;
@@ -96,7 +102,10 @@ export async function handleLogin(
       next(
         Errors.validationError(
           "Request body failed validation.",
-          err.errors.map((e) => ({ field: e.path.join("."), message: e.message })),
+          err.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
         ),
       );
       return;
@@ -249,7 +258,9 @@ export async function handleAdminUpdateStatus(
     );
   } catch (err) {
     if (err instanceof z.ZodError) {
-      next(Errors.validationError("Status must be ACTIVE, LOCKED, or DISABLED."));
+      next(
+        Errors.validationError("Status must be ACTIVE, LOCKED, or DISABLED."),
+      );
       return;
     }
     next(err);
