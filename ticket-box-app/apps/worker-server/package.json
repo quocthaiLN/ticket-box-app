@@ -10,13 +10,14 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@ticketbox/config": "*",
     "@ticketbox/database": "*",
     "@ticketbox/queue": "*",
-    "@ticketbox/storage": "*",
     "@ticketbox/redis": "*",
+    "@ticketbox/storage": "*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.0.0",
-    "nodemailer": "^6.9.0"
+    "nodemailer": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -6,6 +6,10 @@
   "main": "./env.ts",
   "exports": {
     ".": "./env.ts",
-    "./payment.js": "./payment.ts"
+    "./payment.js": "./payment.ts",
+    "./load-env.js": "./load-env.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0"
   }
 }
