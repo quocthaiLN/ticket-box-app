@@ -1,7 +1,7 @@
 # Báo cáo tiến độ & Kế hoạch hoàn thành — TicketBox
 
 - **Ngày lập:** 21/06/2026
-- **Deadline bàn giao:** **27/06/2026** (còn **6 ngày**)
+- **Deadline bàn giao:** **29/06/2026** — 22/6 đọc & chuẩn bị, 23–29/6 thực hiện (7 ngày).
 - **Nhóm:** Thanh (Lead/Catalog/Web), Thuận (Auth-RBAC/Foundation/Worker), Thái (Inventory/Order/Payment/E-ticket), Quang (Check-in/Guest/Offline/AI Bio)
 
 ---
@@ -13,7 +13,7 @@
 - **Điểm nghẽn (critical path):** đợt **refactor role/route + module Organizer** (theo `template2.md`) **mới chỉ xong tài liệu, code = 0%**. Đây là khối lượng còn lại lớn nhất và quyết định việc kịp deadline.
 - **Mức hoàn thành tổng thể (tính cả scope refactor): ~70–75%.**
 
-> ⚠️ Toàn bộ phần Organizer (BTC nộp hồ sơ → Admin duyệt → tự sinh concert + checker), single-role guard, 3 model DB mới, và 3 endpoint auth mới **chưa có dòng code nào**. Cần dồn lực 6 ngày tới cho phần này.
+> ⚠️ Toàn bộ phần Organizer (BTC nộp hồ sơ → Admin duyệt → tự sinh concert + checker), single-role guard, 3 model DB mới, và 3 endpoint auth mới **chưa có dòng code nào**. Cần dồn lực 7 ngày thực hiện (23–29/6) cho phần này.
 
 ---
 
@@ -67,7 +67,7 @@
 
 ## 4. Phân công chi tiết theo thành viên
 
-> Nguyên tắc: mỗi người làm refactor trong **đúng domain mình sở hữu**; phần guard single-role tách theo router để không giẫm chân. Ước lượng giờ cho 6 ngày.
+> Nguyên tắc: mỗi người làm refactor trong **đúng domain mình sở hữu**; phần guard single-role tách theo router để không giẫm chân. Ước lượng giờ cho 7 ngày thực hiện (23–29/6).
 
 ### 🟦 Thuận — Foundation, Auth/RBAC, hồ sơ duyệt
 | Task | Map | Giờ |
@@ -108,31 +108,33 @@
 
 ---
 
-## 5. Lịch trình 6 ngày (21 → 27/06)
+## 5. Lịch trình (22/6 chuẩn bị · 23–29/6 thực hiện)
 
 | Ngày | Mốc | Ai |
 | --- | --- | --- |
-| **D1 — 21–22/6** | Verify build/test baseline xanh. **A1** (schema+migration), **A2** (errors), **A3** (auth) xong. Mỗi người bắt đầu **A4** guard refactor router của mình. | Thuận (A1-A3), cả nhóm (A4) |
-| **D2 — 23/6** | Hoàn tất toàn bộ **A4** (8 router single-role, bỏ route → 404). **A5** organizer backend & **A6** organizer-admin bắt đầu. **A7** checker-disable. | Cả nhóm |
-| **D3 — 24/6** | **A5 + A6** xong backend; **A8** mount + build xanh. Test luồng API: nộp hồ sơ → approve → concert DRAFT + checker accounts. | Thanh, Thuận, Thái |
-| **D4 — 25/6** | **A9** Web Organizer + Admin duyệt (lõi). Quang verify checker login/check-in/disable. Bắt đầu integration end-to-end. | Thanh (web), Quang |
-| **D5 — 26/6** | Integration full: organizer→duyệt→bán vé→check-in→hủy→checker DISABLED. Bug bash P0/P1. Seed accounts + demo script. | Cả nhóm |
-| **D6 — 27/6** | Freeze scope. Fix nốt P0/P1. README/runbook hoàn chỉnh. Tổng duyệt demo 20–30’. **Bàn giao.** | Cả nhóm |
+| **22/6 — Đọc & chuẩn bị** | Đọc `template2.md` + blueprint api-design/specs (đã cập nhật). Dựng môi trường, **verify build/test baseline xanh** (`pnpm -r build`). Tạo nhánh refactor, chốt artist-bio. **Chưa code feature.** | Cả nhóm |
+| **23/6 — Foundation** | **A1** (schema + migration + generate), **A2** (errors), **A3** (auth) xong. Cả nhóm bắt đầu **A4** guard refactor router của mình. | Thuận (A1-A3), cả nhóm (A4) |
+| **24/6 — Guard + mở module** | Hoàn tất toàn bộ **A4** (8 router single-role, route bỏ → 404). Bắt đầu **A5** organizer & **A6** organizer-admin. **A7** checker-disable. | Cả nhóm |
+| **25/6 — Backend feature** | **A5 + A6** xong backend; **A8** mount + build xanh. Test API: nộp hồ sơ → approve → concert DRAFT + checker accounts. | Thanh, Thuận, Thái |
+| **26/6 — Web** | **A9** Web Organizer + Admin duyệt (lõi) + `redirect_to` theo role. Quang verify checker login/check-in/disable. Bắt đầu integration. | Thanh (web), Quang |
+| **27/6 — Integration** | Integration full: organizer→duyệt→bán vé→check-in→hủy→checker DISABLED. Bug bash, phân loại P0/P1. Seed accounts + demo script. | Cả nhóm |
+| **28/6 — Hardening & QA** | Fix P0/P1, polish web (loading/error state), test critical xanh, README/runbook. | Cả nhóm |
+| **29/6 — Freeze & bàn giao** | Freeze scope, fix nốt P0/P1. Tổng duyệt demo 20–30’. **Bàn giao.** | Cả nhóm |
 
 ---
 
 ## 6. Rủi ro & khuyến nghị
 
-1. **Thời gian rất căng.** 6 ngày cho cả refactor lớn + ổn định + demo. **Khuyến nghị:** đóng băng mọi feature ngoài `template2.md`; không thêm scope.
-2. **Thanh quá tải** (organizer backend + toàn bộ web + integration). **Khuyến nghị:** Thái/Quang sau khi xong A4 (D2) chuyển sang hỗ trợ Thanh phần web/test; cân nhắc Thuận làm trọn organizer-admin để Thanh tập trung organizer + web.
-3. **Migration phá dữ liệu seed cũ.** A1 đổi schema → cần seed lại. **Khuyến nghị:** chạy migration sớm (D1) để các module khác có schema mới làm việc.
-4. **Phương án giảm phạm vi (nếu chậm đến D5):** ưu tiên giữ **luồng lõi** (nộp hồ sơ → approve sinh concert+checker → sửa DRAFT → cancel→disable checker). Có thể tạm hạ ưu tiên: `analytics`, `deletion-requests`, UI organizer chi tiết → để placeholder/đơn giản hóa cho demo.
-5. **Build verification.** Memory ghi build xanh 2026-06-08; đã có nhiều commit sau đó → **D1 phải verify lại** `pnpm -r build` + test trước khi sửa tiếp.
-6. **artist-bio** giữ guard cũ (ORGANIZER+ADMIN) — ngoài phạm vi refactor; thống nhất để nguyên hay siết single-role (quyết định nhanh ở daily D1).
+1. **Thời gian căng.** 7 ngày thực hiện (23–29/6) cho cả refactor lớn + ổn định + demo. **Khuyến nghị:** đóng băng mọi feature ngoài `template2.md`; không thêm scope.
+2. **Thanh quá tải** (organizer backend + toàn bộ web + integration). **Khuyến nghị:** Thái/Quang sau khi xong A4 (24/6) chuyển sang hỗ trợ Thanh phần web/test; cân nhắc Thuận làm trọn organizer-admin để Thanh tập trung organizer + web.
+3. **Migration phá dữ liệu seed cũ.** A1 đổi schema → cần seed lại. **Khuyến nghị:** chạy migration sớm (23/6) để các module khác có schema mới làm việc.
+4. **Phương án giảm phạm vi (nếu chậm đến 27/6):** ưu tiên giữ **luồng lõi** (nộp hồ sơ → approve sinh concert+checker → sửa DRAFT → cancel→disable checker). Có thể tạm hạ ưu tiên: `analytics`, `deletion-requests`, UI organizer chi tiết → để placeholder/đơn giản hóa cho demo.
+5. **Build verification.** Memory ghi build xanh 2026-06-08; đã có nhiều commit sau đó → **ngày chuẩn bị 22/6 phải verify lại** `pnpm -r build` + test trước khi sửa tiếp.
+6. **artist-bio** giữ guard cũ (ORGANIZER+ADMIN) — ngoài phạm vi refactor; thống nhất để nguyên hay siết single-role (quyết định nhanh ở daily 22/6).
 
 ---
 
-## 7. Definition of Done (nghiệm thu 27/6)
+## 7. Definition of Done (nghiệm thu 29/6)
 
 - [ ] `prisma migrate` + `generate` sạch; `pnpm -r build` xanh; test critical xanh.
 - [ ] Guard single-role đúng: AUDIENCE/ORGANIZER/CHECKER/ADMIN; route đã bỏ trả 404; route sai role trả 403.
