@@ -1,8 +1,7 @@
-// Nạp .env gốc monorepo trước mọi import khác (Prisma/Redis đọc process.env).
-import "@ticketbox/config";
+import { env } from "@ticketbox/config";
 import { createApp } from "./app.js";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(env.server.port);
 const app = createApp();
 
 app.listen(port, () => {

@@ -9,6 +9,7 @@ import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
 import { EventsPage } from "./routes/audience/EventsPage";
 import { CheckerPage } from "./routes/checker/CheckerPage";
+import { PaymentResultPage } from "./routes/payment/PaymentResultPage";
 import "./styles/globals.css";
 
 const router = createBrowserRouter([
@@ -47,6 +48,10 @@ const router = createBrowserRouter([
       {
         path: "checker",
         element: <CheckerPage />
+      },
+      {
+        path: "payment/result",
+        element: <PaymentResultPage />
       }
     ]
   }

@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 
 // Lỗi trả về ngay khi provider đã dùng hết số request chạy đồng thời được phép.
 // Bulkhead không xếp hàng chờ, giúp tránh làm cạn tài nguyên khi provider chậm/lỗi.
@@ -52,9 +52,8 @@ export class PaymentBulkhead {
   }
 }
 
-// Hai provider được cô lập: VNPAY quá tải không làm giảm slot của MoMo và ngược lại.
-export const vnpayBulkhead = new PaymentBulkhead('VNPAY', paymentConfig.vnpay.bulkheadLimit);
-export const momoBulkhead = new PaymentBulkhead('MOMO', paymentConfig.momo.bulkheadLimit);
+export const vnpayBulkhead = new PaymentBulkhead('VNPAY', env.vnpay.bulkheadLimit);
+export const momoBulkhead = new PaymentBulkhead('MOMO', env.momo.bulkheadLimit);
 
 // Trả về bulkhead đúng với provider được chọn trong luồng thanh toán.
 export function getBulkhead(provider: 'VNPAY' | 'MOMO'): PaymentBulkhead {

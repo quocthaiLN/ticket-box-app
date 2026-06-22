@@ -1,5 +1,4 @@
-// Nạp .env gốc monorepo trước mọi import khác (Prisma/Redis đọc process.env).
-import "@ticketbox/config";
+import { env } from "@ticketbox/config";
 import {
   getExpireHoldsQueue,
   getNotificationsQueue,
@@ -54,11 +53,8 @@ const expireHoldsQueue = getExpireHoldsQueue();
 
 const reminderTimer = startReminderScheduler(notificationQueue);
 
-const expireHoldsIntervalMs = Number(
-  process.env.EXPIRE_HOLDS_INTERVAL_MS ?? 60_000,
-);
-const expireHoldsBatchSize = Number(process.env.EXPIRE_HOLDS_BATCH_SIZE ?? 50);
-const expireHoldsDryRun = process.env.EXPIRE_HOLDS_DRY_RUN === "true";
+const { expireHoldsIntervalMs, expireHoldsBatchSize, expireHoldsDryRun } =
+  env.worker;
 
 const expireHoldsTimer = setInterval(
   () => {
@@ -112,8 +108,9 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 
 const redisAddr =
-  process.env.REDIS_URL ??
-  `${process.env.REDIS_HOST ?? "localhost"}:${process.env.REDIS_PORT ?? 6379}`;
+  env.redis.url !== "redis://localhost:6379"
+    ? env.redis.url
+    : `${env.redis.host}:${env.redis.port}`;
 
 console.log(
   `[worker-server] TicketBox Worker Server started — ${workers.length} worker(s) listening`,

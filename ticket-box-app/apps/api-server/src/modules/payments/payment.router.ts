@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { momoWebhookHandler, createPaymentHandler, vnpayWebhookHandler } from './payment.controller.js';
+import { momoWebhookHandler, createPaymentHandler, vnpayWebhookHandler, vnpayReturnHandler } from './payment.controller.js';
 import { paymentHealthHandler } from './payment.health.js';
 import { webhookIdempotencyMiddleware } from './middlewares/index.js';
 import { idempotencyMiddleware } from '../../shared/middleware/idempotency.middleware.js';
@@ -19,6 +19,9 @@ router.post(
   validateBody(createPaymentSchema, 'INVALID_REQUEST'),
   createPaymentHandler,
 );
+
+// GET /payment/return — VNPAY browser return (public, signature-verified — no user JWT)
+router.get('/payment/return', vnpayReturnHandler);
 
 // POST /payments/webhooks/vnpay — VNPAY IPN (public, signature-verified — no user JWT)
 router.post('/payments/webhooks/vnpay', webhookIdempotencyMiddleware, vnpayWebhookHandler);

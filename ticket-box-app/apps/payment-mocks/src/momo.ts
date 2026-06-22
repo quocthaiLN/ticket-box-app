@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { Router } from 'express';
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 import { applyFault, type ControlStore } from './control.js';
 
 interface MomoCreateBody {
@@ -18,7 +18,7 @@ interface MomoCreateBody {
 }
 
 function expectedSignature(b: MomoCreateBody): string {
-  const { accessKey, secretKey } = paymentConfig.momo;
+  const { accessKey, secretKey } = env.momo;
   const raw =
     `accessKey=${accessKey}` +
     `&amount=${b.amount}` +
@@ -66,7 +66,7 @@ export function momoRouter(control: ControlStore): Router {
 
   router.post('/v2/gateway/api/query', async (req, res) => {
     const b = req.body as { partnerCode?: string; orderId?: string; requestId?: string; signature?: string };
-    const { accessKey, secretKey } = paymentConfig.momo;
+    const { accessKey, secretKey } = env.momo;
     const raw = `accessKey=${accessKey}&orderId=${b.orderId}&partnerCode=${b.partnerCode}&requestId=${b.requestId}`;
     const expected = createHmac('sha256', secretKey).update(raw, 'utf8').digest('hex');
 

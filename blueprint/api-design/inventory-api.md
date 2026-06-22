@@ -35,11 +35,11 @@ Nguồn nghiệp vụ chính:
 
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
-| `GET` | `/admin/ticket-types/{ticket_type_id}/inventory` | `ORGANIZER`, `ADMIN` | Xem tồn kho source-of-truth. |
 | `POST` | `/internal/inventory/holds` | Internal/Ticketing | Hold vé khi tạo order. |
 | `POST` | `/internal/inventory/releases` | Internal/Worker | Release hold khi order hết hạn/hủy. |
 | `POST` | `/internal/inventory/payment-confirmations` | Internal/Payment | Chuyển held sang sold khi payment thành công. |
-| `POST` | `/admin/ticket-types/{ticket_type_id}/inventory-adjustments` | `ADMIN` | Điều chỉnh tổng tồn kho thủ công và ghi audit. |
+
+> **Sprint 6:** `GET /admin/ticket-types/{id}/inventory` **chuyển** sang `GET /organizer/ticket-types/{id}/inventory` (role `ORGANIZER`, filter theo ownership; xem `organizer-api.md`); `POST /admin/ticket-types/{id}/inventory-adjustments` **đã bỏ** (trả `404`). File này còn lại các route `/internal/*` (không JWT người dùng).
 
 Internal endpoints có thể là module method nội bộ trong modular monolith; nếu expose HTTP thì chỉ nằm trong private network và bắt buộc service auth.
 
@@ -47,7 +47,9 @@ Internal endpoints có thể là module method nội bộ trong modular monolith
 
 ## 4. API chi tiết
 
-### 4.1. `GET /admin/ticket-types/{ticket_type_id}/inventory`
+### 4.1. `GET /admin/ticket-types/{ticket_type_id}/inventory` — CHUYỂN sang organizer (sprint 6)
+
+Tồn kho source-of-truth theo loại vé nay phục vụ qua `GET /organizer/ticket-types/{ticket_type_id}/inventory` (role `ORGANIZER`, verify ownership concert; xem `organizer-api.md`). Route admin cũ trả `404`. Cấu trúc response giữ nguyên dưới đây làm tham chiếu.
 
 Response `200`:
 
@@ -189,9 +191,9 @@ Side effects:
 - Phát hành ticket ở Ticketing/E-ticket module.
 - Ghi `audit_logs` nếu đây là thao tác admin/manual hoặc cần đối soát.
 
-### 4.5. `POST /admin/ticket-types/{ticket_type_id}/inventory-adjustments`
+### 4.5. `POST /admin/ticket-types/{ticket_type_id}/inventory-adjustments` — ĐÃ BỎ (sprint 6)
 
-Điều chỉnh thủ công, chỉ `ADMIN`. `user_id` của admin được extract từ JWT để ghi vào `audit_logs.performed_by`, không nhận từ request body.
+Route điều chỉnh tồn kho thủ công đã bỏ (trả `404`) trong scope refactor sprint 6. Mô tả bên dưới giữ làm tham chiếu lịch sử.
 
 Headers:
 
@@ -252,3 +254,4 @@ Ràng buộc:
 - Order hết hạn release đúng số lượng.
 - Payment success chuyển held sang sold đúng một lần.
 - Không còn phụ thuộc bảng `ticket_inventory_events`.
+- `GET /admin/ticket-types/{id}/inventory` → 404; tồn kho cho BTC qua `GET /organizer/ticket-types/{id}/inventory`.

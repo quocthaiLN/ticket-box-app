@@ -129,11 +129,13 @@ function verifyVnpaySignature(body: VnpayWebhookBody): boolean {
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = body;
   if (!vnp_SecureHash) return false;
 
-  // VNPAY yêu cầu các field được lọc, sắp xếp và ghép theo định dạng cố định.
+  // VNPAY ký trên value đã encode (encodeURIComponent, %20 -> +); framework parse query
+  // trả về value đã decode nên phải encode lại đúng cách thì hash mới khớp.
+  const encodeVnpValue = (value: string) => encodeURIComponent(value).replace(/%20/g, '+');
   const sortedKeys = Object.keys(rest).sort();
   const signData = sortedKeys
     .filter((k) => rest[k] !== '' && rest[k] !== undefined)
-    .map((k) => `${k}=${rest[k]}`)
+    .map((k) => `${k}=${encodeVnpValue(String(rest[k]))}`)
     .join('&');
 
   const expected = createHmac('sha512', env.vnpay.hashSecret)

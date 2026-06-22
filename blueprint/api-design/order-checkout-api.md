@@ -51,12 +51,12 @@ Idempotency runtime nằm ở Redis. PostgreSQL chỉ giữ unique constraint tr
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
 | `POST` | `/orders` | `AUDIENCE` | Tạo order held và payment URL. |
-| `GET` | `/orders/{order_id}` | `AUDIENCE`, `ADMIN` | Poll trạng thái order. |
+| `GET` | `/orders/{order_id}` | `AUDIENCE` | Poll trạng thái order (chủ order). |
 | `POST` | `/orders/{order_id}/cancel` | `AUDIENCE` | Hủy order còn `HELD`. |
 | `POST` | `/orders/{order_id}/payments` | `AUDIENCE` | Tạo payment attempt mới (retry). |
 | `POST` | `/payments/webhooks/{provider}` | Public + signature | Webhook/IPN VNPAY/MoMo. |
 | `POST` | `/internal/orders/{order_id}/expire` | Internal/Worker | Expire order hết TTL. |
-| `GET` | `/admin/orders` | `ORGANIZER`, `ADMIN` | Tra cứu order quản trị. |
+| `GET` | `/admin/orders` | `ADMIN` | Tra cứu order quản trị (BTC dùng `GET /organizer/orders`). |
 
 ---
 
@@ -154,7 +154,7 @@ Nếu payment provider circuit breaker đang open, backend có thể fail-fast v
 
 Khán giả poll trạng thái order sau khi quay về từ payment provider.
 
-Auth: JWT Bearer token. `user_id` extract từ JWT để verify ownership (`order.user_id === token.sub`). Admin không cần check ownership.
+Auth: JWT Bearer token role `AUDIENCE`; `user_id` extract từ JWT để verify ownership (`order.user_id === token.sub`). **Sprint 6:** route này chỉ `AUDIENCE`; admin tra cứu order qua `GET /admin/orders`, BTC qua `GET /organizer/orders`.
 
 **Headers**
 
@@ -225,7 +225,7 @@ Cache-Control: no-store
 Ownership:
 
 - AUDIENCE chỉ xem order của chính mình.
-- Organizer/Admin xem order qua `/admin/orders` theo scope.
+- Admin xem order qua `/admin/orders`; BTC xem order concert mình qua `/organizer/orders` (xem `organizer-api.md`).
 
 ---
 
@@ -394,14 +394,14 @@ Idempotent: nếu order đã `CONFIRMED`, `CANCELLED` hoặc `EXPIRED`, không r
 
 ### 4.6. `GET /admin/orders`
 
-Admin/Organizer tra cứu order.
+Admin tra cứu toàn bộ order.
 
-Auth: JWT Bearer token với role `ORGANIZER` hoặc `ADMIN`. Organizer scope (concert nào được xem) derive từ JWT claims, không nhận từ query params.
+Auth: JWT Bearer token role `ADMIN`. **Sprint 6:** guard đổi từ `ORGANIZER, ADMIN` → `ADMIN`; BTC xem order của concert mình qua `GET /organizer/orders` (xem `organizer-api.md`).
 
 **Headers**
 
 ```http
-Authorization: Bearer <jwt>  (role = ORGANIZER | ADMIN)
+Authorization: Bearer <jwt>  (role = ADMIN)
 ```
 
 **Query parameters**
@@ -414,7 +414,7 @@ Authorization: Bearer <jwt>  (role = ORGANIZER | ADMIN)
 | `from`, `to` | Lọc theo `created_at`. |
 | `limit`, `cursor` | Phân trang. |
 
-Organizer chỉ xem order thuộc concert mình quản lý.
+BTC không dùng route này; order theo concert của BTC lấy qua `GET /organizer/orders` (xem `organizer-api.md`).
 
 ---
 
@@ -526,13 +526,13 @@ SUCCEEDED -> REFUNDED
 
 | Endpoint group | `GUEST` | `AUDIENCE` | `ORGANIZER` | `ADMIN` | Provider/Internal |
 | --- | --- | --- | --- | --- | --- |
-| `POST /orders` | 401 | Allow | 403 | Allow for test/support only | 403 |
-| `GET /orders/{id}` | 401 | Own order only | 403 | Allow | 403 |
-| `POST /orders/{id}/cancel` | 401 | Own held order only | 403 | Allow | 403 |
-| `POST /orders/{id}/payments` | 401 | Own held order only | 403 | Allow | 403 |
+| `POST /orders` | 401 | Allow | 403 | 403 | 403 |
+| `GET /orders/{id}` | 401 | Own order only | 403 | 403 | 403 |
+| `POST /orders/{id}/cancel` | 401 | Own held order only | 403 | 403 | 403 |
+| `POST /orders/{id}/payments` | 401 | Own held order only | 403 | 403 | 403 |
 | Payment webhook | Allow only with valid signature | 403 | 403 | 403 | Provider |
 | Internal expire | 403 | 403 | 403 | 403 | Internal only |
-| Admin order search | 401 | 403 | Scoped by concert | Allow | 403 |
+| Admin order search | 401 | 403 | 403 | Allow | 403 |
 
 ---
 
@@ -546,3 +546,5 @@ SUCCEEDED -> REFUNDED
 - Webhook success verify đúng chữ ký/amount mới chuyển order `CONFIRMED`.
 - Webhook trùng không phát hành vé trùng.
 - Payment provider lỗi không làm sập catalog/check-in.
+- `GET /orders/{id}`, `POST /orders/{id}/cancel`, `POST /orders/{id}/payments` chỉ `AUDIENCE` (chủ order); `ADMIN`/`ORGANIZER` → 403.
+- `GET /admin/orders` chỉ `ADMIN`; BTC dùng `GET /organizer/orders`.

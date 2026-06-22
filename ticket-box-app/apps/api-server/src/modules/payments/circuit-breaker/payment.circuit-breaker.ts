@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 
 // CLOSED: cho phép gọi; OPEN: chặn gọi; HALF_OPEN: cho một request thử khôi phục.
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
@@ -161,13 +161,13 @@ export class PaymentCircuitBreaker {
 
 // Hai circuit độc lập để sự cố một provider không chặn provider còn lại.
 export const vnpayCircuitBreaker = new PaymentCircuitBreaker('VNPAY', {
-  failureThreshold: paymentConfig.vnpay.failureThreshold,
-  resetTimeout: paymentConfig.vnpay.resetTimeout,
+  failureThreshold: env.vnpay.failureThreshold,
+  resetTimeout: env.vnpay.resetTimeout,
 });
 
 export const momoCircuitBreaker = new PaymentCircuitBreaker('MOMO', {
-  failureThreshold: paymentConfig.momo.failureThreshold,
-  resetTimeout: paymentConfig.momo.resetTimeout,
+  failureThreshold: env.momo.failureThreshold,
+  resetTimeout: env.momo.resetTimeout,
 });
 
 // Trả về circuit breaker tương ứng với provider đang được gọi.

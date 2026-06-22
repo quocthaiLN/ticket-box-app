@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 import { postJson } from './http-client.js';
 import type {
   CheckoutInput,
@@ -22,6 +22,12 @@ function formatVnpDate(date: Date): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
+// VNPAY encode value theo encodeURIComponent rồi đổi %20 -> + (giống demo chính thức).
+// Phải dùng đúng chuỗi đã encode này cho cả signData lẫn query URL, nếu không hash sẽ lệch.
+function encodeVnpValue(value: string): string {
+  return encodeURIComponent(value).replace(/%20/g, '+');
+}
+
 export class VnpayGateway implements PaymentGateway {
   // Adapter này chuyển contract chung sang tham số chuẩn của VNPAY.
   readonly provider = 'VNPAY' as const;
@@ -31,7 +37,7 @@ export class VnpayGateway implements PaymentGateway {
   // VNPay checkout is a signed redirect URL — built locally, no network call.
   // Tạo redirect URL được ký cục bộ; VNPAY chưa bị gọi ở bước này.
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
-    const { tmnCode, hashSecret, url, returnUrl } = paymentConfig.vnpay;
+    const { tmnCode, hashSecret, url, returnUrl } = env.vnpay;
     const now = new Date();
     const expireDate = new Date(now.getTime() + 15 * 60 * 1000);
     const vnpAmount = Math.round(parseFloat(input.amount) * 100);
@@ -53,21 +59,20 @@ export class VnpayGateway implements PaymentGateway {
       vnp_ExpireDate: formatVnpDate(expireDate),
     };
 
-    // VNPAY yêu cầu sort key trước khi tạo dữ liệu ký và query string.
+    // VNPAY yêu cầu sort key, rồi ký trên chính chuỗi đã encode (không phải giá trị thô).
     const sortedKeys = Object.keys(params).sort();
-    const signData = sortedKeys.map((k) => `${k}=${params[k]}`).join('&');
+    const signData = sortedKeys.map((k) => `${k}=${encodeVnpValue(params[k])}`).join('&');
     const secureHash = createHmac('sha512', hashSecret).update(signData, 'utf8').digest('hex');
 
-    // Hash được thêm sau cùng để provider xác minh tính toàn vẹn của redirect URL.
-    const query = new URLSearchParams(sortedKeys.map((k) => [k, params[k]] as [string, string]));
-    query.append('vnp_SecureHash', secureHash);
+    // Query URL dùng đúng chuỗi đã encode ở trên để khớp với signData; hash thêm sau cùng.
+    const payUrl = `${url}?${signData}&vnp_SecureHash=${secureHash}`;
 
-    return { payUrl: `${url}?${query.toString()}`, providerRef: input.orderId };
+    return { payUrl, providerRef: input.orderId };
   }
 
   // Gọi QueryDR của VNPAY để đối soát một giao dịch đã gửi sang provider.
   async queryStatus(input: StatusInput): Promise<StatusResult> {
-    const { tmnCode, hashSecret, querydrUrl, timeout } = paymentConfig.vnpay;
+    const { tmnCode, hashSecret, querydrUrl, timeout } = env.vnpay;
     const now = new Date();
     const requestId = `${Date.now()}`;
     const version = '2.1.0';

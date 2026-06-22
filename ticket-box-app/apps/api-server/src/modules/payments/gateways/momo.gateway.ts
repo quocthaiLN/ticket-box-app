@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 import { postJson } from './http-client.js';
 import type {
   CheckoutInput,
@@ -25,7 +25,7 @@ interface MomoQueryResponse {
 
 // Ký chuỗi canonical theo HMAC SHA-256 mà MoMo yêu cầu.
 const sign = (raw: string): string =>
-  createHmac('sha256', paymentConfig.momo.secretKey).update(raw, 'utf8').digest('hex');
+  createHmac('sha256', env.momo.secretKey).update(raw, 'utf8').digest('hex');
 
 export class MomoGateway implements PaymentGateway {
   // Adapter này chuyển contract chung sang định dạng API MoMo.
@@ -36,7 +36,7 @@ export class MomoGateway implements PaymentGateway {
   // Tạo payment request, ký body và lấy payUrl để redirect user.
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     // Lấy credential, endpoint và URL callback từ cấu hình; không nhận từ client.
-    const { partnerCode, accessKey, redirectUrl, ipnUrl, endpoint, timeout } = paymentConfig.momo;
+    const { partnerCode, accessKey, redirectUrl, ipnUrl, endpoint, timeout } = env.momo;
     // Dùng orderId làm requestId để liên kết request provider với order nội bộ.
     const requestId = input.orderId;
     // MoMo nhận số tiền nguyên VND, nên loại phần thập phân trước khi gửi.
@@ -80,7 +80,7 @@ export class MomoGateway implements PaymentGateway {
   // Gọi API query của MoMo để đối soát trạng thái payment đã tạo.
   async queryStatus(input: StatusInput): Promise<StatusResult> {
     // Query sử dụng cùng orderId/requestId đã dùng ở bước tạo checkout.
-    const { partnerCode, accessKey, queryUrl, timeout } = paymentConfig.momo;
+    const { partnerCode, accessKey, queryUrl, timeout } = env.momo;
     const requestId = input.orderId;
 
     // Query request cũng phải được ký theo chuỗi field cố định của MoMo.

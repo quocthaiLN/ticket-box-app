@@ -115,10 +115,12 @@ export function buildVnpayWebhookPayload(
     vnp_TxnRef:        orderId,
   };
 
+  // VNPAY ký trên value đã encode (encodeURIComponent, %20 -> +) — khớp với verifyVnpaySignature.
+  const encodeVnpValue = (value: string) => encodeURIComponent(value).replace(/%20/g, '+');
   const sortedKeys = Object.keys(fields).sort();
   const signData = sortedKeys
     .filter((k) => fields[k] !== '' && fields[k] !== undefined)
-    .map((k) => `${k}=${fields[k]}`)
+    .map((k) => `${k}=${encodeVnpValue(String(fields[k]))}`)
     .join('&');
 
   const vnp_SecureHash = createHmac('sha512', hashSecret)

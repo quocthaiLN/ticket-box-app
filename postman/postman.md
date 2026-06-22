@@ -1,29 +1,4 @@
-# Hướng dẫn test TicketBox trên Postman
-
-Tài liệu này hướng dẫn bạn test **luồng khán giả** (Audience Flow) từ đăng nhập đến lấy QR vé,
-dựa trên collection `TicketBox-Audience-Flow.postman_collection.json`.
-
-> Luồng: **Đăng nhập → chọn concert/ticket type → tạo order (HELD) → tạo payment VNPAY →
-> giả lập webhook VNPAY thành công → poll order CONFIRMED → lấy QR vé.**
-
----
-
 ## 1. Chuẩn bị trước khi test
-
-### 1.1. Chạy backend + dịch vụ phụ trợ
-Collection gọi vào API ở `http://localhost:3000/v1`, nên cần API server, Postgres, Redis đang chạy.
-
-```powershell
-# Bật Postgres + Redis (và các service trong docker-compose)
-cd ticket-box-app
-docker compose up -d
-
-# Seed dữ liệu (tạo tài khoản audience, concert PUBLISH, ticket type)
-npm run db:seed
-
-# Chạy API server
-npm run dev
-```
 
 Tài khoản seed mặc định:
 - Email: `audience@ticketbox.test`
@@ -44,33 +19,6 @@ collection `vnp_hash_secret` **phải trùng** với `VNPAY_HASH_SECRET` trong f
 2. Kéo thả file `postman/TicketBox-Audience-Flow.postman_collection.json` (hoặc chọn **Upload Files**).
 3. Sau khi import, bạn sẽ thấy collection **"TicketBox - Audience Flow (Login -> QR)"**
    với 11 request đánh số `0.` → `10.`.
-
-### Biến của collection
-Mở collection → tab **Variables**. Các biến quan trọng:
-
-| Biến | Ý nghĩa | Cần sửa? |
-|------|---------|----------|
-| `base_url` | `http://localhost:3000/v1` | Đổi nếu PORT khác |
-| `audience_email` / `audience_password` | Tài khoản đăng nhập | Mặc định là tài khoản seed |
-| `vnp_hash_secret` | Khóa ký VNPAY | Phải trùng `.env` |
-| `access_token`, `concert_id`, `order_id`, ... | Tự động được set qua các bước | Để trống, đừng sửa tay |
-
-> **Quan trọng:** các biến như `access_token`, `order_id`, `payment_id`, `ticket_id`... được
-> các script `test` của từng request **tự động gán** rồi truyền sang bước sau. Vì vậy phải
-> chạy **đúng thứ tự** từ trên xuống.
-
----
-
-## 3. Cách nhanh nhất: Run Collection
-
-Thay vì bấm từng request, bạn có thể chạy cả luồng một lần:
-
-1. Bấm chuột phải vào collection → **Run collection** (hoặc nút **Run**).
-2. Giữ nguyên thứ tự 0 → 10.
-3. Bấm **Run TicketBox - Audience Flow**.
-4. Xem cột kết quả: tất cả test nên **PASS** (xanh).
-
-Nếu muốn hiểu từng bước, làm theo phần 4 dưới đây (chạy thủ công).
 
 ---
 
