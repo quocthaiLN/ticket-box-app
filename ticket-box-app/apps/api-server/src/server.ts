@@ -1,6 +1,7 @@
+import { env } from "@ticketbox/config";
 import { createApp } from "./app.js";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(env.server.port);
 const app = createApp();
 
 app.listen(port, () => {

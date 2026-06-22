@@ -1,6 +1,18 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import dotenv from "dotenv";
 
-dotenv.config();
+// `dotenv.config()` mặc định đọc `.env` theo process.cwd(). Khi chạy qua
+// `npm run dev -w <workspace>` thì cwd là thư mục con (vd apps/api-server) nên
+// KHÔNG thấy `.env` dùng chung ở gốc monorepo. Vì vậy trỏ tường minh tới
+// `ticket-box-app/.env` dựa trên vị trí file này (config/env.ts -> `../.env`),
+// để mọi app/worker/test/prisma đều nạp đúng cùng một file bất kể cwd.
+const rootEnvPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../.env",
+);
+
+dotenv.config({ path: rootEnvPath });
 
 export const env = {
   server: {
@@ -65,7 +77,8 @@ export const env = {
       "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
     returnUrl:
       process.env["VNPAY_RETURN_URL"] ?? "http://localhost:3000/payment/return",
-    // Resilience (circuit breaker / bulkhead) — cấu hình chi tiết ở payment.ts
+    timeout: process.env["NODE_ENV"] === "production" ? 5_000 : 10_000,
+    // Resilience: circuit breaker + bulkhead
     failureThreshold: Number(process.env["VNPAY_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["VNPAY_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["VNPAY_CB_RESET_TIMEOUT"] ?? 30_000),
@@ -85,7 +98,8 @@ export const env = {
     endpoint:
       process.env["MOMO_ENDPOINT"] ??
       "https://test-payment.momo.vn/v2/gateway/api/create",
-    // Resilience (circuit breaker / bulkhead) — cấu hình chi tiết ở payment.ts
+    timeout: process.env["NODE_ENV"] === "production" ? 8_000 : 15_000,
+    // Resilience: circuit breaker + bulkhead
     failureThreshold: Number(process.env["MOMO_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["MOMO_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["MOMO_CB_RESET_TIMEOUT"] ?? 30_000),

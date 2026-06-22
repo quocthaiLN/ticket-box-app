@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -140,13 +140,13 @@ export class PaymentCircuitBreaker {
 }
 
 export const vnpayCircuitBreaker = new PaymentCircuitBreaker('VNPAY', {
-  failureThreshold: paymentConfig.vnpay.failureThreshold,
-  resetTimeout: paymentConfig.vnpay.resetTimeout,
+  failureThreshold: env.vnpay.failureThreshold,
+  resetTimeout: env.vnpay.resetTimeout,
 });
 
 export const momoCircuitBreaker = new PaymentCircuitBreaker('MOMO', {
-  failureThreshold: paymentConfig.momo.failureThreshold,
-  resetTimeout: paymentConfig.momo.resetTimeout,
+  failureThreshold: env.momo.failureThreshold,
+  resetTimeout: env.momo.resetTimeout,
 });
 
 export function getCircuitBreaker(provider: 'VNPAY' | 'MOMO'): PaymentCircuitBreaker {

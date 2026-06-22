@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
+import { env } from "@ticketbox/config";
 import type { AuthPayload, Role } from "./auth.type.js";
 
 const BCRYPT_ROUNDS = 12;
@@ -9,14 +10,14 @@ const REFRESH_TOKEN_EXPIRES_IN = "7d";
 export const ACCESS_TOKEN_TTL_SECONDS = 900; // 15 min
 
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = env.auth.jwtSecret;
   if (!secret) throw new Error("JWT_SECRET env variable is not set");
   return secret;
 }
 
 function getRefreshSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET env variable is not set");
+  const secret = env.auth.jwtRefreshSecret;
+  if (!secret) throw new Error("JWT_REFRESH_SECRET env variable is not set");
   return secret;
 }
 

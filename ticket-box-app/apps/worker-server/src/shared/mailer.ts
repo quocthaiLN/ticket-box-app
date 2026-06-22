@@ -6,15 +6,16 @@
  */
 
 import nodemailer from "nodemailer";
+import { env } from "@ticketbox/config";
 import type { EmailJobData } from "@ticketbox/queue";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === "true",
+  host: env.smtp.host,
+  port: env.smtp.port,
+  secure: env.smtp.secure,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: env.smtp.user,
+    pass: env.smtp.pass,
   },
 });
 
@@ -23,7 +24,7 @@ const transporter = nodemailer.createTransport({
  */
 export async function sendEmail(data: EmailJobData): Promise<void> {
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? "TicketBox <noreply@ticketbox.vn>",
+    from: env.smtp.from,
     to: data.to,
     subject: data.subject,
     text: data.text,
