@@ -1,10 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { prisma, Prisma, TicketStatus, NotificationChannel, NotificationType } from '@ticketbox/database';
+import { prisma, Prisma, TicketStatus } from '@ticketbox/database';
 import { buildQrPayload, signQrPayload } from './ticket.qr.js';
 import type { QrPayload, TicketListQuery } from './ticket.type.js';
-import { Errors } from '../../shared/http/problem-details.js';
+import { ApiError } from '../../shared/http/problem-details.js';
 
-// ── Row types ──────────────────────────────────────────────────────────────────
+// Row types
 
 type TicketListRow = {
   id: string;
@@ -38,25 +37,7 @@ type TicketDetailRow = {
   qrSignature: string | null;
 };
 
-type OrderItemRow = {
-  itemId: string;
-  ticketTypeId: string;
-  seatZoneId: string;
-  quantity: number;
-};
-
-type ExistingTicketRow = {
-  id: string;
-  ticketTypeId: string;
-  seatZoneId: string;
-  status: string;
-  qrTokenHash: string;
-  issuedAt: Date;
-  qrPayload: unknown;
-  qrSignature: string | null;
-};
-
-// ── List ───────────────────────────────────────────────────────────────────────
+// List
 
 export async function listTicketsForUser(userId: string, query: TicketListQuery) {
   const limit = Math.min(query.limit ?? 20, 100);
@@ -91,8 +72,7 @@ export async function listTicketsForUser(userId: string, query: TicketListQuery)
   return { items, nextCursor, limit };
 }
 
-// ── Detail ─────────────────────────────────────────────────────────────────────
-
+// Detail
 export async function getTicketDetailForUser(ticketId: string, userId: string) {
   const [row] = await prisma.$queryRaw<TicketDetailRow[]>(Prisma.sql`
     SELECT
@@ -120,14 +100,13 @@ export async function getTicketDetailForUser(ticketId: string, userId: string) {
     WHERE t.id = ${ticketId}::uuid
   `);
 
-  if (!row) throw Errors.ticketNotFound();
-  if (row.userId !== userId) throw Errors.ticketAccessDenied();
+  if (!row) throw new ApiError({ title: 'TICKET_NOT_FOUND', status: 404, code: 'TICKET_NOT_FOUND', detail: 'Ticket not found' });
+  if (row.userId !== userId) throw new ApiError({ title: 'TICKET_ACCESS_DENIED', status: 403, code: 'TICKET_ACCESS_DENIED', detail: 'Access denied to this ticket' });
 
   return row;
 }
 
-// ── QR ─────────────────────────────────────────────────────────────────────────
-
+// QR
 export async function getTicketQrForUser(
   ticketId: string,
   userId: string,
@@ -135,7 +114,12 @@ export async function getTicketQrForUser(
   const row = await getTicketDetailForUser(ticketId, userId);
 
   if (row.status === 'CANCELLED' || row.status === 'REFUNDED') {
-    throw Errors.ticketNotUsable();
+    throw new ApiError({
+      title: 'TICKET_NOT_USABLE',
+      status: 422,
+      code: 'TICKET_NOT_USABLE',
+      detail: 'Ticket is cancelled or refunded',
+    });
   }
 
   if (row.qrPayload && row.qrSignature) {
@@ -154,121 +138,7 @@ export async function getTicketQrForUser(
   return { ticketId: row.id, payload, qrSignature: signature };
 }
 
-// ── Issue ──────────────────────────────────────────────────────────────────────
-
-export async function issueTicketsForOrder(orderId: string) {
-  return prisma.$transaction(async (tx) => {
-    const [orderRow] = await tx.$queryRaw<Array<{ userId: string; concertId: string; status: string }>>(Prisma.sql`
-      SELECT user_id AS "userId", concert_id AS "concertId", status::text AS "status"
-      FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
-    `);
-
-    if (!orderRow) throw Errors.orderNotFoundById();
-    if (orderRow.status !== 'CONFIRMED') {
-      throw Errors.orderNotConfirmed(orderRow.status);
-    }
-
-    const [paymentRow] = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT id FROM payments
-      WHERE order_id = ${orderId}::uuid AND status = 'SUCCEEDED'
-      LIMIT 1
-    `);
-
-    if (!paymentRow) throw Errors.paymentNotSucceeded();
-
-    const items = await tx.$queryRaw<OrderItemRow[]>(Prisma.sql`
-      SELECT
-        oi.id               AS "itemId",
-        oi.ticket_type_id   AS "ticketTypeId",
-        tt.seat_zone_id     AS "seatZoneId",
-        oi.quantity
-      FROM order_items oi
-      JOIN ticket_types tt ON tt.id = oi.ticket_type_id
-      WHERE oi.order_id = ${orderId}::uuid
-    `);
-
-    const totalExpected = items.reduce((sum, i) => sum + i.quantity, 0);
-
-    const existing = await tx.$queryRaw<ExistingTicketRow[]>(Prisma.sql`
-      SELECT id, ticket_type_id AS "ticketTypeId", seat_zone_id AS "seatZoneId",
-             status::text AS "status", qr_token_hash AS "qrTokenHash",
-             issued_at AS "issuedAt", qr_payload AS "qrPayload", qr_signature AS "qrSignature"
-      FROM tickets WHERE order_id = ${orderId}::uuid
-    `);
-
-    const now = new Date();
-
-    // Idempotent: tickets already exist, just backfill any missing QR data
-    if (existing.length === totalExpected) {
-      for (const t of existing) {
-        if (!t.qrPayload || !t.qrSignature) {
-          const payload = buildQrPayload(t.id, orderRow.concertId, t.ticketTypeId, t.seatZoneId, t.issuedAt, t.qrTokenHash);
-          const signature = signQrPayload(payload);
-          await tx.ticket.update({
-            where: { id: t.id },
-            data: { qrPayload: payload as unknown as Prisma.InputJsonValue, qrSignature: signature },
-          });
-        }
-      }
-      return { orderId, tickets: existing };
-    }
-
-    if (existing.length > 0) {
-      throw Errors.ticketsAlreadyIssued();
-    }
-
-    // Create tickets
-    const issued: ExistingTicketRow[] = [];
-
-    for (const item of items) {
-      for (let i = 0; i < item.quantity; i++) {
-        const rawToken = `${orderId}:${item.itemId}:${i}:${randomBytes(8).toString('hex')}`;
-        const qrTokenHash = createHash('sha256').update(rawToken, 'utf8').digest('hex');
-
-        const ticket = await tx.ticket.create({
-          data: {
-            orderId,
-            orderItemId: item.itemId,
-            userId: orderRow.userId,
-            concertId: orderRow.concertId,
-            ticketTypeId: item.ticketTypeId,
-            seatZoneId: item.seatZoneId,
-            qrTokenHash,
-            status: TicketStatus.ISSUED,
-            issuedAt: now,
-          },
-        });
-
-        const payload = buildQrPayload(ticket.id, orderRow.concertId, item.ticketTypeId, item.seatZoneId, now, qrTokenHash);
-        const signature = signQrPayload(payload);
-
-        await tx.ticket.update({
-          where: { id: ticket.id },
-          data: { qrPayload: payload as unknown as Prisma.InputJsonValue, qrSignature: signature },
-        });
-
-        issued.push({ id: ticket.id, ticketTypeId: item.ticketTypeId, seatZoneId: item.seatZoneId, status: 'ISSUED', qrTokenHash, issuedAt: now, qrPayload: payload, qrSignature: signature });
-      }
-    }
-
-    // Enqueue TICKET_ISSUED notifications
-    await tx.notification.createMany({
-      data: issued.map((t) => ({
-        userId: orderRow.userId,
-        concertId: orderRow.concertId,
-        ticketId: t.id,
-        channel: NotificationChannel.EMAIL,
-        type: NotificationType.TICKET_ISSUED,
-        payload: { ticket_id: t.id, order_id: orderId } as Prisma.InputJsonValue,
-      })),
-    });
-
-    return { orderId, tickets: issued };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-}
-
-// ── Void ───────────────────────────────────────────────────────────────────────
-
+// Void
 export async function voidTicketById(ticketId: string) {
   return prisma.$transaction(async (tx) => {
     const [row] = await tx.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
@@ -276,7 +146,7 @@ export async function voidTicketById(ticketId: string) {
       FROM tickets WHERE id = ${ticketId}::uuid FOR UPDATE
     `);
 
-    if (!row) throw Errors.ticketNotFound();
+    if (!row) throw new ApiError({ title: 'TICKET_NOT_FOUND', status: 404, code: 'TICKET_NOT_FOUND', detail: 'Ticket not found' });
 
     if (row.status === 'CANCELLED' || row.status === 'REFUNDED') {
       return { id: row.id, status: row.status, voidedAt: new Date() };

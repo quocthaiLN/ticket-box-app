@@ -1,12 +1,11 @@
-import { createHmac } from 'node:crypto';
+﻿import { createHmac } from 'node:crypto';
 import { env } from '@ticketbox/config';
 import { enqueueNotification } from '@ticketbox/queue';
-import { buildVnpayUrl } from './payment.vnpay.js';
-import { buildMomoUrl } from './payment.momo.js';
-import { Errors } from '../../shared/http/problem-details.js';
+import { getGateway } from './gateways/index.js';
+import { ApiError } from '../../shared/http/problem-details.js';
 import {
   confirmOrderPayment,
-  createRetryPaymentRecord,
+  createPaymentRecord,
   failPayment,
   findPaymentByProviderTxn,
   findPendingPaymentForWebhook,
@@ -16,32 +15,19 @@ import {
 } from './payment.repository.js';
 import { getBulkhead } from './bulkhead/payment.bulkhead.js';
 import { getCircuitBreaker } from './circuit-breaker/payment.circuit-breaker.js';
-import type { MomoWebhookBody, RetryPaymentResponse, VnpayWebhookBody } from './payment.type.js';
+import type { CreatePaymentResponse, MomoWebhookBody, VnpayWebhookBody } from './payment.type.js';
 
-// ── Provider Call Wrapper ──────────────────────────────────────────────────────
-
-async function callProvider(
+// Gọi provider qua bulkhead và circuit breaker để cô lập lỗi giữa các provider.
+async function callProvider<T>(
   provider: 'VNPAY' | 'MOMO',
-  fn: () => Promise<string>,
-): Promise<string> {
+  fn: () => Promise<T>,
+): Promise<T> {
   const cb = getCircuitBreaker(provider);
   const bh = getBulkhead(provider);
   return bh.execute(() => cb.execute(fn));
 }
 
-// ── Build Checkout URL (with circuit breaker + bulkhead + fallback) ────────────
-
-export function buildCheckoutUrl(
-  provider: 'VNPAY' | 'MOMO',
-  orderId: string,
-  amount: string,
-  currency: string,
-  orderInfo: string,
-): string {
-  if (provider === 'MOMO') return buildMomoUrl(orderId, amount, orderInfo);
-  return buildVnpayUrl(orderId, amount, currency, orderInfo);
-}
-
+// Tạo checkout URL bằng provider ưu tiên, sau đó thử provider dự phòng khi cần.
 export async function buildCheckoutUrlWithFallback(
   preferredProvider: 'VNPAY' | 'MOMO',
   orderId: string,
@@ -49,44 +35,70 @@ export async function buildCheckoutUrlWithFallback(
   currency: string,
   orderInfo: string,
 ): Promise<{ url: string; provider: 'VNPAY' | 'MOMO' }> {
+  // Xác định thứ tự gọi provider: lựa chọn của user trước, dự phòng sau.
   const fallback: 'VNPAY' | 'MOMO' = preferredProvider === 'VNPAY' ? 'MOMO' : 'VNPAY';
   const order: Array<'VNPAY' | 'MOMO'> = [preferredProvider, fallback];
 
   let lastError: unknown;
 
   for (const provider of order) {
+    // Bỏ qua provider đang bị circuit breaker chặn (tín hiệu từ queryStatus/webhook).
     if (getCircuitBreaker(provider).isOpen()) continue;
 
     try {
-      const url = await callProvider(provider, async () =>
-        buildCheckoutUrl(provider, orderId, amount, currency, orderInfo),
-      );
-      return { url, provider };
+      // Provider trả checkout URL dùng để redirect user sang trang thanh toán.
+      const gateway = getGateway(provider);
+      const run = () => gateway.createCheckout({ orderId, amount, currency, orderInfo });
+      // Chỉ checkout chạm mạng (MoMo) mới feed circuit breaker; VNPay ký URL local
+      // nên không record vào breaker để tránh reset/đóng nhầm trạng thái sức khỏe.
+      const { payUrl } = gateway.checkoutHitsNetwork
+        ? await callProvider(provider, run)
+        : await run();
+      return { url: payUrl, provider };
     } catch (err) {
       lastError = err;
     }
   }
 
+  // Không provider nào khả dụng: trả lỗi để client có thể thử lại sau.
   throw Object.assign(
     new Error('All payment providers are currently unavailable'),
     { statusCode: 503, code: 'PAYMENT_PROVIDER_UNAVAILABLE', cause: lastError },
   );
 }
 
-// ── Retry Payment ──────────────────────────────────────────────────────────────
+// Truy vấn trạng thái thanh toán tại provider để phục vụ đối soát.
+export async function queryPaymentStatus(
+  provider: 'VNPAY' | 'MOMO',
+  orderId: string,
+  transactionDate: string,
+): Promise<{ paid: boolean; raw: Record<string, unknown> }> {
+  return callProvider(provider, () =>
+    getGateway(provider).queryStatus({ orderId, transactionDate }),
+  );
+}
 
-export async function retryPayment(
+// Tạo một payment attempt cho order HELD và trả checkout URL cho client.
+export async function createPayment(
   orderId: string,
   userId: string,
   provider: 'VNPAY' | 'MOMO' = 'VNPAY',
-): Promise<RetryPaymentResponse> {
+): Promise<CreatePaymentResponse> {
+  // Xác nhận user sở hữu order và order vẫn có thể thanh toán.
   const order = await getOrderForRetry(orderId, userId);
 
+  // Không cho phép đồng thời tồn tại nhiều payment PENDING.
   const existing = await getActivePendingPayment(orderId);
   if (existing) {
-    throw Errors.paymentAlreadyPending();
+    throw new ApiError({
+      title: 'PAYMENT_ALREADY_PENDING',
+      status: 409,
+      code: 'PAYMENT_ALREADY_PENDING',
+      detail: 'An active pending payment already exists for this order',
+    });
   }
 
+  // Chuẩn bị dữ liệu giao dịch và yêu cầu provider tạo checkout URL.
   const orderInfo = `Payment for order ${orderId}`;
 
   const { url: checkoutUrl, provider: actualProvider } = await buildCheckoutUrlWithFallback(
@@ -97,8 +109,10 @@ export async function retryPayment(
     orderInfo,
   );
 
-  const payment = await createRetryPaymentRecord(orderId, order.totalAmount, order.currency, actualProvider, checkoutUrl);
+  // Lưu attempt với provider thực tế; có thể khác provider ưu tiên do fallback.
+  const payment = await createPaymentRecord(orderId, order.totalAmount, order.currency, actualProvider, checkoutUrl);
 
+  // Chuẩn hoá dữ liệu cần thiết để client chuyển sang bước thanh toán.
   return {
     payment_id: payment.id,
     provider: actualProvider,
@@ -109,12 +123,13 @@ export async function retryPayment(
   };
 }
 
-// ── VNPAY Webhook ──────────────────────────────────────────────────────────────
-
+// VNPAY Webhook
+// Xác minh HMAC SHA-512 của webhook VNPAY trước khi thay đổi trạng thái payment.
 function verifyVnpaySignature(body: VnpayWebhookBody): boolean {
   const { vnp_SecureHash, vnp_SecureHashType, ...rest } = body;
   if (!vnp_SecureHash) return false;
 
+  // VNPAY yêu cầu các field được lọc, sắp xếp và ghép theo định dạng cố định.
   const sortedKeys = Object.keys(rest).sort();
   const signData = sortedKeys
     .filter((k) => rest[k] !== '' && rest[k] !== undefined)
@@ -128,6 +143,7 @@ function verifyVnpaySignature(body: VnpayWebhookBody): boolean {
   return expected.toLowerCase() === vnp_SecureHash.toLowerCase();
 }
 
+// Xử lý webhook VNPAY: kiểm tra dữ liệu, chữ ký, số tiền rồi xác nhận/thất bại payment.
 export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspCode: string; Message: string }> {
   const orderId = body.vnp_TxnRef;
   const providerTxnId = body.vnp_TransactionNo;
@@ -138,11 +154,13 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
     return { RspCode: '99', Message: 'Missing required fields' };
   }
 
+  // Webhook trùng của giao dịch thành công được chấp nhận idempotent.
   const existing = await findPaymentByProviderTxn('VNPAY', providerTxnId);
   if (existing?.status === 'SUCCEEDED') {
     return { RspCode: '00', Message: 'Confirm Success' };
   }
 
+  // Luôn lưu payload nếu tìm được payment để phục vụ audit, kể cả chữ ký không hợp lệ.
   const signatureValid = verifyVnpaySignature(body);
 
   const payment = await findPendingPaymentForWebhook(orderId, 'VNPAY');
@@ -155,6 +173,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
   }
 
   if (payment) {
+    // VNPAY biểu diễn số tiền theo đơn vị nhỏ nhất, nên nhân amount với 100 để so sánh.
     const expectedAmount = Math.round(parseFloat(payment.amount) * 100);
     if (parseInt(vnpAmount, 10) !== expectedAmount) {
       return { RspCode: '04', Message: 'Invalid amount' };
@@ -163,6 +182,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
 
   const isSuccess = responseCode === '00';
 
+  // Webhook hợp lệ sẽ xác nhận payment hoặc giải phóng hold khi thất bại.
   if (isSuccess && payment) {
     const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('VNPAY').recordSuccess();
@@ -176,11 +196,12 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
   return { RspCode: '00', Message: 'Confirm Success' };
 }
 
-// ── MoMo Webhook ───────────────────────────────────────────────────────────────
-
+// MoMo Webhook
+// Xác minh HMAC SHA-256 của payload webhook MoMo.
 function verifyMomoSignature(body: MomoWebhookBody): boolean {
   if (!body.signature) return false;
 
+  // MoMo yêu cầu chuỗi ký gồm các field theo đúng thứ tự này.
   const rawSignature = [
     `accessKey=${env.momo.accessKey}`,
     `amount=${body.amount}`,
@@ -204,6 +225,7 @@ function verifyMomoSignature(body: MomoWebhookBody): boolean {
   return expected === body.signature;
 }
 
+// Xử lý webhook MoMo: kiểm tra chữ ký rồi xác nhận/thất bại payment tương ứng.
 export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status: number; message: string }> {
   const orderId = body.orderId;
   const transId = body.transId?.toString();
@@ -213,11 +235,13 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
     return { status: 400, message: 'Missing required fields' };
   }
 
+  // Webhook trùng của giao dịch thành công được chấp nhận idempotent.
   const existing = await findPaymentByProviderTxn('MOMO', transId);
   if (existing?.status === 'SUCCEEDED') {
     return { status: 200, message: 'success' };
   }
 
+  // Lưu payload trước khi kết thúc xử lý để có dữ liệu audit/reconcile.
   const signatureValid = verifyMomoSignature(body);
 
   const payment = await findPendingPaymentForWebhook(orderId, 'MOMO');
@@ -231,6 +255,7 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
 
   const isSuccess = resultCode === 0;
 
+  // Webhook hợp lệ sẽ xác nhận payment hoặc giải phóng hold khi thất bại.
   if (isSuccess && payment) {
     const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('MOMO').recordSuccess();
@@ -244,8 +269,6 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
   return { status: 200, message: 'success' };
 }
 
-// ── Internal helpers ───────────────────────────────────────────────────────────
-
 type IssuedNotification = {
   id: string;
   userId: string;
@@ -253,9 +276,11 @@ type IssuedNotification = {
   payload: Record<string, unknown>;
 };
 
+// Đẩy notification phát hành vé sang queue sau khi transaction thanh toán đã commit.
 async function enqueueIssuedTicketNotifications(
   notifications: IssuedNotification[],
 ): Promise<void> {
+  // Một notification lỗi không được làm ảnh hưởng các notification còn lại.
   await Promise.allSettled(
     notifications.map((n) =>
       enqueueNotification({

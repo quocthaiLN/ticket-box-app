@@ -11,6 +11,10 @@ export const paymentConfig = {
     url:
       process.env["VNPAY_URL"] ??
       "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+    // Endpoint QueryDR để đối soát trạng thái giao dịch (khác trang redirect `url`).
+    querydrUrl:
+      process.env["VNPAY_QUERYDR_URL"] ??
+      "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction",
     returnUrl:
       process.env["VNPAY_RETURN_URL"] ?? "http://localhost:3000/payment/return",
     timeout: process.env.NODE_ENV === "production" ? 5000 : 10000,
@@ -37,6 +41,10 @@ export const paymentConfig = {
     endpoint:
       process.env["MOMO_ENDPOINT"] ??
       "https://test-payment.momo.vn/v2/gateway/api/create",
+    // Endpoint query để đối soát trạng thái payment đã tạo (khác `endpoint` create).
+    queryUrl:
+      process.env["MOMO_QUERY_ENDPOINT"] ??
+      "https://test-payment.momo.vn/v2/gateway/api/query",
     timeout: process.env.NODE_ENV === "production" ? 8000 : 15000,
     failureThreshold: Number(process.env["MOMO_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["MOMO_CB_ERROR_THRESHOLD"] ?? 50),

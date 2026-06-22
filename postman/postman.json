@@ -1,0 +1,361 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "TicketBox - Audience Flow (Login -> QR)",
+    "description": "Luồng test khán giả: Đăng nhập -> chọn concert/ticket type -> tạo order (HELD) -> tạo payment VNPAY -> giả lập webhook VNPAY thành công -> poll order CONFIRMED -> lấy QR vé.\n\nChạy theo thứ tự (Run Collection) để các biến tự động truyền qua các bước.\n\nTÀI KHOẢN SEED: audience@ticketbox.test / Password@123 (cần seed lại DB sau khi sửa seed.mjs: npm run db:seed).\n\nLƯU Ý:\n- base_url mặc định http://localhost:3000/v1 (đổi nếu PORT khác).\n- vnp_hash_secret PHẢI trùng VNPAY_HASH_SECRET trong .env (repo hiện tại: vnpay_hash_secret).\n- Cần có sẵn concert đã PUBLISH và ticket type trong DB (seed có sẵn); collection tự lấy concert/ticket type đầu tiên.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000/v1" },
+    { "key": "audience_email", "value": "audience@ticketbox.test" },
+    { "key": "audience_password", "value": "Password@123" },
+    { "key": "audience_full_name", "value": "Demo Audience" },
+    { "key": "vnp_hash_secret", "value": "vnpay_hash_secret" },
+    { "key": "access_token", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "concert_id", "value": "" },
+    { "key": "ticket_type_id", "value": "" },
+    { "key": "order_id", "value": "" },
+    { "key": "total_amount", "value": "" },
+    { "key": "payment_id", "value": "" },
+    { "key": "ticket_id", "value": "" },
+    { "key": "vnp_Amount", "value": "" },
+    { "key": "vnp_TransactionNo", "value": "" },
+    { "key": "vnp_SecureHash", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('API is up', () => pm.response.code === 200);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Register audience (optional)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// 201 = tạo mới; 409 = email đã tồn tại (seed). Cả hai đều ok, vẫn login được ở bước 2.",
+              "pm.test('Register ok or already exists', () => [201, 409, 422].includes(pm.response.code));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{audience_email}}\",\n  \"password\": \"{{audience_password}}\",\n  \"confirmPassword\": \"{{audience_password}}\",\n  \"full_name\": \"{{audience_full_name}}\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] }
+      }
+    },
+    {
+      "name": "2. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login 200', () => pm.response.code === 200);",
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('access_token', d.access_token);",
+              "pm.collectionVariables.set('user_id', d.user.id);",
+              "pm.test('Has access token', () => !!d.access_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{audience_email}}\",\n  \"password\": \"{{audience_password}}\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "3. List published concerts",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.code === 200);",
+              "const list = pm.response.json().data || [];",
+              "pm.test('Has at least one concert', () => list.length > 0);",
+              "if (list.length > 0) {",
+              "  pm.collectionVariables.set('concert_id', list[0].id);",
+              "  console.log('concert_id =', list[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{base_url}}/concerts", "host": ["{{base_url}}"], "path": ["concerts"] }
+      }
+    },
+    {
+      "name": "4. List ticket types for concert",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.code === 200);",
+              "const list = pm.response.json().data || [];",
+              "pm.test('Has at least one ticket type', () => list.length > 0);",
+              "if (list.length > 0) {",
+              "  pm.collectionVariables.set('ticket_type_id', list[0].id);",
+              "  console.log('ticket_type_id =', list[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/concerts/{{concert_id}}/ticket-types",
+          "host": ["{{base_url}}"],
+          "path": ["concerts", "{{concert_id}}", "ticket-types"]
+        }
+      }
+    },
+    {
+      "name": "5. Create order (HELD)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Order created 201', () => pm.response.code === 201);",
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('order_id', d.order_id);",
+              "pm.collectionVariables.set('total_amount', String(d.total_amount));",
+              "pm.test('Status HELD', () => d.status === 'HELD');",
+              "console.log('order_id =', d.order_id, 'total =', d.total_amount);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" },
+          { "key": "Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"concert_id\": \"{{concert_id}}\",\n  \"items\": [\n    { \"ticket_type_id\": \"{{ticket_type_id}}\", \"quantity\": 1 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] }
+      }
+    },
+    {
+      "name": "6. Create payment (VNPAY)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Payment created 201', () => pm.response.code === 201);",
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('payment_id', d.payment_id);",
+              "pm.test('Status PENDING', () => d.status === 'PENDING');",
+              "console.log('checkout_url =', d.checkout_url);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" },
+          { "key": "Idempotency-Key", "value": "{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payment_provider\": \"VNPAY\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/payments",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", "payments"]
+        }
+      }
+    },
+    {
+      "name": "7. Simulate VNPAY webhook (success)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Tính chữ ký HMAC-SHA512 giống server (payment.service.ts verifyVnpaySignature)",
+              "const CryptoJS = require('crypto-js');",
+              "const secret = pm.collectionVariables.get('vnp_hash_secret');",
+              "const txnRef = pm.collectionVariables.get('order_id');",
+              "const total = pm.collectionVariables.get('total_amount');",
+              "const amount = String(Math.round(parseFloat(total) * 100));",
+              "const txnNo = String(Date.now());",
+              "",
+              "// Các field tham gia ký (loại vnp_SecureHash), filter rỗng, sort theo key",
+              "const fields = {",
+              "  vnp_Amount: amount,",
+              "  vnp_ResponseCode: '00',",
+              "  vnp_TransactionNo: txnNo,",
+              "  vnp_TxnRef: txnRef",
+              "};",
+              "const signData = Object.keys(fields).sort()",
+              "  .filter(k => fields[k] !== '' && fields[k] !== undefined)",
+              "  .map(k => `${k}=${fields[k]}`)",
+              "  .join('&');",
+              "const hash = CryptoJS.HmacSHA512(signData, secret).toString(CryptoJS.enc.Hex);",
+              "",
+              "pm.collectionVariables.set('vnp_Amount', amount);",
+              "pm.collectionVariables.set('vnp_TransactionNo', txnNo);",
+              "pm.collectionVariables.set('vnp_SecureHash', hash);",
+              "console.log('signData =', signData);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Webhook accepted 200', () => pm.response.code === 200);",
+              "const body = pm.response.json();",
+              "pm.test('RspCode 00 (Confirm Success)', () => body.RspCode === '00');",
+              "if (body.RspCode !== '00') {",
+              "  console.warn('Webhook từ chối:', JSON.stringify(body), '-> kiểm tra vnp_hash_secret khớp .env');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vnp_TxnRef\": \"{{order_id}}\",\n  \"vnp_Amount\": \"{{vnp_Amount}}\",\n  \"vnp_TransactionNo\": \"{{vnp_TransactionNo}}\",\n  \"vnp_ResponseCode\": \"00\",\n  \"vnp_SecureHash\": \"{{vnp_SecureHash}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/webhooks/vnpay",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "webhooks", "vnpay"]
+        }
+      }
+    },
+    {
+      "name": "8. Poll order (expect CONFIRMED + tickets)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.code === 200);",
+              "const d = pm.response.json().data;",
+              "pm.test('Order CONFIRMED', () => d.status === 'CONFIRMED');",
+              "pm.test('Tickets issued', () => Array.isArray(d.tickets) && d.tickets.length > 0);",
+              "if (d.tickets && d.tickets.length > 0) {",
+              "  pm.collectionVariables.set('ticket_id', d.tickets[0].id);",
+              "  console.log('ticket_id =', d.tickets[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}"]
+        }
+      }
+    },
+    {
+      "name": "9. List my tickets",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.code === 200);",
+              "const list = pm.response.json().data || [];",
+              "pm.test('Has tickets', () => list.length > 0);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": { "raw": "{{base_url}}/me/tickets", "host": ["{{base_url}}"], "path": ["me", "tickets"] }
+      }
+    },
+    {
+      "name": "10. Get ticket QR",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.code === 200);",
+              "const d = pm.response.json().data;",
+              "pm.test('Has QR payload', () => !!d);",
+              "console.log('QR =', JSON.stringify(d));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": {
+          "raw": "{{base_url}}/me/tickets/{{ticket_id}}/qr",
+          "host": ["{{base_url}}"],
+          "path": ["me", "tickets", "{{ticket_id}}", "qr"]
+        }
+      }
+    }
+  ]
+}

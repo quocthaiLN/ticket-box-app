@@ -8,11 +8,11 @@ declare global {
   }
 }
 
-export interface RetryPaymentRequest {
+export interface CreatePaymentRequest {
   payment_provider?: 'VNPAY' | 'MOMO';
 }
 
-export interface RetryPaymentResponse {
+export interface CreatePaymentResponse {
   payment_id: string;
   provider: string;
   status: string;

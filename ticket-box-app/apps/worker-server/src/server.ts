@@ -1,3 +1,5 @@
+// Nạp .env gốc monorepo trước mọi import khác (Prisma/Redis đọc process.env).
+import "@ticketbox/config";
 import {
   getExpireHoldsQueue,
   getNotificationsQueue,

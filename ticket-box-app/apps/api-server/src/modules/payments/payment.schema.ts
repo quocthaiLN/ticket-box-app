@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const retryPaymentSchema = z
+export const createPaymentSchema = z
   .object({
     payment_provider: z
       .enum(['VNPAY', 'MOMO'], {
@@ -8,5 +8,5 @@ export const retryPaymentSchema = z
       })
       .optional(),
   })
-  // body is optional on the retry endpoint — treat a missing body as {}
+  // body is optional on the payment endpoint — treat a missing body as {}
   .default({});

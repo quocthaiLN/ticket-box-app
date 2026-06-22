@@ -16,7 +16,6 @@ export interface OrderItem {
 export interface CreateOrderRequest {
   concert_id: string;
   items: OrderItem[];
-  payment_provider?: "VNPAY" | "MOMO";
 }
 
 export interface CreateOrderResponse {
@@ -25,8 +24,6 @@ export interface CreateOrderResponse {
   total_amount: string;
   currency: string;
   hold_expires_at: string | null;
-  checkout_url: string;
-  payment_id: string;
   items: Array<{
     ticket_type_id: string;
     quantity: number;

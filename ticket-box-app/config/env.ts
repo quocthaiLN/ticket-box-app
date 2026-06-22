@@ -1,6 +1,12 @@
 import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
-dotenv.config();
+// Mọi app/worker/test đọc DUY NHẤT file .env ở gốc monorepo (ticket-box-app/.env).
+// Resolve theo vị trí file config này để không phụ thuộc cwd của tiến trình
+// (npm chạy workspace với cwd = thư mục app con, không phải gốc repo).
+const rootEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env");
+dotenv.config({ path: rootEnvPath });
 
 export const env = {
   server: {
@@ -16,10 +22,9 @@ export const env = {
   },
 
   redis: {
-    // URL chuẩn cho ioredis / BullMQ (worker, queue, cache)
+    // URL chuẩn DUY NHẤT cho ioredis / BullMQ (worker, queue, cache).
+    // Dùng redis:// (local/docker) hoặc rediss:// (Upstash/TLS) đều qua biến này.
     url: process.env["REDIS_URL"] ?? "redis://localhost:6379",
-    // Tương thích cấu hình Upstash (nếu deploy dùng Upstash)
-    upstashUrl: process.env["UPSTASH_REDIS_URL"] ?? "",
     // Fallback host:port khi không set REDIS_URL
     host: process.env["REDIS_HOST"] ?? "localhost",
     port: process.env["REDIS_PORT"] ?? "6379",
@@ -46,6 +51,13 @@ export const env = {
     localRoot: process.env["STORAGE_LOCAL_ROOT"] ?? "",
     pressKitRoot: process.env["STORAGE_PRESS_KIT_ROOT"] ?? "",
     importRoot: process.env["STORAGE_IMPORT_ROOT"] ?? "",
+  },
+
+  // Orders — chính sách giữ chỗ: server tự đặt hạn giữ vé cho order HELD.
+  order: {
+    holdDurationSeconds: Number(
+      process.env["ORDER_HOLD_DURATION_SECONDS"] ?? 900,
+    ),
   },
 
   // Worker — job dọn dẹp đơn giữ chỗ hết hạn (expire-holds)

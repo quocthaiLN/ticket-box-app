@@ -29,9 +29,4 @@ export const createOrderSchema = z.object({
       invalid_type_error: 'items must be a non-empty array',
     })
     .min(1, 'items must be a non-empty array'),
-  payment_provider: z
-    .enum(['VNPAY', 'MOMO'], {
-      errorMap: () => ({ message: 'payment_provider must be VNPAY or MOMO' }),
-    })
-    .optional(),
 });

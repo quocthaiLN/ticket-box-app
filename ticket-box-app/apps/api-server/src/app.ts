@@ -5,7 +5,6 @@ import { authRouter } from "./modules/auth/auth.router.js";
 import { catalogRouter } from "./modules/catalog/catalog.router.js";
 import { checkinRouter } from "./modules/checkin/checkin.router.js";
 import { guestListRouter } from "./modules/guest-list/guest-list.router.js";
-import inventoryRouter from "./modules/inventory/inventory.router.js";
 import orderRouter from "./modules/orders/order.router.js";
 import paymentRouter from "./modules/payments/payment.router.js";
 import ticketRouter from "./modules/tickets/ticket.router.js";
@@ -66,9 +65,6 @@ export function createApp() {
 
   // ── Guest list ─────────────────────────────────────────────────────────────
   app.use("/v1", guestListRouter);
-
-  // ── Inventory ──────────────────────────────────────────────────────────────
-  app.use("/v1", inventoryRouter);
 
   // ── Orders — strict rate limit chống scalper ───────────────────────────────
   app.use("/v1/orders", orderRateLimit);

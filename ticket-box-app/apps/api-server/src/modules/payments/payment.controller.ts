@@ -1,15 +1,15 @@
 import type { NextFunction, Response } from 'express';
-import { handleMomoWebhook, handleVnpayWebhook, retryPayment } from './payment.service.js';
-import type { AppRequest, MomoWebhookBody, RetryPaymentRequest, VnpayWebhookBody } from './payment.type.js';
+import { handleMomoWebhook, handleVnpayWebhook, createPayment } from './payment.service.js';
+import type { AppRequest, CreatePaymentRequest, MomoWebhookBody, VnpayWebhookBody } from './payment.type.js';
 
-export async function retryPaymentHandler(req: AppRequest, res: Response, next: NextFunction) {
+export async function createPaymentHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
     const userId = res.locals['auth']?.user_id as string;
     const orderId = req.params['order_id'] as string;
-    const body = req.body as RetryPaymentRequest;
+    const body = req.body as CreatePaymentRequest;
     const provider = body.payment_provider ?? 'VNPAY';
 
-    const data = await retryPayment(orderId, userId, provider);
+    const data = await createPayment(orderId, userId, provider);
 
     res.status(201).json({
       data,

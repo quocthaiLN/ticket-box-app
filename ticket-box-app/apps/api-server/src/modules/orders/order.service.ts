@@ -3,14 +3,12 @@ import { Prisma } from "@ticketbox/database";
 import {
   cancelOrderById,
   createOrderHeld,
-  createPaymentRecord,
   expireOrderById,
   findAdminOrders,
   getOrderByIdempotencyKey,
   getOrderWithDetails,
 } from "./order.repository.js";
-import { Errors } from "../../shared/http/problem-details.js";
-import { buildCheckoutUrlWithFallback } from "../payments/payment.service.js";
+import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   AdminOrderListResponse,
   AdminOrdersQuery,
@@ -25,6 +23,7 @@ const IDEMPOTENCY_TTL = 86400; // 24 hours
 const idempotencyCacheKey = (userId: string, key: string) =>
   `idempotency:checkout:${userId}:${key}`;
 
+// mapOrderWithDetailsToResponse dùng để chuyển dữ liệu đơn hàng lấy từ repository sang đúng cấu trúc API OrderDetailResponse.
 function mapOrderWithDetailsToResponse(
   details: NonNullable<Awaited<ReturnType<typeof getOrderWithDetails>>>,
 ): OrderDetailResponse {
@@ -61,16 +60,16 @@ function mapOrderWithDetailsToResponse(
     })),
     payment: payment
       ? {
-          id: payment.id,
-          provider: payment.provider,
-          status: payment.status,
-          checkout_url: payment.checkoutUrl,
-          amount: payment.amount,
-          currency: payment.currency,
-          paid_at: payment.paidAt ? payment.paidAt.toISOString() : null,
-          failure_reason: payment.failureReason,
-          created_at: payment.createdAt.toISOString(),
-        }
+        id: payment.id,
+        provider: payment.provider,
+        status: payment.status,
+        checkout_url: payment.checkoutUrl,
+        amount: payment.amount,
+        currency: payment.currency,
+        paid_at: payment.paidAt ? payment.paidAt.toISOString() : null,
+        failure_reason: payment.failureReason,
+        created_at: payment.createdAt.toISOString(),
+      }
       : null,
     tickets: tickets.map((ticket) => ({
       id: ticket.id,
@@ -91,18 +90,21 @@ export async function createOrder(
   req: CreateOrderRequest,
   idempotencyKey: string,
 ): Promise<CreateOrderResponse> {
+  // Trả lại kết quả cũ nếu yêu cầu cùng idempotency key đã được xử lý.
   const cacheKey = idempotencyCacheKey(userId, idempotencyKey);
   const cached = await get(cacheKey);
   if (cached) {
     return cached as CreateOrderResponse;
   }
 
+  // Khai báo kết quả của createOrder
   let orderResult: Awaited<ReturnType<typeof createOrderHeld>>;
 
   try {
+    // Tạo đơn hàng ở trạng thái giữ chỗ và trừ tồn kho tương ứng.
     orderResult = await createOrderHeld(userId, req, idempotencyKey);
   } catch (err: unknown) {
-    // Handle duplicate idempotency key (P2002 Prisma unique constraint violation)
+    // Xử lý trường hợp hai yêu cầu đồng thời dùng cùng idempotency key ở mức redis - siêu hiếm - lấy order đã được tạo trước ở mức database
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002" &&
@@ -112,16 +114,15 @@ export async function createOrder(
       if (!existingOrder) throw err;
 
       const details = await getOrderWithDetails(existingOrder.id);
-      if (!details || !details.payment) throw err;
+      if (!details) throw err;
 
+      // Tái tạo response của đơn hàng đã tồn tại để trả về nhất quán.
       const response: CreateOrderResponse = {
         order_id: existingOrder.id,
         status: existingOrder.status,
         total_amount: details.order.totalAmount,
         currency: details.order.currency,
         hold_expires_at: details.order.holdExpiresAt?.toISOString() ?? null,
-        checkout_url: details.payment.checkoutUrl ?? "",
-        payment_id: details.payment.id,
         items: details.items.map((item) => ({
           ticket_type_id: item.ticketTypeId,
           quantity: item.quantity,
@@ -138,34 +139,14 @@ export async function createOrder(
   }
 
   const { order, items } = orderResult;
-  const preferredProvider = req.payment_provider ?? "VNPAY";
-  const orderInfo = `Payment for order ${order.id}`;
 
-  const { url: checkoutUrl, provider } = await buildCheckoutUrlWithFallback(
-    preferredProvider,
-    order.id,
-    order.totalAmount,
-    order.currency,
-    orderInfo,
-  );
-
-  const paymentRecord = await createPaymentRecord(
-    order.id,
-    order.totalAmount,
-    order.currency,
-    provider,
-    checkoutUrl,
-    idempotencyKey,
-  );
-
+  // Chỉ giữ vé ở bước này; thanh toán tách sang POST /orders/:order_id/payments.
   const response: CreateOrderResponse = {
     order_id: order.id,
     status: order.status,
     total_amount: order.totalAmount,
     currency: order.currency,
     hold_expires_at: order.holdExpiresAt.toISOString(),
-    checkout_url: checkoutUrl,
-    payment_id: paymentRecord.id,
     items: items.map((item) => ({
       ticket_type_id: item.ticketTypeId,
       quantity: item.quantity,
@@ -174,6 +155,7 @@ export async function createOrder(
     })),
   };
 
+  // Lưu response để các lần gửi lại cùng key không tạo đơn mới.
   await set(cacheKey, response, IDEMPOTENCY_TTL);
 
   return response;
@@ -186,11 +168,21 @@ export async function getOrder(
   const details = await getOrderWithDetails(orderId);
 
   if (!details) {
-    throw Errors.orderNotFoundById();
+    throw new ApiError({
+      title: "ORDER_NOT_FOUND",
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      detail: "Order not found",
+    });
   }
 
   if (details.order.userId !== userId) {
-    throw Errors.orderAccessDenied();
+    throw new ApiError({
+      title: "ORDER_ACCESS_DENIED",
+      status: 403,
+      code: "ORDER_ACCESS_DENIED",
+      detail: "Access denied to this order",
+    });
   }
 
   return mapOrderWithDetailsToResponse(details);

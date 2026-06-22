@@ -76,18 +76,6 @@ export interface TicketQrResponse {
   expires_at: string | null;
 }
 
-export interface IssuedTicketItem {
-  id: string;
-  ticket_type_id: string;
-  seat_zone_id: string;
-  status: string;
-}
-
-export interface IssueTicketsResponse {
-  order_id: string;
-  tickets: IssuedTicketItem[];
-}
-
 export interface VoidTicketResponse {
   ticket_id: string;
   status: string;
