@@ -6,7 +6,7 @@
  */
 
 import { Worker, type Job } from "bullmq";
-import { expireHeldOrder, findExpiredHeldOrders } from "@ticketbox/database";
+import { findExpiredHeldOrders, expireHeldOrder } from "@ticketbox/database";
 import {
   createRedisConnection,
   QUEUE_NAMES,

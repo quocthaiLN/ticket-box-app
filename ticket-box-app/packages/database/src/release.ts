@@ -1,17 +1,55 @@
 import { OrderStatus, Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 
-import { prisma } from "../client.js";
-import { withSerializableRetry } from "../serializable-retry.js";
+import { prisma } from "./client.js";
 
 // ---------------------------------------------------------------------------
-// orders.ts — Vòng đời order phía sau hold: release / expire.
+// release.ts — Vòng đời order phía sau hold: release / expire.
 // releaseHeldOrder là nguồn sự thật duy nhất cho "trả vé của một order HELD",
 // thay cho: inventory.releaseInventory, orders.cancelOrderById/expireOrderById,
 // và lõi của expireHeldOrder.
 // ---------------------------------------------------------------------------
 
 const HOLD_EXPIRED_REASON = "HOLD_EXPIRED";
+
+/**
+ * Dưới isolation level Serializable, PostgreSQL có thể abort một transaction khi
+ * phát hiện xung đột với transaction chạy song song (serialization failure /
+ * deadlock). Đây là lỗi *tạm thời* — cách xử lý đúng là chạy lại transaction.
+ */
+function isRetryableTxError(err: unknown): boolean {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === "P2034"
+  ) {
+    return true;
+  }
+  const message = err instanceof Error ? err.message : "";
+  return message.includes("40001") || message.includes("40P01");
+}
+
+async function withSerializableRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 25,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRetryableTxError(err) || attempt === maxAttempts) {
+        throw err;
+      }
+      lastError = err;
+      const backoff = baseDelayMs * 2 ** (attempt - 1);
+      const jitter = Math.random() * baseDelayMs;
+      await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+    }
+  }
+  // Không bao giờ tới đây, nhưng giữ cho TypeScript yên tâm.
+  throw lastError;
+}
 
 type ExpiredHeldOrderRow = {
   orderId: string;

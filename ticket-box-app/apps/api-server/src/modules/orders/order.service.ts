@@ -7,7 +7,7 @@ import {
   findAdminOrders,
   getOrderByIdempotencyKey,
   getOrderWithDetails,
-} from "./order.repository.js";
+} from "./repository/order.repository.js";
 import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   AdminOrderListResponse,

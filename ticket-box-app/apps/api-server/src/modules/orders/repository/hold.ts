@@ -1,8 +1,9 @@
 import { OrderStatus, Prisma, TicketTypeStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
+import { prisma } from "@ticketbox/database";
+import { withSerializableRetry } from "./serializable-retry.js";
 
-import { prisma } from "../client.js";
-import { withSerializableRetry } from "../serializable-retry.js";
+
 
 // ---------------------------------------------------------------------------
 // hold.ts — Nghiệp vụ "tạo Order + giữ vé" (nguồn sự thật duy nhất).
