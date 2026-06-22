@@ -7,6 +7,7 @@ export {
   cacheGet,
   cacheSet,
   cacheDelete,
+  cacheDeletePattern,
   cacheAside,
   getSetNX,
 } from "./cache.js";

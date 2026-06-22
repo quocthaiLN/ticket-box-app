@@ -6,6 +6,7 @@ import {
   PaymentProvider,
 } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
+import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   CreateOrderRequest,
   AdminOrderRow,
@@ -13,18 +14,6 @@ import type {
 } from "./order.type.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
-
-export class OrderError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-
-  constructor(code: string, message: string, statusCode = 400) {
-    super(message);
-    this.name = "OrderError";
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
 
 type TicketTypeRow = {
   id: string;
@@ -166,11 +155,12 @@ export async function createOrderHeld(
     `);
 
       if (ticketTypes.length !== ticketTypeIds.length) {
-        throw new OrderError(
-          "TICKET_TYPE_NOT_FOUND",
-          "One or more ticket types not found",
-          404,
-        );
+        throw new ApiError({
+          title: "TICKET_TYPE_NOT_FOUND",
+          status: 404,
+          code: "TICKET_TYPE_NOT_FOUND",
+          detail: "One or more ticket types not found",
+        });
       }
 
       const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
@@ -178,44 +168,49 @@ export async function createOrderHeld(
       for (const item of sortedItems) {
         const tt = typeMap.get(item.ticket_type_id);
         if (!tt) {
-          throw new OrderError(
-            "TICKET_TYPE_NOT_FOUND",
-            `Ticket type ${item.ticket_type_id} not found`,
-            404,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_FOUND",
+            status: 404,
+            code: "TICKET_TYPE_NOT_FOUND",
+            detail: `Ticket type ${item.ticket_type_id} not found`,
+          });
         }
 
         if (tt.concertId !== req.concert_id) {
-          throw new OrderError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} does not belong to concert ${req.concert_id}`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} does not belong to concert ${req.concert_id}`,
+          });
         }
 
         if (tt.status !== "ON_SALE") {
-          throw new OrderError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is not on sale`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} is not on sale`,
+          });
         }
 
         if (now < tt.saleStartAt || now > tt.saleEndAt) {
-          throw new OrderError(
-            "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is outside the sale window`,
-            422,
-          );
+          throw new ApiError({
+            title: "TICKET_TYPE_NOT_ON_SALE",
+            status: 422,
+            code: "TICKET_TYPE_NOT_ON_SALE",
+            detail: `Ticket type ${item.ticket_type_id} is outside the sale window`,
+          });
         }
 
         const available = tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
         if (available < item.quantity) {
-          throw new OrderError(
-            "TICKET_SOLD_OUT",
-            `Not enough available tickets for type ${item.ticket_type_id}`,
-            409,
-          );
+          throw new ApiError({
+            title: "TICKET_SOLD_OUT",
+            status: 409,
+            code: "TICKET_SOLD_OUT",
+            detail: `Not enough available tickets for type ${item.ticket_type_id}`,
+          });
         }
       }
 
@@ -235,22 +230,24 @@ export async function createOrderHeld(
       `);
 
         if (!counter) {
-          throw new OrderError(
-            "INVENTORY_ERROR",
-            `Could not lock user counter for ticket type ${item.ticket_type_id}`,
-            500,
-          );
+          throw new ApiError({
+            title: "INVENTORY_ERROR",
+            status: 500,
+            code: "INVENTORY_ERROR",
+            detail: `Could not lock user counter for ticket type ${item.ticket_type_id}`,
+          });
         }
         const tt = typeMap.get(item.ticket_type_id)!;
         if (
           counter.heldQuantity + counter.paidQuantity + item.quantity >
           tt.maxPerUser
         ) {
-          throw new OrderError(
-            "PER_USER_LIMIT_EXCEEDED",
-            `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
-            422,
-          );
+          throw new ApiError({
+            title: "PER_USER_LIMIT_EXCEEDED",
+            status: 422,
+            code: "PER_USER_LIMIT_EXCEEDED",
+            detail: `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
+          });
         }
       }
 
@@ -512,25 +509,32 @@ export async function cancelOrderById(
     `);
 
       if (rows.length === 0) {
-        throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new ApiError({
+          title: "ORDER_NOT_FOUND",
+          status: 404,
+          code: "ORDER_NOT_FOUND",
+          detail: "Order not found",
+        });
       }
 
       const { orderStatus, userId: orderUserId } = rows[0];
 
       if (orderUserId !== userId) {
-        throw new OrderError(
-          "ORDER_ACCESS_DENIED",
-          "Access denied to this order",
-          403,
-        );
+        throw new ApiError({
+          title: "ORDER_ACCESS_DENIED",
+          status: 403,
+          code: "ORDER_ACCESS_DENIED",
+          detail: "Access denied to this order",
+        });
       }
 
       if (orderStatus !== OrderStatus.HELD) {
-        throw new OrderError(
-          "ORDER_ALREADY_FINALIZED",
-          `Order is in status ${orderStatus} and cannot be cancelled`,
-          409,
-        );
+        throw new ApiError({
+          title: "ORDER_ALREADY_FINALIZED",
+          status: 409,
+          code: "ORDER_ALREADY_FINALIZED",
+          detail: `Order is in status ${orderStatus} and cannot be cancelled`,
+        });
       }
 
       const now = new Date();
@@ -619,7 +623,12 @@ export async function expireOrderById(orderId: string): Promise<{
     `);
 
       if (rows.length === 0) {
-        throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new ApiError({
+          title: "ORDER_NOT_FOUND",
+          status: 404,
+          code: "ORDER_NOT_FOUND",
+          detail: "Order not found",
+        });
       }
 
       const { orderStatus } = rows[0];
@@ -703,7 +712,12 @@ export async function findAdminOrders(query: AdminOrdersQuery): Promise<{
       cursorCreatedAt = new Date(isoStr);
       cursorId = id;
     } catch {
-      throw new OrderError("INVALID_CHECKOUT_REQUEST", "Invalid cursor", 400);
+      throw new ApiError({
+        title: "INVALID_CHECKOUT_REQUEST",
+        status: 400,
+        code: "INVALID_CHECKOUT_REQUEST",
+        detail: "Invalid cursor",
+      });
     }
   }
 

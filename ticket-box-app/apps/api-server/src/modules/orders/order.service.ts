@@ -8,8 +8,8 @@ import {
   findAdminOrders,
   getOrderByIdempotencyKey,
   getOrderWithDetails,
-  OrderError,
 } from "./order.repository.js";
+import { ApiError } from "../../shared/http/problem-details.js";
 import { buildCheckoutUrlWithFallback } from "../payments/payment.service.js";
 import type {
   AdminOrderListResponse,
@@ -186,15 +186,21 @@ export async function getOrder(
   const details = await getOrderWithDetails(orderId);
 
   if (!details) {
-    throw new OrderError("ORDER_NOT_FOUND", "Order not found", 404);
+    throw new ApiError({
+      title: "ORDER_NOT_FOUND",
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      detail: "Order not found",
+    });
   }
 
   if (details.order.userId !== userId) {
-    throw new OrderError(
-      "ORDER_ACCESS_DENIED",
-      "Access denied to this order",
-      403,
-    );
+    throw new ApiError({
+      title: "ORDER_ACCESS_DENIED",
+      status: 403,
+      code: "ORDER_ACCESS_DENIED",
+      detail: "Access denied to this order",
+    });
   }
 
   return mapOrderWithDetailsToResponse(details);

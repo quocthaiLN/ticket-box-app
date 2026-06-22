@@ -1,6 +1,10 @@
-import { getNotificationsQueue } from "@ticketbox/queue";
+import { enqueueNotification } from "@ticketbox/queue";
 import { notificationsRepository } from "./notifications.repository.js";
-import type { CreateNotificationInput, Notification } from "./notifications.types.js";
+import type {
+  AdminNotificationsQuery,
+  CreateNotificationInput,
+  Notification,
+} from "./notifications.types.js";
 
 export const notificationsService = {
   /**
@@ -11,26 +15,68 @@ export const notificationsService = {
     const notification = await notificationsRepository.create(input);
 
     try {
-      const queue = getNotificationsQueue();
-      await queue.add(
-        "send-notification",
-        {
-          notification_id: notification.id,
-          channel: input.channel,
-          recipient_user_id: input.user_id,
-          subject: input.subject,
-          body: input.body,
-        },
-        {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-          removeOnComplete: { count: 100 },
-          removeOnFail: { count: 50 },
-        }
-      );
+      await enqueueNotification({
+        notification_id: notification.id,
+        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        recipient_user_id: notification.user_id ?? "",
+        subject: (notification.payload.subject as string | undefined),
+        body: (notification.payload.body as string | undefined) ?? "",
+      });
     } catch (err) {
-      // Queue không khả dụng không được phép làm crash luồng chính
       console.error("[notifications] Failed to enqueue job:", err);
+    }
+
+    return notification;
+  },
+
+  /**
+   * Enqueue BullMQ job cho một notification đã tồn tại trong DB.
+   * Dùng sau khi createMany (ví dụ: payment.repository confirmOrderPayment).
+   */
+  async enqueueExisting(notification: {
+    id: string;
+    user_id: string | null;
+    channel: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await enqueueNotification({
+        notification_id: notification.id,
+        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        recipient_user_id: notification.user_id ?? "",
+        subject: (notification.payload.subject as string | undefined),
+        body: (notification.payload.body as string | undefined) ?? "",
+      });
+    } catch (err) {
+      console.error(
+        `[notifications] Failed to enqueue existing job ${notification.id}:`,
+        err,
+      );
+    }
+  },
+
+  async list(query: AdminNotificationsQuery) {
+    return notificationsRepository.findAll(query);
+  },
+
+  async getById(id: string): Promise<Notification | null> {
+    return notificationsRepository.findById(id);
+  },
+
+  async retry(id: string): Promise<Notification | null> {
+    const notification = await notificationsRepository.resetToPending(id);
+    if (!notification) return null;
+
+    try {
+      await enqueueNotification({
+        notification_id: notification.id,
+        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        recipient_user_id: notification.user_id ?? "",
+        subject: (notification.payload.subject as string | undefined),
+        body: (notification.payload.body as string | undefined) ?? "",
+      });
+    } catch (err) {
+      console.error(`[notifications] Failed to re-enqueue job ${id}:`, err);
     }
 
     return notification;

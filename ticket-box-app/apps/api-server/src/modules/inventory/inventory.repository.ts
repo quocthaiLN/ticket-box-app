@@ -1,5 +1,6 @@
 import { prisma, Prisma, OrderStatus } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
+import { ApiError } from "../../shared/http/problem-details.js";
 import type {
   HoldRequest,
   ReleaseRequest,
@@ -8,6 +9,22 @@ import type {
 } from "./inventory.type.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
+
+export class InventoryError extends ApiError {
+  code: string;
+  statusCode: number;
+
+  constructor(code: string, statusCode: number, detail: string) {
+    super({
+      title: code,
+      status: statusCode,
+      code,
+      detail,
+    });
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
 
 type TicketTypeRow = {
   id: string;
@@ -42,18 +59,6 @@ type OrderWithItemsRow = {
   quantity: number;
 };
 
-export class InventoryError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-
-  constructor(code: string, message: string, statusCode = 409) {
-    super(message);
-    this.name = "InventoryError";
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
-
 export async function getInventoryByTicketTypeId(ticketTypeId: string) {
   const [row] = await prisma.$queryRaw<TicketTypeRow[]>(Prisma.sql`
     SELECT
@@ -75,11 +80,7 @@ export async function getInventoryByTicketTypeId(ticketTypeId: string) {
   `);
 
   if (!row) {
-    throw new InventoryError(
-      "TICKET_TYPE_NOT_FOUND",
-      "Ticket type not found",
-      404,
-    );
+    throw new InventoryError("TICKET_TYPE_NOT_FOUND", 404, "Ticket type not found");
   }
 
   return row;
@@ -122,8 +123,8 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
       if (ticketTypes.length !== ticketTypeIds.length) {
         throw new InventoryError(
           "TICKET_TYPE_NOT_FOUND",
-          "One or more ticket types not found",
           404,
+          "One or more ticket types not found",
         );
       }
 
@@ -136,22 +137,22 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
         if (tt.concertId !== req.concert_id) {
           throw new InventoryError(
             "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} does not belong to concert`,
             422,
+            `Ticket type ${item.ticket_type_id} does not belong to concert`,
           );
         }
         if (tt.status !== "ON_SALE") {
           throw new InventoryError(
             "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is not on sale`,
             422,
+            `Ticket type ${item.ticket_type_id} is not on sale`,
           );
         }
         if (now < tt.saleStartAt || now > tt.saleEndAt) {
           throw new InventoryError(
             "TICKET_TYPE_NOT_ON_SALE",
-            `Ticket type ${item.ticket_type_id} is outside the sale window`,
             422,
+            `Ticket type ${item.ticket_type_id} is outside the sale window`,
           );
         }
 
@@ -159,8 +160,8 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
         if (available < item.quantity) {
           throw new InventoryError(
             "TICKET_SOLD_OUT",
-            `Not enough available tickets for type ${item.ticket_type_id}`,
             409,
+            `Not enough available tickets for type ${item.ticket_type_id}`,
           );
         }
       }
@@ -187,8 +188,8 @@ export async function holdInventory(req: HoldRequest, idempotencyKey: string) {
         ) {
           throw new InventoryError(
             "PER_USER_LIMIT_EXCEEDED",
-            `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
             409,
+            `Purchase would exceed per-user limit for ticket type ${item.ticket_type_id}`,
           );
         }
       }
@@ -292,7 +293,7 @@ export async function releaseInventory(req: ReleaseRequest) {
     `);
 
       if (rows.length === 0) {
-        throw new InventoryError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new InventoryError("ORDER_NOT_FOUND", 404, "Order not found");
       }
 
       const orderStatus = rows[0].orderStatus;
@@ -384,7 +385,7 @@ export async function confirmPayment(req: PaymentConfirmationRequest) {
     `);
 
       if (rows.length === 0) {
-        throw new InventoryError("ORDER_NOT_FOUND", "Order not found", 404);
+        throw new InventoryError("ORDER_NOT_FOUND", 404, "Order not found");
       }
 
       const orderStatus = rows[0].orderStatus;
@@ -392,8 +393,8 @@ export async function confirmPayment(req: PaymentConfirmationRequest) {
       if (orderStatus !== OrderStatus.HELD) {
         throw new InventoryError(
           "ORDER_NOT_HELD",
-          `Order is in status ${orderStatus} and cannot be confirmed`,
           409,
+          `Order is in status ${orderStatus} and cannot be confirmed`,
         );
       }
 
@@ -479,11 +480,7 @@ export async function adjustInventory(
     `);
 
       if (!row) {
-        throw new InventoryError(
-          "TICKET_TYPE_NOT_FOUND",
-          "Ticket type not found",
-          404,
-        );
+        throw new InventoryError("TICKET_TYPE_NOT_FOUND", 404, "Ticket type not found");
       }
 
       const newTotal = row.totalQuantity + req.delta_total_quantity;
@@ -493,16 +490,16 @@ export async function adjustInventory(
       if (newAvailable < 0) {
         throw new InventoryError(
           "INVENTORY_INVARIANT_VIOLATED",
-          "Adjustment would make available_quantity negative",
           422,
+          "Adjustment would make available_quantity negative",
         );
       }
 
       if (newTotal < 0) {
         throw new InventoryError(
           "INVENTORY_INVARIANT_VIOLATED",
-          "total_quantity cannot be negative",
           422,
+          "total_quantity cannot be negative",
         );
       }
 
@@ -516,8 +513,8 @@ export async function adjustInventory(
       if (zone && newTotal > zone.capacity) {
         throw new InventoryError(
           "ZONE_CAPACITY_EXCEEDED",
-          `New total_quantity ${newTotal} exceeds seat zone capacity ${zone.capacity}`,
           422,
+          `New total_quantity ${newTotal} exceeds seat zone capacity ${zone.capacity}`,
         );
       }
 

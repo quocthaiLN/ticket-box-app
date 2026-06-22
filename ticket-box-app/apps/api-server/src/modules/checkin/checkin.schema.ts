@@ -57,26 +57,38 @@ export function parseOfflineSyncBody(body: unknown, routeBatchId?: string): Offl
   }
 
   return {
-    device_id: requiredString(value.device_id, "device_id"),
-    staff_user_id: requiredString(value.staff_user_id, "staff_user_id"),
+    device_id: optionalString(value.device_id),
+    staff_user_id: optionalString(value.staff_user_id),
     batch_id: optionalString(routeBatchId) ?? optionalString(value.batch_id) ?? requiredString(value.batch_token, "batch_id"),
+    concert_id: optionalString(value.concert_id),
+    gate_id: optionalString(value.gate_id),
     items: items.map((item, index) => {
       const row = asRecord(item, `items.${index}`);
       const ticketCode = optionalString(row.ticket_code);
       const qrPayloadHash = optionalString(row.qr_payload_hash);
+      const qrToken = optionalString(row.qr_token);
+      const ticketId = optionalString(row.ticket_id);
+      const guestId = optionalString(row.guest_id);
+      const phone = optionalString(row.phone);
 
-      if (!ticketCode && !qrPayloadHash) {
-        throw validationError(`items.${index}.ticket_code`, "Either ticket_code or qr_payload_hash is required.");
+      if (!ticketCode && !qrPayloadHash && !qrToken && !ticketId && !guestId && !phone) {
+        throw validationError(`items.${index}`, "ticket_id, guest_id, phone, qr_token, ticket_code, or qr_payload_hash is required.");
       }
 
       return {
         client_item_id: requiredString(row.client_item_id, `items.${index}.client_item_id`),
+        type: parseOfflineItemType(row.type),
+        ticket_id: ticketId,
+        guest_id: guestId,
+        phone,
+        qr_token: qrToken,
         ticket_code: ticketCode,
         qr_payload_hash: qrPayloadHash,
-        concert_id: requiredString(row.concert_id, `items.${index}.concert_id`),
-        gate_id: requiredString(row.gate_id, `items.${index}.gate_id`),
+        concert_id: optionalString(row.concert_id) ?? optionalString(value.concert_id) ?? requiredString(row.concert_id, `items.${index}.concert_id`),
+        gate_id: optionalString(row.gate_id) ?? optionalString(value.gate_id) ?? requiredString(row.gate_id, `items.${index}.gate_id`),
+        seat_zone_id: optionalString(row.seat_zone_id),
         zone_id: optionalString(row.zone_id),
-        scanned_at: requiredIsoString(row.scanned_at, `items.${index}.scanned_at`)
+        scanned_at: optionalIsoString(row.local_scanned_at, `items.${index}.local_scanned_at`) ?? requiredIsoString(row.scanned_at, `items.${index}.scanned_at`)
       };
     })
   };
@@ -290,6 +302,13 @@ function optionalIsoString(value: unknown, field: string) {
   }
 
   return parsed;
+}
+
+function parseOfflineItemType(value: unknown): "TICKET" | "GUEST" | undefined {
+  const parsed = optionalString(value)?.toUpperCase();
+  if (!parsed) return undefined;
+  if (parsed === "TICKET" || parsed === "GUEST") return parsed;
+  throw validationError("type", "type must be TICKET or GUEST.");
 }
 
 // Tạo lỗi validation theo chuẩn problem-details.

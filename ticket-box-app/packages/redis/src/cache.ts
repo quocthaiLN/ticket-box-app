@@ -76,6 +76,37 @@ export async function cacheAside<T>(
 }
 
 /**
+ * Xóa tất cả key khớp pattern (dùng SCAN để tránh block Redis).
+ * Ví dụ: cacheDeletePattern("catalog:list:*")
+ */
+export async function cacheDeletePattern(pattern: string): Promise<void> {
+  const client = getRedisClient();
+  if (!client) return;
+
+  try {
+    let cursor = "0";
+    const keys: string[] = [];
+    do {
+      const [nextCursor, batch] = await client.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        200,
+      );
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== "0");
+
+    if (keys.length > 0) {
+      await client.del(...keys);
+    }
+  } catch (err) {
+    console.error(`[cache] SCAN+DEL error for pattern "${pattern}":`, err);
+  }
+}
+
+/**
  * Set only if key does not exist.
  * Returns true if value was written.
  */
