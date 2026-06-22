@@ -177,7 +177,7 @@ export function getCircuitBreaker(provider: 'VNPAY' | 'MOMO'): PaymentCircuitBre
 
 /*
 Luồng gọi trong payment service:
-  buildCheckoutUrlWithFallback() -> callProvider() -> bulkhead.execute()
+  buildCheckoutUrl() -> callProvider() -> bulkhead.execute()
   -> circuitBreaker.execute(fn) -> payment provider.
 
 execute(fn):

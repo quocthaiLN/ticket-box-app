@@ -1,16 +1,23 @@
 import type { NextFunction, Response } from 'express';
 import { env } from '@ticketbox/config';
 import { handleMomoWebhook, handleVnpayWebhook, createPayment } from './payment.service.js';
-import type { AppRequest, CreatePaymentRequest, MomoWebhookBody, VnpayWebhookBody } from './payment.type.js';
+import type {
+  AppRequest,
+  CreatePaymentRequest,
+  MomoReturnQuery,
+  MomoWebhookBody,
+  VnpayReturnQuery,
+  VnpayWebhookBody,
+} from './payment.type.js';
 
 export async function createPaymentHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
     const userId = res.locals['auth']?.user_id as string;
     const orderId = req.params['order_id'] as string;
     const body = req.body as CreatePaymentRequest;
-    const provider = body.payment_provider ?? 'VNPAY';
-
-    const data = await createPayment(orderId, userId, provider);
+    // Không default ở đây: truyền undefined khi client không chỉ định để service biết
+    // được phép fallback; nếu client chỉ định thì service chỉ dùng đúng provider đó.
+    const data = await createPayment(orderId, userId, body.payment_provider);
 
     res.status(201).json({
       data,
@@ -41,9 +48,10 @@ export async function vnpayWebhookHandler(req: AppRequest, res: Response, next: 
 // Sau khi xử lý, redirect người dùng sang trang kết quả ở web frontend.
 export async function vnpayReturnHandler(req: AppRequest, res: Response, next: NextFunction) {
   try {
-    const query = req.query as VnpayWebhookBody;
+    // Query đã được validateQuery(vnpayReturnQuerySchema) xử lý (giữ nguyên mọi field vnp_*).
+    const query = req.query as VnpayReturnQuery;
 
-    const result = await handleVnpayWebhook(query);
+    const result = await handleVnpayWebhook(query as VnpayWebhookBody);
     // RspCode '00' nghĩa là đã xử lý hợp lệ; thanh toán thực sự thành công khi vnp_ResponseCode '00'.
     const paid = result.RspCode === '00' && query.vnp_ResponseCode === '00';
 
@@ -51,6 +59,27 @@ export async function vnpayReturnHandler(req: AppRequest, res: Response, next: N
       status: paid ? 'success' : 'failed',
       order_id: query.vnp_TxnRef ?? '',
       code: query.vnp_ResponseCode ?? '',
+    });
+    res.redirect(`${env.web.url}/payment/result?${params.toString()}`);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /payment/return/momo — browser redirect từ MoMo (UX). Tái dùng cùng logic verify+confirm
+// như IPN MoMo (idempotent). validateQuery(momoReturnQuerySchema) đã ép string -> number sẵn.
+export async function momoReturnHandler(req: AppRequest, res: Response, next: NextFunction) {
+  try {
+    const query = req.query as MomoReturnQuery;
+
+    const result = await handleMomoWebhook(query as MomoWebhookBody);
+    // resultCode 0 = thành công; status 200 nghĩa là đã xử lý hợp lệ (chữ ký đúng).
+    const paid = result.status === 200 && query.resultCode === 0;
+
+    const params = new URLSearchParams({
+      status: paid ? 'success' : 'failed',
+      order_id: query.orderId ?? '',
+      code: query.resultCode !== undefined ? String(query.resultCode) : '',
     });
     res.redirect(`${env.web.url}/payment/result?${params.toString()}`);
   } catch (err) {

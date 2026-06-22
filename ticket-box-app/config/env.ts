@@ -107,7 +107,7 @@ export const env = {
     secretKey: process.env["MOMO_SECRET_KEY"] ?? "",
     redirectUrl:
       process.env["MOMO_REDIRECT_URL"] ??
-      "http://localhost:3000/payment/return",
+      "http://localhost:3000/v1/payment/return/momo",
     ipnUrl:
       process.env["MOMO_IPN_URL"] ??
       "http://localhost:4000/payments/webhooks/momo",

@@ -485,6 +485,17 @@ export const Errors = {
       detail: "An active pending payment already exists for this order.",
     }),
 
+  // Không tạo được checkout ở bất kỳ cổng nào → client nên chọn lại phương thức và POST lại.
+  paymentProviderUnavailable: (
+    detail = "No payment provider is currently available. Please choose a payment method and try again.",
+  ) =>
+    new ApiError({
+      title: "Payment provider unavailable",
+      status: 503,
+      code: "PAYMENT_PROVIDER_UNAVAILABLE",
+      detail,
+    }),
+
   // Notifications
   notificationNotFound: (id: string) =>
     new ApiError({

@@ -41,7 +41,9 @@ export class MomoGateway implements PaymentGateway {
     const requestId = input.orderId;
     // MoMo nhận số tiền nguyên VND, nên loại phần thập phân trước khi gửi.
     const amount = String(Math.round(parseFloat(input.amount)));
-    const requestType = 'payWithMethod';
+    // Tài khoản sandbox chỉ được cấp quyền captureWallet; payWithMethod trả resultCode 11
+    // (access denied). Dùng captureWallet để create thành công với credential test.
+    const requestType = 'captureWallet';
     const extraData = '';
 
     // Thứ tự field trong raw string phải trùng với quy định chữ ký của MoMo.

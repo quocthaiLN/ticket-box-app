@@ -33,3 +33,28 @@ export function validateBody(schema: ZodTypeAny, code = "VALIDATION_ERROR") {
     next();
   };
 }
+
+/**
+ * Validate `req.query` against a Zod schema (vd webhook/return chạy bằng GET).
+ * Trùng hành vi với `validateBody`: hỏng → 400 với lỗi theo field; thành công thì
+ * gán lại `req.query` bằng dữ liệu đã parse (đã ép kiểu, vd string -> number).
+ */
+export function validateQuery(schema: ZodTypeAny, code = "VALIDATION_ERROR") {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return next(
+        Errors.validationError(
+          "Request query failed validation.",
+          parsed.error.issues.map((issue) => ({
+            field: formatPath(issue.path),
+            message: issue.message,
+          })),
+          code,
+        ),
+      );
+    }
+    req.query = parsed.data;
+    next();
+  };
+}

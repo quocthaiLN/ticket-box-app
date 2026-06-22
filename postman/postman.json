@@ -6,22 +6,114 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:3000/v1" },
-    { "key": "audience_email", "value": "audience@ticketbox.test" },
-    { "key": "audience_password", "value": "Password@123" },
-    { "key": "audience_full_name", "value": "Demo Audience" },
-    { "key": "vnp_hash_secret", "value": "vnpay_hash_secret" },
-    { "key": "access_token", "value": "" },
-    { "key": "user_id", "value": "" },
-    { "key": "concert_id", "value": "" },
-    { "key": "ticket_type_id", "value": "" },
-    { "key": "order_id", "value": "" },
-    { "key": "total_amount", "value": "" },
-    { "key": "payment_id", "value": "" },
-    { "key": "ticket_id", "value": "" },
-    { "key": "vnp_Amount", "value": "" },
-    { "key": "vnp_TransactionNo", "value": "" },
-    { "key": "vnp_SecureHash", "value": "" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/v1"
+    },
+    {
+      "key": "audience_email",
+      "value": "audience@ticketbox.test"
+    },
+    {
+      "key": "audience_password",
+      "value": "Password@123"
+    },
+    {
+      "key": "audience_full_name",
+      "value": "Demo Audience"
+    },
+    {
+      "key": "vnp_hash_secret",
+      "value": "vnpay_hash_secret"
+    },
+    {
+      "key": "payment_provider",
+      "value": "VNPAY"
+    },
+    {
+      "key": "momo_partner_code",
+      "value": "MOMO"
+    },
+    {
+      "key": "momo_access_key",
+      "value": "F8BBA842ECF85"
+    },
+    {
+      "key": "momo_secret_key",
+      "value": "K951B6PE1waDMi640xX08PD3vg6EkVlz"
+    },
+    {
+      "key": "momo_amount",
+      "value": ""
+    },
+    {
+      "key": "momo_trans_id",
+      "value": ""
+    },
+    {
+      "key": "momo_response_time",
+      "value": ""
+    },
+    {
+      "key": "momo_request_id",
+      "value": ""
+    },
+    {
+      "key": "momo_order_info",
+      "value": ""
+    },
+    {
+      "key": "momo_message",
+      "value": ""
+    },
+    {
+      "key": "momo_signature",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "concert_id",
+      "value": ""
+    },
+    {
+      "key": "ticket_type_id",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "total_amount",
+      "value": ""
+    },
+    {
+      "key": "payment_id",
+      "value": ""
+    },
+    {
+      "key": "ticket_id",
+      "value": ""
+    },
+    {
+      "key": "vnp_Amount",
+      "value": ""
+    },
+    {
+      "key": "vnp_TransactionNo",
+      "value": ""
+    },
+    {
+      "key": "vnp_SecureHash",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -29,7 +121,15 @@
       "request": {
         "method": "GET",
         "header": [],
-        "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
       },
       "event": [
         {
@@ -59,12 +159,26 @@
       ],
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"email\": \"{{audience_email}}\",\n  \"password\": \"{{audience_password}}\",\n  \"confirmPassword\": \"{{audience_password}}\",\n  \"full_name\": \"{{audience_full_name}}\"\n}"
         },
-        "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] }
+        "url": {
+          "raw": "{{base_url}}/auth/register",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        }
       }
     },
     {
@@ -86,12 +200,26 @@
       ],
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"email\": \"{{audience_email}}\",\n  \"password\": \"{{audience_password}}\"\n}"
         },
-        "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
       }
     },
     {
@@ -116,7 +244,15 @@
       "request": {
         "method": "GET",
         "header": [],
-        "url": { "raw": "{{base_url}}/concerts", "host": ["{{base_url}}"], "path": ["concerts"] }
+        "url": {
+          "raw": "{{base_url}}/concerts",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "concerts"
+          ]
+        }
       }
     },
     {
@@ -143,8 +279,14 @@
         "header": [],
         "url": {
           "raw": "{{base_url}}/concerts/{{concert_id}}/ticket-types",
-          "host": ["{{base_url}}"],
-          "path": ["concerts", "{{concert_id}}", "ticket-types"]
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "concerts",
+            "{{concert_id}}",
+            "ticket-types"
+          ]
         }
       }
     },
@@ -169,15 +311,32 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{access_token}}" },
-          { "key": "Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"concert_id\": \"{{concert_id}}\",\n  \"items\": [\n    { \"ticket_type_id\": \"{{ticket_type_id}}\", \"quantity\": 1 }\n  ]\n}"
         },
-        "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] }
+        "url": {
+          "raw": "{{base_url}}/orders",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        }
       }
     },
     {
@@ -188,11 +347,24 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Payment created 201', () => pm.response.code === 201);",
-              "const d = pm.response.json().data;",
-              "pm.collectionVariables.set('payment_id', d.payment_id);",
-              "pm.test('Status PENDING', () => d.status === 'PENDING');",
-              "console.log('checkout_url =', d.checkout_url);"
+              "const requested = pm.collectionVariables.get('payment_provider');",
+              "if (pm.response.code === 201) {",
+              "  const d = pm.response.json().data;",
+              "  pm.collectionVariables.set('payment_id', d.payment_id);",
+              "  pm.test('Status PENDING', () => d.status === 'PENDING');",
+              "  // Backend KHÔNG còn fallback khi client chỉ định provider → phải đúng provider đã chọn.",
+              "  pm.test('Provider khớp yêu cầu', () => d.provider === requested);",
+              "  console.log('provider =', d.provider, '| checkout_url =', d.checkout_url);",
+              "} else if (pm.response.code === 503) {",
+              "  // Provider đã chọn lỗi (vd MoMo down). User chọn lại phương thức và POST lại bước 6.",
+              "  const b = pm.response.json();",
+              "  pm.test('Provider unavailable -> chon lai & POST lai', () => b.code === 'PAYMENT_PROVIDER_UNAVAILABLE');",
+              "  console.warn('Thanh toan that bai:', b.detail);",
+              "  console.warn('=> Doi bien collection payment_provider sang provider khac (vd VNPAY) roi Send lai buoc 6.');",
+              "} else {",
+              "  pm.test('Payment created 201 hoac 503', () => false);",
+              "  console.warn('Response khong mong doi:', pm.response.code, pm.response.text());",
+              "}"
             ]
           }
         }
@@ -200,18 +372,33 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{access_token}}" },
-          { "key": "Idempotency-Key", "value": "{{$guid}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"payment_provider\": \"VNPAY\"\n}"
+          "raw": "{\n  \"payment_provider\": \"{{payment_provider}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/orders/{{order_id}}/payments",
-          "host": ["{{base_url}}"],
-          "path": ["orders", "{{order_id}}", "payments"]
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "orders",
+            "{{order_id}}",
+            "payments"
+          ]
         }
       }
     },
@@ -268,15 +455,122 @@
       ],
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"vnp_TxnRef\": \"{{order_id}}\",\n  \"vnp_Amount\": \"{{vnp_Amount}}\",\n  \"vnp_TransactionNo\": \"{{vnp_TransactionNo}}\",\n  \"vnp_ResponseCode\": \"00\",\n  \"vnp_SecureHash\": \"{{vnp_SecureHash}}\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/payments/webhooks/vnpay",
-          "host": ["{{base_url}}"],
-          "path": ["payments", "webhooks", "vnpay"]
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payments",
+            "webhooks",
+            "vnpay"
+          ]
+        }
+      }
+    },
+    {
+      "name": "7-MOMO. Simulate MOMO webhook (success)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Giả lập IPN MoMo. Chỉ chạy bước này (THAY cho bước 7) khi payment_provider = MOMO.",
+              "// Chữ ký HMAC-SHA256 phải khớp verifyMomoSignature (payment.service.ts): secret + accessKey lấy từ ENV.",
+              "const CryptoJS = require('crypto-js');",
+              "const secret = pm.collectionVariables.get('momo_secret_key');",
+              "const accessKey = pm.collectionVariables.get('momo_access_key');",
+              "const partnerCode = pm.collectionVariables.get('momo_partner_code');",
+              "const orderId = pm.collectionVariables.get('order_id');",
+              "const total = pm.collectionVariables.get('total_amount');",
+              "const amount = String(Math.round(parseFloat(total)));",
+              "const requestId = orderId;",
+              "const transId = String(Date.now());",
+              "const responseTime = String(Date.now());",
+              "const resultCode = '0';",
+              "const message = 'Successful.';",
+              "const orderInfo = 'Payment for order ' + orderId;",
+              "const orderType = '';",
+              "const payType = '';",
+              "const extraData = '';",
+              "",
+              "// Thứ tự field PHẢI trùng verifyMomoSignature.",
+              "const raw = [",
+              "  `accessKey=${accessKey}`,",
+              "  `amount=${amount}`,",
+              "  `extraData=${extraData}`,",
+              "  `message=${message}`,",
+              "  `orderId=${orderId}`,",
+              "  `orderInfo=${orderInfo}`,",
+              "  `orderType=${orderType}`,",
+              "  `partnerCode=${partnerCode}`,",
+              "  `payType=${payType}`,",
+              "  `requestId=${requestId}`,",
+              "  `responseTime=${responseTime}`,",
+              "  `resultCode=${resultCode}`,",
+              "  `transId=${transId}`",
+              "].join('&');",
+              "const signature = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
+              "",
+              "pm.collectionVariables.set('momo_amount', amount);",
+              "pm.collectionVariables.set('momo_trans_id', transId);",
+              "pm.collectionVariables.set('momo_response_time', responseTime);",
+              "pm.collectionVariables.set('momo_request_id', requestId);",
+              "pm.collectionVariables.set('momo_order_info', orderInfo);",
+              "pm.collectionVariables.set('momo_message', message);",
+              "pm.collectionVariables.set('momo_signature', signature);",
+              "console.log('momo raw =', raw);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('MoMo webhook accepted 200', () => pm.response.code === 200);",
+              "const body = pm.response.json();",
+              "pm.test('MoMo message success', () => body.message === 'success');",
+              "if (pm.response.code !== 200) {",
+              "  console.warn('MoMo webhook bị từ chối:', JSON.stringify(body), '-> kiểm tra MOMO_SECRET_KEY/MOMO_ACCESS_KEY khớp .env');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"partnerCode\": \"{{momo_partner_code}}\",\n  \"requestId\": \"{{momo_request_id}}\",\n  \"amount\": {{momo_amount}},\n  \"orderId\": \"{{order_id}}\",\n  \"orderInfo\": \"{{momo_order_info}}\",\n  \"orderType\": \"\",\n  \"transId\": {{momo_trans_id}},\n  \"resultCode\": 0,\n  \"message\": \"{{momo_message}}\",\n  \"payType\": \"\",\n  \"responseTime\": {{momo_response_time}},\n  \"extraData\": \"\",\n  \"signature\": \"{{momo_signature}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/webhooks/momo",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "payments",
+            "webhooks",
+            "momo"
+          ]
         }
       }
     },
@@ -302,11 +596,21 @@
       ],
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
         "url": {
           "raw": "{{base_url}}/orders/{{order_id}}",
-          "host": ["{{base_url}}"],
-          "path": ["orders", "{{order_id}}"]
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "orders",
+            "{{order_id}}"
+          ]
         }
       }
     },
@@ -327,8 +631,22 @@
       ],
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
-        "url": { "raw": "{{base_url}}/me/tickets", "host": ["{{base_url}}"], "path": ["me", "tickets"] }
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/me/tickets",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "me",
+            "tickets"
+          ]
+        }
       }
     },
     {
@@ -349,11 +667,67 @@
       ],
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
         "url": {
           "raw": "{{base_url}}/me/tickets/{{ticket_id}}/qr",
-          "host": ["{{base_url}}"],
-          "path": ["me", "tickets", "{{ticket_id}}", "qr"]
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "me",
+            "tickets",
+            "{{ticket_id}}",
+            "qr"
+          ]
+        }
+      }
+    },
+    {
+      "name": "11. Cancel order (HELD) - optional",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Optional: chỉ hủy được đơn đang HELD. Để demo: chạy bước 0-5 rồi chạy bước này (BỎ QUA 6-10).",
+              "// Nếu đơn đã CONFIRMED/CANCELLED/hết hạn sẽ trả 409/422 — chấp nhận để Run Collection không đỏ.",
+              "const code = pm.response.code;",
+              "pm.test('Cancel xu ly hop le (200/409/422)', () => [200, 409, 422].includes(code));",
+              "if (code === 200) {",
+              "  const d = pm.response.json().data;",
+              "  pm.test('Status CANCELLED', () => d.status === 'CANCELLED');",
+              "  console.log('cancelled_at =', d.cancelled_at);",
+              "} else {",
+              "  console.warn('Khong huy duoc (don khong con HELD):', pm.response.text());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/cancel",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "orders",
+            "{{order_id}}",
+            "cancel"
+          ]
         }
       }
     }

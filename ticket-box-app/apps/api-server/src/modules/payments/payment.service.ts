@@ -2,7 +2,7 @@
 import { env } from '@ticketbox/config';
 import { enqueueNotification } from '@ticketbox/queue';
 import { getGateway } from './gateways/index.js';
-import { ApiError } from '../../shared/http/problem-details.js';
+import { ApiError, Errors } from '../../shared/http/problem-details.js';
 import {
   confirmOrderPayment,
   createPaymentRecord,
@@ -27,21 +27,18 @@ async function callProvider<T>(
   return bh.execute(() => cb.execute(fn));
 }
 
-// Tạo checkout URL bằng provider ưu tiên, sau đó thử provider dự phòng khi cần.
-export async function buildCheckoutUrlWithFallback(
-  preferredProvider: 'VNPAY' | 'MOMO',
+// Tạo checkout URL thử lần lượt các provider trong danh sách, trả về ngay khi 1 cổng OK.
+// 1 phần tử = KHÔNG fallback (client đã chỉ định provider); nhiều phần tử = có fallback.
+export async function buildCheckoutUrl(
+  providers: Array<'VNPAY' | 'MOMO'>,
   orderId: string,
   amount: string,
   currency: string,
   orderInfo: string,
 ): Promise<{ url: string; provider: 'VNPAY' | 'MOMO' }> {
-  // Xác định thứ tự gọi provider: lựa chọn của user trước, dự phòng sau.
-  const fallback: 'VNPAY' | 'MOMO' = preferredProvider === 'VNPAY' ? 'MOMO' : 'VNPAY';
-  const order: Array<'VNPAY' | 'MOMO'> = [preferredProvider, fallback];
-
   let lastError: unknown;
 
-  for (const provider of order) {
+  for (const provider of providers) {
     // Bỏ qua provider đang bị circuit breaker chặn (tín hiệu từ queryStatus/webhook).
     if (getCircuitBreaker(provider).isOpen()) continue;
 
@@ -56,14 +53,17 @@ export async function buildCheckoutUrlWithFallback(
         : await run();
       return { url: payUrl, provider };
     } catch (err) {
+      console.warn(`[payment] ${provider} checkout failed:`, err instanceof Error ? err.message : err);
       lastError = err;
     }
   }
 
-  // Không provider nào khả dụng: trả lỗi để client có thể thử lại sau.
-  throw Object.assign(
-    new Error('All payment providers are currently unavailable'),
-    { statusCode: 503, code: 'PAYMENT_PROVIDER_UNAVAILABLE', cause: lastError },
+  // Không cổng nào tạo được checkout: ném ApiError chuẩn (503) để errorMiddleware trả
+  // problem+json với code PAYMENT_PROVIDER_UNAVAILABLE → client hiện thông báo và để
+  // user chọn phương thức khác rồi POST lại endpoint payment.
+  console.error('[payment] no provider could create checkout:', lastError instanceof Error ? lastError.message : lastError);
+  throw Errors.paymentProviderUnavailable(
+    `Could not start payment via ${providers.join(', ')}. Please choose another payment method and try again.`,
   );
 }
 
@@ -82,7 +82,7 @@ export async function queryPaymentStatus(
 export async function createPayment(
   orderId: string,
   userId: string,
-  provider: 'VNPAY' | 'MOMO' = 'VNPAY',
+  provider?: 'VNPAY' | 'MOMO',
 ): Promise<CreatePaymentResponse> {
   // Xác nhận user sở hữu order và order vẫn có thể thanh toán.
   const order = await getOrderForRetry(orderId, userId);
@@ -101,15 +101,19 @@ export async function createPayment(
   // Chuẩn bị dữ liệu giao dịch và yêu cầu provider tạo checkout URL.
   const orderInfo = `Payment for order ${orderId}`;
 
-  const { url: checkoutUrl, provider: actualProvider } = await buildCheckoutUrlWithFallback(
-    provider,
+  // Client chỉ định provider → CHỈ dùng đúng provider đó (không fallback) để khi lỗi
+  // user tự chọn lại & POST lại. Không chỉ định → thử VNPAY rồi MOMO (resilience).
+  const providers: Array<'VNPAY' | 'MOMO'> = provider ? [provider] : ['VNPAY', 'MOMO'];
+
+  const { url: checkoutUrl, provider: actualProvider } = await buildCheckoutUrl(
+    providers,
     orderId,
     order.totalAmount,
     order.currency,
     orderInfo,
   );
 
-  // Lưu attempt với provider thực tế; có thể khác provider ưu tiên do fallback.
+  // Lưu attempt với provider thực tế (chỉ khác provider yêu cầu khi không chỉ định + fallback).
   const payment = await createPaymentRecord(orderId, order.totalAmount, order.currency, actualProvider, checkoutUrl);
 
   // Chuẩn hoá dữ liệu cần thiết để client chuyển sang bước thanh toán.
