@@ -2,7 +2,7 @@
  * index.ts — Public API của @ticketbox/redis package.
  */
 
-export { getRedisClient, closeRedis } from "./client.js";
+export { createRedisClient, getRedisClient, closeRedis } from "./client.js";
 export {
   cacheGet,
   cacheSet,
@@ -18,3 +18,10 @@ export {
   isTokenRevoked,
   type IdempotencyRecord,
 } from "./idempotency.js";
+export {
+  setOtp,
+  getOtp,
+  deleteOtp,
+  checkResendCooldown,
+  setResendCooldown,
+} from "./otp.js";

@@ -8,7 +8,7 @@
 import { Worker, type Job } from "bullmq";
 import { expireHeldOrder, findExpiredHeldOrders } from "@ticketbox/database";
 import {
-  getRedisConnection,
+  createRedisConnection,
   QUEUE_NAMES,
   type ExpireHoldsJobData,
 } from "@ticketbox/queue";
@@ -73,7 +73,7 @@ export function createExpireHoldsWorker(): Worker<ExpireHoldsJobData> {
         failed_count: failedCount,
       };
     },
-    { connection: getRedisConnection() },
+    { connection: createRedisConnection() },
   );
 
   worker.on("completed", (job) =>

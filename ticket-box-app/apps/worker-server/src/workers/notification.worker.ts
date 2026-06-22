@@ -1,6 +1,10 @@
 import { Worker, type Job } from "bullmq";
 import { prisma, NotificationStatus } from "@ticketbox/database";
-import { getRedisConnection, QUEUE_NAMES, type NotificationJobData } from "@ticketbox/queue";
+import {
+  createRedisConnection,
+  QUEUE_NAMES,
+  type NotificationJobData,
+} from "@ticketbox/queue";
 
 const MAX_ATTEMPTS = 3;
 
@@ -139,7 +143,7 @@ export function createNotificationWorker(): Worker<NotificationJobData> {
       }
     },
     {
-      connection: getRedisConnection(),
+      connection: createRedisConnection(),
       concurrency: 5,
     },
   );

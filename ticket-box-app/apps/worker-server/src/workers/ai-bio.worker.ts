@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Worker, type Job } from "bullmq";
 import { prisma } from "@ticketbox/database";
 import {
-  getRedisConnection,
+  createRedisConnection,
   QUEUE_NAMES,
   type AiBioJobData,
 } from "@ticketbox/queue";
@@ -22,7 +22,7 @@ export function createAiBioWorker(): Worker<AiBioJobData> {
       });
       return result;
     },
-    { connection: getRedisConnection() },
+    { connection: createRedisConnection() },
   );
 
   worker.on("completed", (job) =>
@@ -63,11 +63,15 @@ async function processAiBioJob(data: AiBioJobData) {
 
   try {
     const extractedText = cleanExtractedText(
-      data.source_text ?? bioJob.extractedText ?? (await readOptionalTextSource(bioJob.sourceFileUrl)),
+      data.source_text ??
+        bioJob.extractedText ??
+        (await readOptionalTextSource(bioJob.sourceFileUrl)),
     );
 
     if (!extractedText) {
-      throw new Error("Could not extract usable text from the artist bio source file.");
+      throw new Error(
+        "Could not extract usable text from the artist bio source file.",
+      );
     }
 
     const artistName = data.artist_name || bioJob.concert.artistName;
@@ -109,10 +113,7 @@ async function processAiBioJob(data: AiBioJobData) {
 
 function cleanExtractedText(value: string | undefined) {
   if (!value) return undefined;
-  const cleaned = value
-    .replace(/\0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const cleaned = value.replace(/\0/g, " ").replace(/\s+/g, " ").trim();
   return cleaned.length >= 20 ? cleaned.slice(0, 6_000) : undefined;
 }
 
@@ -134,7 +135,9 @@ function generateMockArtistBio(input: {
   ].join(" ");
 }
 
-async function readOptionalTextSource(source: string): Promise<string | undefined> {
+async function readOptionalTextSource(
+  source: string,
+): Promise<string | undefined> {
   const resolved = resolveLocalPath(source);
   if (!resolved) {
     return undefined;

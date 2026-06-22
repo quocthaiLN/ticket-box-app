@@ -1,16 +1,43 @@
 import type { NextFunction, Request, Response } from "express";
 import { ok } from "../../shared/http/response.js";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { authService } from "./auth.service.js";
 import {
   loginSchema,
   registerSchema,
+  requestOtpSchema,
   updateRoleSchema,
 } from "./auth.schema.js";
 import { z } from "zod";
 
 const REFRESH_COOKIE = "refresh_token";
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export async function handleRequestOtp(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const body = requestOtpSchema.parse(req.body);
+    const result = await authService.requestOtp(body.email);
+    res.status(200).json(ok(result, req.requestId));
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
+        ),
+      );
+      return;
+    }
+    next(err);
+  }
+}
 
 export async function handleRegister(
   req: Request,
@@ -23,21 +50,19 @@ export async function handleRegister(
       email: body.email,
       password: body.password,
       full_name: body.full_name ?? "",
+      otp: body.otp,
     });
     res.status(201).json(ok(user, req.requestId));
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Request body failed validation.",
-          errors: err.errors.map((e) => ({
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({
             field: e.path.join("."),
             message: e.message,
           })),
-        }),
+        ),
       );
       return;
     }
@@ -75,16 +100,13 @@ export async function handleLogin(
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Request body failed validation.",
-          errors: err.errors.map((e) => ({
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({
             field: e.path.join("."),
             message: e.message,
           })),
-        }),
+        ),
       );
       return;
     }
@@ -130,12 +152,7 @@ export async function handleRefresh(
   try {
     const refreshToken: string | undefined = req.cookies?.[REFRESH_COOKIE];
     if (!refreshToken) {
-      throw new ApiError({
-        title: "Unauthorized",
-        status: 401,
-        code: "UNAUTHORIZED",
-        detail: "Refresh token cookie is missing.",
-      });
+      throw Errors.unauthorized("Refresh token cookie is missing.");
     }
     const result = await authService.refresh(refreshToken);
     res.status(200).json(ok(result, req.requestId));
@@ -205,14 +222,7 @@ export async function handleAdminUpdateRole(
       );
   } catch (err) {
     if (err instanceof z.ZodError) {
-      next(
-        new ApiError({
-          title: "Invalid role",
-          status: 422,
-          code: "INVALID_ROLE",
-          detail: "Role must be one of AUDIENCE, ORGANIZER, CHECKER, ADMIN.",
-        }),
-      );
+      next(Errors.invalidRole());
       return;
     }
     next(err);
@@ -249,12 +259,7 @@ export async function handleAdminUpdateStatus(
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(
-        new ApiError({
-          title: "Validation error",
-          status: 400,
-          code: "VALIDATION_ERROR",
-          detail: "Status must be ACTIVE, LOCKED, or DISABLED.",
-        }),
+        Errors.validationError("Status must be ACTIVE, LOCKED, or DISABLED."),
       );
       return;
     }

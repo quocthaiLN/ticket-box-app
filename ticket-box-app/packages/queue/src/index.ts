@@ -2,13 +2,14 @@
  * index.ts — Public API của @ticketbox/queue package.
  */
 
-export { getRedisConnection } from "./connection.js";
+export { createRedisConnection } from "./connection.js";
 export {
   QUEUE_NAMES,
   getExpireHoldsQueue,
   getNotificationsQueue,
   getAiBioQueue,
   getGuestImportQueue,
+  getEmailQueue,
   type QueueName,
 } from "./queues.js";
 export type {
@@ -17,10 +18,12 @@ export type {
   NotificationJobData,
   AiBioJobData,
   GuestImportJobData,
+  EmailJobData,
 } from "./jobs.js";
 export {
   enqueueNotification,
   enqueueExpireHolds,
   enqueueAiBio,
   enqueueGuestImport,
+  enqueueEmail,
 } from "./enqueue.js";

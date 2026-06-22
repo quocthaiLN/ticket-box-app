@@ -1,7 +1,12 @@
-import { Queue } from "bullmq";
-import { getRedisConnection, QUEUE_NAMES } from "@ticketbox/queue";
+import { env } from "@ticketbox/config";
+import {
+  getExpireHoldsQueue,
+  getNotificationsQueue,
+  QUEUE_NAMES,
+} from "@ticketbox/queue";
 import { closeRedis } from "@ticketbox/redis";
 import { createAiBioWorker } from "./workers/ai-bio.worker.js";
+import { createEmailWorker } from "./workers/email.worker.js";
 import { createExpireHoldsWorker } from "./workers/expire-holds.worker.js";
 import { createGuestImportWorker } from "./workers/guest-import.worker.js";
 import { createNotificationWorker } from "./workers/notification.worker.js";
@@ -12,7 +17,12 @@ import { startReminderScheduler } from "./schedulers/reminder.scheduler.js";
 // ---------------------------------------------------------------------------
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("[worker-server] Unhandled rejection at:", promise, "reason:", reason);
+  console.error(
+    "[worker-server] Unhandled rejection at:",
+    promise,
+    "reason:",
+    reason,
+  );
   // Do NOT exit — isolate the error so other workers keep running
 });
 
@@ -31,39 +41,34 @@ const workers = [
   createNotificationWorker(),
   createAiBioWorker(),
   createGuestImportWorker(),
+  createEmailWorker(),
 ];
 
 // ---------------------------------------------------------------------------
 // Khởi tạo schedulers
 // ---------------------------------------------------------------------------
 
-const notificationQueue = new Queue(QUEUE_NAMES.NOTIFICATIONS, {
-  connection: getRedisConnection(),
-});
-const expireHoldsQueue = new Queue(QUEUE_NAMES.EXPIRE_HOLDS, {
-  connection: getRedisConnection(),
-});
+const notificationQueue = getNotificationsQueue();
+const expireHoldsQueue = getExpireHoldsQueue();
 
 const reminderTimer = startReminderScheduler(notificationQueue);
 
-const expireHoldsIntervalMs = Number(
-  process.env.EXPIRE_HOLDS_INTERVAL_MS ?? 60_000,
-);
-const expireHoldsBatchSize = Number(
-  process.env.EXPIRE_HOLDS_BATCH_SIZE ?? 50,
-);
-const expireHoldsDryRun = process.env.EXPIRE_HOLDS_DRY_RUN === "true";
+const { expireHoldsIntervalMs, expireHoldsBatchSize, expireHoldsDryRun } =
+  env.worker;
 
-const expireHoldsTimer = setInterval(() => {
-  expireHoldsQueue
-    .add("expire-held-orders", {
-      batch_size: expireHoldsBatchSize,
-      dry_run: expireHoldsDryRun,
-    })
-    .catch((err: unknown) =>
-      console.error("[worker-server] Failed to enqueue expire-holds:", err),
-    );
-}, Math.max(expireHoldsIntervalMs, 5_000));
+const expireHoldsTimer = setInterval(
+  () => {
+    expireHoldsQueue
+      .add("expire-held-orders", {
+        batch_size: expireHoldsBatchSize,
+        dry_run: expireHoldsDryRun,
+      })
+      .catch((err: unknown) =>
+        console.error("[worker-server] Failed to enqueue expire-holds:", err),
+      );
+  },
+  Math.max(expireHoldsIntervalMs, 5_000),
+);
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown
@@ -103,8 +108,9 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 
 const redisAddr =
-  process.env.REDIS_URL ??
-  `${process.env.REDIS_HOST ?? "localhost"}:${process.env.REDIS_PORT ?? 6379}`;
+  env.redis.url !== "redis://localhost:6379"
+    ? env.redis.url
+    : `${env.redis.host}:${env.redis.port}`;
 
 console.log(
   `[worker-server] TicketBox Worker Server started — ${workers.length} worker(s) listening`,

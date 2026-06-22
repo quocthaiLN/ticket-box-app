@@ -5,7 +5,9 @@
   "type": "module",
   "main": "./env.ts",
   "exports": {
-    ".": "./env.ts",
-    "./payment.js": "./payment.ts"
+    ".": "./env.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0"
   }
 }

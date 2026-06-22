@@ -1,4 +1,4 @@
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 
 export class BulkheadRejectedError extends Error {
   readonly statusCode = 503;
@@ -43,8 +43,8 @@ export class PaymentBulkhead {
   }
 }
 
-export const vnpayBulkhead = new PaymentBulkhead('VNPAY', paymentConfig.vnpay.bulkheadLimit);
-export const momoBulkhead = new PaymentBulkhead('MOMO', paymentConfig.momo.bulkheadLimit);
+export const vnpayBulkhead = new PaymentBulkhead('VNPAY', env.vnpay.bulkheadLimit);
+export const momoBulkhead = new PaymentBulkhead('MOMO', env.momo.bulkheadLimit);
 
 export function getBulkhead(provider: 'VNPAY' | 'MOMO'): PaymentBulkhead {
   return provider === 'VNPAY' ? vnpayBulkhead : momoBulkhead;

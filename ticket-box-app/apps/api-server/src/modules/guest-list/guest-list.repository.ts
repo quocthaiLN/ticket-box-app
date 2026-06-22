@@ -1,6 +1,6 @@
 import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma } from "@ticketbox/database";
 import { enqueueGuestImport } from "@ticketbox/queue";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import type {
   GuestImportRequest,
   GuestImportResponse,
@@ -32,21 +32,11 @@ export class GuestListRepository {
     const fileUrl = input.file_url ?? input.file_object_key;
 
     if (!fileUrl) {
-      throw new ApiError({
-        title: "INVALID_CSV",
-        status: 400,
-        code: "INVALID_CSV",
-        detail: "file_object_key or file_url is required to create a guest import job."
-      });
+      throw Errors.invalidCsv();
     }
 
     if (!input.uploaded_by_user_id) {
-      throw new ApiError({
-        title: "UNAUTHORIZED",
-        status: 401,
-        code: "UNAUTHORIZED",
-        detail: "Authenticated user is required to create a guest import job."
-      });
+      throw Errors.unauthorized("Authenticated user is required to create a guest import job.");
     }
 
     await this.assertConcertExists(input.concert_id);
@@ -105,12 +95,7 @@ export class GuestListRepository {
     });
 
     if (!concert) {
-      throw new ApiError({
-        title: "CONCERT_NOT_FOUND",
-        status: 404,
-        code: "CONCERT_NOT_FOUND",
-        detail: "Concert was not found."
-      });
+      throw Errors.concertNotFound();
     }
   }
 
@@ -280,12 +265,7 @@ export class GuestListRepository {
     });
 
     if (!device) {
-      throw new ApiError({
-        title: "DEVICE_NOT_ASSIGNED",
-        status: 422,
-        code: "DEVICE_NOT_ASSIGNED",
-        detail: "Device is not active or is not assigned to this concert/gate."
-      });
+      throw Errors.deviceNotAssigned();
     }
 
     return device;

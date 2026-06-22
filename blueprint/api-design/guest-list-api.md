@@ -35,16 +35,16 @@ Nguồn nghiệp vụ chính:
 
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
-| `POST` | `/admin/concerts/{concert_id}/guest-import-jobs` | `ORGANIZER`, `ADMIN` | Upload CSV và tạo import job. |
-| `GET` | `/admin/guest-import-jobs/{job_id}` | `ORGANIZER`, `ADMIN` | Xem trạng thái job. |
-| `GET` | `/admin/guest-import-jobs/{job_id}/errors` | `ORGANIZER`, `ADMIN` | Xem lỗi từng dòng. |
-| `GET` | `/admin/concerts/{concert_id}/guests` | `ORGANIZER`, `ADMIN` | Danh sách guest. |
-| `POST` | `/admin/concerts/{concert_id}/guests` | `ORGANIZER`, `ADMIN` | Tạo guest thủ công. |
-| `PATCH` | `/admin/guests/{guest_id}` | `ORGANIZER`, `ADMIN` | Cập nhật guest. |
-| `POST` | `/admin/guests/{guest_id}/cancel` | `ORGANIZER`, `ADMIN` | Hủy guest. |
-| `GET` | `/check-in/guests/search` | `CHECKER`, `ADMIN` | Tra cứu guest tại cổng. |
+| `POST` | `/admin/concerts/{concert_id}/guest-import-jobs` | `ADMIN` | Upload CSV và tạo import job. |
+| `GET` | `/admin/guest-import-jobs/{job_id}` | `ADMIN` | Xem trạng thái job. |
+| `GET` | `/admin/guest-import-jobs/{job_id}/errors` | `ADMIN` | Xem lỗi từng dòng. |
+| `GET` | `/admin/concerts/{concert_id}/guests` | `ADMIN` | Danh sách guest. |
+| `POST` | `/admin/concerts/{concert_id}/guests` | `ADMIN` | Tạo guest thủ công. |
+| `PATCH` | `/admin/guests/{guest_id}` | `ADMIN` | Cập nhật guest. |
+| `POST` | `/admin/guests/{guest_id}/cancel` | `ADMIN` | Hủy guest. |
+| `GET` | `/check-in/guests/search` | `CHECKER` | Tra cứu guest tại cổng. |
 
-Check-in guest online nằm trong `check-in-api.md` tại `POST /check-in/guests/scans`.
+Check-in guest online thực hiện trong luồng check-in (xem `check-in-api.md`); alias cũ `POST /check-in/guests/scans`, `GET /guest-list/search`, `POST /guest-list/scan` đã bỏ (trả `404`). BTC xem guest của concert mình qua `GET /organizer/concerts/{concert_id}/guests` (xem `organizer-api.md`).
 
 ---
 
@@ -256,3 +256,5 @@ Response chỉ trả guest thuộc allowed zones của gate.
 - Admin xem được số dòng thành công/lỗi.
 - Guest được gán zone để check đúng cổng.
 - Guest sai gate-zone bị từ chối trong check-in.
+- `ADMIN` quản lý import/guest; `ORGANIZER` gọi route admin guest → 403.
+- `CHECKER` tra cứu guest qua `GET /check-in/guests/search`; alias cũ (`/guest-list/search`, `/guest-list/scan`) → 404.

@@ -1,4 +1,4 @@
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 
 export type ListConcertsQuery = {
   q?: string;
@@ -327,11 +327,5 @@ function stripUndefined<T extends Record<string, unknown>>(
 }
 
 function validationError(field: string, message: string) {
-  return new ApiError({
-    title: "Invalid catalog request",
-    status: 400,
-    code: "INVALID_CATALOG_REQUEST",
-    detail: message,
-    errors: [{ field, message }],
-  });
+  return Errors.invalidCatalogRequest(field, message);
 }

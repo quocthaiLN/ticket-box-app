@@ -1,5 +1,5 @@
 import { getCatalogAssetUrl } from "@ticketbox/storage";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { CatalogRepository } from "./catalog.repository.js";
 import type {
   CreateConcertInput,
@@ -145,13 +145,7 @@ export class CatalogService {
       readiness.seat_zone_count === 0 ||
       readiness.ticket_type_count === 0
     ) {
-      throw new ApiError({
-        title: "Cannot publish concert",
-        status: 422,
-        code: "CANNOT_PUBLISH_CONCERT",
-        detail:
-          "Concert must have a valid time range, at least one seat zone, and at least one ticket type.",
-      });
+      throw Errors.cannotPublishConcert();
     }
 
     return this.repository.setConcertStatus(concertId, "PUBLISHED");
@@ -236,12 +230,7 @@ export class CatalogService {
 
     const fallback = await this.repository.findDefaultOrganizerId();
     if (!fallback) {
-      throw new ApiError({
-        title: "Organizer not found",
-        status: 422,
-        code: "ORGANIZER_NOT_FOUND",
-        detail: "A valid organizer user is required to create a concert.",
-      });
+      throw Errors.organizerNotFound();
     }
 
     return fallback;
@@ -249,23 +238,13 @@ export class CatalogService {
 
   private assertTimeRange(startsAt: string, endsAt: string) {
     if (new Date(endsAt) <= new Date(startsAt)) {
-      throw new ApiError({
-        title: "Invalid concert time range",
-        status: 422,
-        code: "INVALID_CONCERT_TIME_RANGE",
-        detail: "ends_at must be later than starts_at.",
-      });
+      throw Errors.invalidConcertTimeRange();
     }
   }
 
   private assertSaleWindow(startsAt: string, endsAt: string) {
     if (new Date(endsAt) <= new Date(startsAt)) {
-      throw new ApiError({
-        title: "Invalid sale window",
-        status: 422,
-        code: "INVALID_SALE_WINDOW",
-        detail: "sale_end_at must be later than sale_start_at.",
-      });
+      throw Errors.invalidSaleWindow();
     }
   }
 
@@ -274,24 +253,13 @@ export class CatalogService {
   }
 
   private notFound(resource: "concert" | "seat_zone", id: string) {
-    const code =
-      resource === "concert" ? "CONCERT_NOT_FOUND" : "SEAT_ZONE_NOT_FOUND";
-    return new ApiError({
-      title:
-        resource === "concert" ? "Concert not found" : "Seat zone not found",
-      status: 404,
-      code,
-      detail: `${resource} ${id} does not exist or is not accessible.`,
-    });
+    return resource === "concert"
+      ? Errors.concertNotFound(id)
+      : Errors.seatZoneNotFound(id);
   }
 
   private capacityExceeded() {
-    return new ApiError({
-      title: "Zone capacity exceeded",
-      status: 422,
-      code: "ZONE_CAPACITY_EXCEEDED",
-      detail: "Configured ticket quantity would exceed the seat zone capacity.",
-    });
+    return Errors.zoneCapacityExceeded();
   }
 }
 

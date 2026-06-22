@@ -6,7 +6,7 @@
  */
 
 import { Queue } from "bullmq";
-import { getRedisConnection } from "./connection.js";
+import { createRedisConnection } from "./connection.js";
 
 /** Tên tất cả queue trong hệ thống */
 export const QUEUE_NAMES = {
@@ -18,6 +18,8 @@ export const QUEUE_NAMES = {
   AI_BIO: "ai-bio",
   /** Import CSV danh sách khách VIP */
   GUEST_IMPORT: "guest-import",
+  /** Gửi email transactional (OTP, ...) qua SMTP */
+  EMAIL: "email",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -31,27 +33,34 @@ let _expireHoldsQueue: Queue | null = null;
 let _notificationsQueue: Queue | null = null;
 let _aiBioQueue: Queue | null = null;
 let _guestImportQueue: Queue | null = null;
+let _emailQueue: Queue | null = null;
 
 export function getExpireHoldsQueue(): Queue {
   return (_expireHoldsQueue ??= new Queue(QUEUE_NAMES.EXPIRE_HOLDS, {
-    connection: getRedisConnection(),
+    connection: createRedisConnection(),
   }));
 }
 
 export function getNotificationsQueue(): Queue {
   return (_notificationsQueue ??= new Queue(QUEUE_NAMES.NOTIFICATIONS, {
-    connection: getRedisConnection(),
+    connection: createRedisConnection(),
   }));
 }
 
 export function getAiBioQueue(): Queue {
   return (_aiBioQueue ??= new Queue(QUEUE_NAMES.AI_BIO, {
-    connection: getRedisConnection(),
+    connection: createRedisConnection(),
   }));
 }
 
 export function getGuestImportQueue(): Queue {
   return (_guestImportQueue ??= new Queue(QUEUE_NAMES.GUEST_IMPORT, {
-    connection: getRedisConnection(),
+    connection: createRedisConnection(),
+  }));
+}
+
+export function getEmailQueue(): Queue {
+  return (_emailQueue ??= new Queue(QUEUE_NAMES.EMAIL, {
+    connection: createRedisConnection(),
   }));
 }

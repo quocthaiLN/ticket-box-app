@@ -58,3 +58,17 @@ export type GuestImportJobData = {
   csv_object_key: string;
   uploaded_by_user_id: string;
 };
+
+// ---------------------------------------------------------------------------
+// email — transactional email đã render sẵn (OTP, ...)
+// ---------------------------------------------------------------------------
+
+export type EmailJobData = {
+  /** Địa chỉ người nhận */
+  to: string;
+  subject: string;
+  /** Bản plain-text (bắt buộc để fallback) */
+  text: string;
+  /** Bản HTML (optional) */
+  html?: string;
+};

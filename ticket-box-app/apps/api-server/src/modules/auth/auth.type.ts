@@ -34,6 +34,7 @@ export type RegisterInput = {
   email: string;
   password: string;
   full_name: string;
+  otp: string;
 };
 
 /** Input cho login */

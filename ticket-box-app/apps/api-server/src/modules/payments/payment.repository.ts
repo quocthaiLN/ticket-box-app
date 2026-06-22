@@ -10,7 +10,7 @@ import {
   NotificationType,
 } from "@ticketbox/database";
 import { cacheDelete } from "@ticketbox/redis";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 
 const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
@@ -61,36 +61,16 @@ export async function getOrderForRetry(
   `);
 
   if (!row) {
-    throw new ApiError({
-      title: "ORDER_NOT_FOUND",
-      status: 404,
-      code: "ORDER_NOT_FOUND",
-      detail: "Order not found",
-    });
+    throw Errors.orderNotFoundById();
   }
   if (row.userId !== userId) {
-    throw new ApiError({
-      title: "ORDER_ACCESS_DENIED",
-      status: 403,
-      code: "ORDER_ACCESS_DENIED",
-      detail: "Access denied to this order",
-    });
+    throw Errors.orderAccessDenied();
   }
   if (row.status !== OrderStatus.HELD) {
-    throw new ApiError({
-      title: "ORDER_NOT_HELD",
-      status: 422,
-      code: "ORDER_NOT_HELD",
-      detail: `Order is in status ${row.status} and cannot create a new payment`,
-    });
+    throw Errors.orderNotHeld(`Order is in status ${row.status} and cannot create a new payment.`);
   }
   if (row.holdExpiresAt && row.holdExpiresAt < new Date()) {
-    throw new ApiError({
-      title: "ORDER_NOT_HELD",
-      status: 422,
-      code: "ORDER_NOT_HELD",
-      detail: "Order hold has expired",
-    });
+    throw Errors.orderNotHeld("Order hold has expired.");
   }
 
   return row;
@@ -221,13 +201,7 @@ export async function confirmOrderPayment(
       FOR UPDATE
     `);
 
-      if (!orderRow)
-        throw new ApiError({
-          title: "ORDER_NOT_FOUND",
-          status: 404,
-          code: "ORDER_NOT_FOUND",
-          detail: "Order not found",
-        });
+      if (!orderRow) throw Errors.orderNotFoundById();
 
       // Idempotent: already confirmed — still ensure payment is SUCCEEDED
       if (orderRow.status === OrderStatus.CONFIRMED) {
@@ -243,12 +217,7 @@ export async function confirmOrderPayment(
       }
 
       if (orderRow.status !== OrderStatus.HELD) {
-        throw new ApiError({
-          title: "ORDER_NOT_HELD",
-          status: 409,
-          code: "ORDER_NOT_HELD",
-          detail: `Order is in status ${orderRow.status}`,
-        });
+        throw Errors.orderNotHeldConflict(orderRow.status);
       }
 
       const now = new Date();

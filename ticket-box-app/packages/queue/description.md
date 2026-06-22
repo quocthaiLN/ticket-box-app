@@ -20,7 +20,7 @@
 ## Cách đọc folder này
 
 1. Đọc `package.json` để biết dependencies (sử dụng `@ticketbox/redis` và `bullmq`).
-2. Đọc `src/connection.ts` để hiểu cách queue sử dụng chung Redis instance từ package `@ticketbox/redis`.
+2. Đọc `src/connection.ts` để hiểu cách mỗi queue/worker tạo kết nối Redis riêng từ package `@ticketbox/redis`.
 3. Đọc `src/jobs.ts` để nắm được các loại jobs có trong hệ thống và cấu trúc dữ liệu payload đi kèm của chúng.
 4. Đọc `src/queues.ts` để hiểu các hàm factory khởi tạo các queue instances.
 5. Đọc `src/index.ts` để xem các exports cung cấp cho các package/app khác.
@@ -29,7 +29,7 @@
 
 - Phải đảm bảo tính đồng nhất của `QUEUE_NAMES` và cấu trúc job payload (`jobs.ts`) giữa producer và consumer. Thay đổi payload là một breaking change, đòi hỏi phải migrate hoặc xử lý các pending jobs trong queue.
 - Khi thêm một queue mới, cần định nghĩa tên queue trong `QUEUE_NAMES`, định nghĩa job data type tương ứng trong `jobs.ts`, và tạo một factory function tương ứng trong `queues.ts`.
-- Mọi queue đều chia sẻ chung một kết nối Redis qua `getRedisConnection()`.
+- Mỗi Queue/Worker được cấp một kết nối Redis riêng qua `createRedisConnection()` (tạo connection mới từ `@ticketbox/redis`) — theo khuyến nghị của BullMQ cho worker.
 
 ## Ghi chú học thêm
 
