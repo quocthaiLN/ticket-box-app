@@ -62,7 +62,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setError("");
 
     try {
-      const user =
+      const auth =
         mode === "login"
           ? await login({
               email: form.email,
@@ -76,7 +76,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               otp: form.otp,
             });
 
-      navigate(nextPathForUser(user), { replace: true });
+      navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed.");
     } finally {
@@ -474,6 +474,7 @@ function SocialButton({ icon, label }: { icon: string; label: string }) {
 
 function nextPathForUser(user: AuthUser) {
   if (user.role === "ADMIN") return "/admin";
+  if (user.role === "ORGANIZER") return "/organizer";
   if (user.role === "CHECKER") return "/checker";
   return "/";
 }

@@ -28,6 +28,7 @@ type LoginResponse = {
   access_token: string;
   expires_in: number;
   user: AuthUser;
+  redirect_to?: string;
 };
 
 export async function login(input: LoginInput) {
@@ -41,7 +42,7 @@ export async function login(input: LoginInput) {
     user: response.data.user,
   });
 
-  return response.data.user;
+  return response.data;
 }
 
 export async function register(input: RegisterInput) {

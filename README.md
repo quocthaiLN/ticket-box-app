@@ -1,7 +1,5 @@
 # TicketBox Local Run Guide
 
-Hướng dẫn này tập trung vào việc chuẩn bị database, seed dữ liệu và chạy Web UI trên localhost để kiểm tra các màn Home, Events và Concert Detail.
-
 Các lệnh bên dưới chạy từ thư mục workspace npm:
 
 ```powershell
@@ -81,25 +79,17 @@ Lệnh này apply các migration hiện có vào database được trỏ bởi `
 npm run db:seed
 ```
 
-Seed thực thi file:
+Seed thực thi file: `packages/database/prisma/seed.mjs`
 
-```text
-packages/database/prisma/seed.mjs
-```
+Dữ liệu seed hiện tại đáp ứng Sprint 6 mới nhất.
 
-Dữ liệu seed hiện tại phục vụ Home, Events và Concert Detail:
-
-- 6 concerts dựa trên mock data của `fe/src/app/data/mockData.ts`.
-- 5 concerts `PUBLISHED`, 1 concert `DRAFT`.
-- Venues, seat zones, gates, ticket types và inventory.
-- Demo users, orders, payments, tickets, check-in devices và artist bio jobs.
-- Ảnh catalog nằm trong `apps/web/src/img/`.
-
-Nếu muốn xem database bằng Prisma Studio:
+Xem database bằng Prisma Studio để có thể đổi role nhanh chóng: `http://localhost:5555`
 
 ```powershell
 npm run db:studio
 ```
+
+> Mở terminal khác để tiếp tục các lệnh dưới
 
 ## 7. Build các package nền cho API
 
@@ -120,13 +110,7 @@ Mở terminal 1 tại `ticket-box-app/`:
 npm run dev:api
 ```
 
-API mặc định chạy tại:
-
-```text
-http://localhost:3000
-```
-
-Lưu ý URL phải có hai dấu slash sau `http`, tức là `http://localhost:3000`. `http:/localhost/3000` là sai cú pháp URL.
+API mặc định chạy tại: `http://localhost:3000`
 
 Catalog endpoints cần kiểm tra nhanh:
 
@@ -145,105 +129,7 @@ Mở terminal 2 tại `ticket-box-app/`:
 npm run dev:web
 ```
 
-Web UI chạy tại:
+Web UI chạy tại: `http://localhost:3001`
 
-```text
-http://localhost:3001
-```
+Nếu port `3001` đang bận, có thể là `http://localhost:3002`
 
-Nếu port `3001` đang bận, Vite có thể tự động chuyển sang port tiếp theo, ví dụ:
-
-```text
-http://localhost:3002
-```
-
-Hãy mở đúng URL mà terminal `npm run dev:web` in ra.
-
-Web mặc định gọi API tại:
-
-```text
-http://localhost:3000/v1
-```
-
-Nếu cần override API base URL:
-
-```powershell
-$env:VITE_API_BASE_URL="http://localhost:3000/v1"
-npm run dev:web
-```
-
-## 10. Luồng kiểm tra UI
-
-Sau khi API và Web đều đang chạy:
-
-1. Mở URL web mà Vite in ra, thường là `http://localhost:3001` hoặc `http://localhost:3002`.
-2. Xem Home lấy concert từ Catalog API.
-3. Mở `/events` trên cùng port web đang chạy.
-4. Search/filter danh sách Events.
-5. Mở một concert detail từ card event.
-6. Kiểm tra venue, description, ticket types và inventory.
-
-## Lệnh build nhanh cho Web
-
-```powershell
-npm run build:web
-```
-
-## Troubleshooting
-
-### `Environment variable not found: DATABASE_URL`
-
-Kiểm tra `ticket-box-app/.env` đã có `DATABASE_URL`, sau đó chạy lại các script database từ workspace root.
-
-### `Can't reach database server at localhost:5432`
-
-Nếu đang dùng Docker Compose của repo, port đúng là `5433`, không phải `5432`.
-
-Sửa `.env`:
-
-```env
-DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5433/ticketbox?schema=public
-```
-
-Sau đó chạy lại:
-
-```powershell
-npm run db:validate
-npm run db:migrate
-npm run db:seed
-```
-
-### Docker Compose báo lỗi pipe hoặc Docker engine
-
-Nếu `docker compose ps` báo lỗi liên quan `dockerDesktopLinuxEngine`, hãy mở Docker Desktop trước, chờ engine start xong rồi chạy lại:
-
-```powershell
-docker compose up -d
-docker compose ps
-```
-
-### Web không có dữ liệu
-
-Kiểm tra API:
-
-```text
-http://localhost:3000/v1/concerts
-```
-
-Nếu API chưa chạy:
-
-```powershell
-npm run dev:api
-```
-
-### Port 3001 bị chiếm
-
-```powershell
-npm run dev -w @ticketbox/web -- --port 3002
-```
-
-Sau đó mở:
-
-```text
-http://localhost:3002
-```
