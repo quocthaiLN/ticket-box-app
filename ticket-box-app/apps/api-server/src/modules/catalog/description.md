@@ -21,9 +21,11 @@ Owns public concert catalog reads and the remaining admin catalog operations.
   - `PATCH /admin/seat-zones/:seat_zone_id`
   - `POST /admin/concerts/:concert_id/ticket-types`
   - `PATCH /admin/ticket-types/:ticket_type_id`
+- Sprint 6 A7 is implemented in `CatalogRepository.setConcertStatus`: when a concert status becomes `CANCELLED` or `COMPLETED`, linked `CHECKER` users from `concert_checker_accounts` are set to `DISABLED` in the same DB transaction.
 
 ## Rules To Keep
 
 - Keep catalog service/repository methods for create venue/concert/zone/ticket-type available for Organizer and Organizer-Admin flows to reuse later.
 - Do not re-expose removed admin routes from this router; Organizer-owned flows belong under `/organizer/*` and approval materialization belongs under Organizer-Admin.
+- Keep checker disable behavior inside the same transaction as the concert status update.
 - When changing catalog admin routes, check `blueprint/api-design/rbac-route-map.md` first.
