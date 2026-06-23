@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   createOrder,
+  createPayment,
   getOrder,
+  newIdempotencyKey,
   type OrderDetail,
   type PaymentProvider,
 } from "../../services/order.service";
@@ -87,7 +89,6 @@ export function CheckoutPage() {
       const result = await createOrder(
         {
           concert_id: pending.concertId,
-          payment_provider: pending.paymentProvider,
           items: pending.items.map((item) => ({
             ticket_type_id: item.ticketTypeId,
             quantity: item.quantity,
@@ -98,16 +99,42 @@ export function CheckoutPage() {
       const nextPending = {
         ...pending,
         orderId: result.order_id,
-        checkoutUrl: result.checkout_url,
         expiresAt: result.hold_expires_at ? new Date(result.hold_expires_at).getTime() : pending.expiresAt,
       };
       writePendingCheckout(nextPending);
       setPending(nextPending);
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
-      window.open(result.checkout_url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể tạo đơn hàng.");
+      setStep("payment");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitPayment() {
+    if (!pending?.orderId) return;
+    setBusy(true);
+    setError("");
+    setStep("processing");
+    try {
+      const paymentIdempotencyKey = pending.paymentIdempotencyKey ?? newIdempotencyKey();
+      const result = await createPayment(pending.orderId, pending.paymentProvider, paymentIdempotencyKey);
+      const nextPending = {
+        ...pending,
+        paymentIdempotencyKey,
+        checkoutUrl: result.checkout_url,
+        expiresAt: new Date(result.hold_expires_at).getTime(),
+      };
+      writePendingCheckout(nextPending);
+      setPending(nextPending);
+      setTimeLeft(remainingSeconds(nextPending.expiresAt));
+      setStep("payment");
+      // Redirect in the current tab so browser popup policies cannot block checkout.
+      window.location.assign(result.checkout_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể tạo yêu cầu thanh toán.");
       setStep("payment");
     } finally {
       setBusy(false);
@@ -285,12 +312,22 @@ export function CheckoutPage() {
               {!pending.orderId ? (
                 <button type="button" onClick={submitOrder} disabled={busy || step === "processing"} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:opacity-50">
                   {busy || step === "processing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                  Thanh toán qua {providerLabel}
+                  Giữ vé và tiếp tục
                 </button>
               ) : (
-                <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">
-                  Đang chờ xác nhận từ cổng thanh toán. Trang này tự kiểm tra mỗi 3 giây.
-                </p>
+                <div className="space-y-3">
+                  {!pending.checkoutUrl && (
+                    <button type="button" onClick={submitPayment} disabled={busy || isExpired} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:opacity-50">
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                      Gửi yêu cầu thanh toán qua {providerLabel}
+                    </button>
+                  )}
+                  <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">
+                    {pending.checkoutUrl
+                      ? "Đang chờ xác nhận từ cổng thanh toán. Trang này tự kiểm tra mỗi 3 giây."
+                      : "Vé đã được giữ. Hãy gửi yêu cầu thanh toán trước khi thời gian giữ vé kết thúc."}
+                  </p>
+                </div>
               )}
             </div>
           </aside>

@@ -697,8 +697,11 @@ async function seedDemoTickets() {
         seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
         gateId: gateId(sourceConcertIndex, sourceZoneIndex),
         qrTokenHash: `qr-seed-${concert.slug}-001`,
-        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
-        qrSignature: "demo-signature",
+        // Để null để api-server tự build payload (7 field) và ký Ed25519 thật khi
+        // gọi GET /me/tickets/:id/qr lần đầu (như vé phát hành thật). Không gán
+        // chữ ký demo ở đây nữa, nếu không checker sẽ verify thất bại.
+        qrPayload: null,
+        qrSignature: null,
         status: index === 2 ? "CHECKED_IN" : "ISSUED",
         issuedAt: new Date("2026-06-08T10:05:00+07:00"),
         checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,
@@ -712,8 +715,9 @@ async function seedDemoTickets() {
         seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
         gateId: gateId(sourceConcertIndex, sourceZoneIndex),
         qrTokenHash: `qr-seed-${concert.slug}-001`,
-        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
-        qrSignature: "demo-signature",
+        // Ghi đè dữ liệu demo cũ trong DB về null để lần /qr kế tiếp ký lại thật.
+        qrPayload: null,
+        qrSignature: null,
         status: index === 2 ? "CHECKED_IN" : "ISSUED",
         issuedAt: new Date("2026-06-08T10:05:00+07:00"),
         checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,

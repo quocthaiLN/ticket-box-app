@@ -23,6 +23,7 @@ export type PendingCheckout = {
   totalPrice: number;
   orderId?: string;
   checkoutUrl?: string;
+  paymentIdempotencyKey?: string;
 };
 
 const pendingCheckoutKey = "ticketbox.pendingCheckout";

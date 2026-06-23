@@ -43,6 +43,7 @@ export type TicketQr = {
     concert_id: string;
     ticket_type_id: string;
     seat_zone_id: string;
+    gate_id: string;
     issued_at: string;
     qr_token: string;
   };

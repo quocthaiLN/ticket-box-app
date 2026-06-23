@@ -400,7 +400,14 @@ export async function confirmOrderPayment(
       // Ghi nhận các loại vé bị thay đổi để xóa cache sau khi commit.
       affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      // Phát hành vé chạy nhiều query tuần tự; với DB có độ trễ mạng cao (vd Neon
+      // khác region) tổng thời gian dễ vượt 5000ms mặc định của Prisma và làm
+      // transaction bị đóng (P2028). Nới timeout để webhook xác nhận không bị hủy giữa chừng.
+      timeout: 30_000,
+      maxWait: 10_000,
+    },
   );
 
   // Cache không được xóa thành công không làm rollback thanh toán đã commit.
@@ -488,7 +495,13 @@ export async function failPayment(
       // Chỉ lưu ticket type duy nhất; cache được xóa một lần cho mỗi loại vé.
       affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      // Cùng lý do với confirmOrderPayment: nhiều query tuần tự + độ trễ mạng cao
+      // có thể vượt 5000ms mặc định và gây P2028.
+      timeout: 30_000,
+      maxWait: 10_000,
+    },
   );
 
   // Xóa cache tồn kho sau khi transaction giải phóng hold đã commit.

@@ -1,4 +1,5 @@
 import { Ban, Calendar, CheckCircle, Download, QrCode, Ticket as TicketIcon, X } from "lucide-react";
+import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -173,17 +174,11 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
     };
   }, [ticket.id]);
 
-  const payloadText = qr
-    ? JSON.stringify(
-        {
-          ticket_id: qr.ticket_id,
-          payload: qr.payload,
-          qr_signature: qr.qr_signature,
-          expires_at: qr.expires_at,
-        },
-        null,
-        2,
-      )
+  // Nội dung QR = payload (các field server đã ký) GỘP với chữ ký. Không bọc thêm
+  // lớp ngoài: checker canonicalize payload (bỏ qr_signature) rồi verify Ed25519, nên
+  // object phải đúng bằng object server đã ký thì chữ ký mới khớp.
+  const qrContent = qr
+    ? JSON.stringify({ ...qr.payload, qr_signature: qr.qr_signature })
     : "";
 
   return (
@@ -206,7 +201,7 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
             ) : status === "error" ? (
               <div className="flex h-44 items-center justify-center text-sm text-[#E8315B]">Không thể tải QR</div>
             ) : (
-              <PayloadCodePanel text={payloadText} />
+              <QrImage content={qrContent} />
             )}
           </div>
 
@@ -221,11 +216,44 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
   );
 }
 
-function PayloadCodePanel({ text }: { text: string }) {
+// Render chuỗi đã ký thành ảnh QR thật. Mức sửa lỗi 'M' đủ bền khi in/chụp màn hình;
+// nền trắng + ô tối để máy quét đọc tốt dù app dùng theme tối.
+function QrImage({ content }: { content: string }) {
+  const [dataUrl, setDataUrl] = useState<string>("");
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!content) return;
+    let mounted = true;
+    QRCode.toDataURL(content, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 256,
+      color: { dark: "#08080E", light: "#FFFFFF" },
+    })
+      .then((url) => {
+        if (mounted) setDataUrl(url);
+      })
+      .catch(() => {
+        if (mounted) setFailed(true);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [content]);
+
+  if (failed) {
+    return <div className="flex h-44 items-center justify-center text-sm text-[#E8315B]">Không thể tạo QR</div>;
+  }
+  if (!dataUrl) {
+    return <div className="flex h-44 items-center justify-center text-sm text-[#8585A0]">Đang tạo QR...</div>;
+  }
   return (
-    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/30 p-3 text-left font-mono text-[11px] leading-5 text-[#F0EDEB]">
-      {text}
-    </pre>
+    <img
+      src={dataUrl}
+      alt="Mã QR vé"
+      className="mx-auto h-56 w-56 rounded-xl bg-white p-2"
+    />
   );
 }
 

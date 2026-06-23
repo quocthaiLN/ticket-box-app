@@ -12,7 +12,6 @@ export type CreateOrderItemInput = {
 export type CreateOrderInput = {
   concert_id: string;
   items: CreateOrderItemInput[];
-  payment_provider?: PaymentProvider;
 };
 
 export type CreateOrderResult = {
@@ -21,14 +20,21 @@ export type CreateOrderResult = {
   total_amount: string;
   currency: string;
   hold_expires_at: string | null;
-  checkout_url: string;
-  payment_id: string;
   items: Array<{
     ticket_type_id: string;
     quantity: number;
     unit_price: string;
     line_total: string;
   }>;
+};
+
+export type CreatePaymentResult = {
+  payment_id: string;
+  provider: PaymentProvider;
+  status: PaymentStatus;
+  checkout_url: string;
+  order_id: string;
+  hold_expires_at: string;
 };
 
 export type OrderDetail = {
@@ -99,6 +105,20 @@ export async function createOrder(input: CreateOrderInput, idempotencyKey: strin
 
 export async function getOrder(orderId: string) {
   const response = await apiGet<ApiResponse<OrderDetail>>(`/orders/${orderId}`);
+  return response.data;
+}
+
+/** Creates a payment attempt for an order already held by POST /orders. */
+export async function createPayment(
+  orderId: string,
+  paymentProvider: PaymentProvider,
+  idempotencyKey: string,
+) {
+  const response = await apiPost<ApiResponse<CreatePaymentResult>>(
+    `/orders/${orderId}/payments`,
+    { payment_provider: paymentProvider },
+    { headers: { "Idempotency-Key": idempotencyKey } },
+  );
   return response.data;
 }
 
