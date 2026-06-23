@@ -6,12 +6,14 @@ import {
   Clock,
   HelpCircle,
   Info,
+  LogIn,
   MapPin,
   Music,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   formatCurrency,
   formatDate,
@@ -21,6 +23,7 @@ import {
   type UiConcert,
 } from "../../lib/catalog-ui";
 import { getCatalogConcertDetail } from "../../services/catalog.service";
+import { createPendingCheckout, writePendingCheckout } from "./checkout-storage";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -30,6 +33,7 @@ export function ConcertDetailPage() {
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     if (!concertId) return;
@@ -65,6 +69,28 @@ export function ConcertDetailPage() {
   });
   const startTime = new Date(concert.startsAt);
   const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
+
+  function handleBuyTickets() {
+    const currentConcert = concert;
+    if (!currentConcert) return;
+
+    const session = getStoredAuthSession();
+    if (!session) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    const pending = createPendingCheckout(currentConcert.id);
+    writePendingCheckout({
+      ...pending,
+      concertTitle: currentConcert.title,
+      artistName: currentConcert.artistName,
+      coverImageUrl: currentConcert.coverImageUrl,
+      venueName: currentConcert.venue.name,
+      startsAt: currentConcert.startsAt,
+    });
+    navigate(`/concerts/${currentConcert.id}/seats`);
+  }
 
   return (
     <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -291,10 +317,10 @@ export function ConcertDetailPage() {
               <button
                 type="button"
                 disabled={!hasAvailableTickets}
-                onClick={() => document.getElementById("ticket-list")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={handleBuyTickets}
                 className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Xem loại vé
+                Mua vé
               </button>
             </div>
 
@@ -306,6 +332,13 @@ export function ConcertDetailPage() {
           </div>
         </aside>
       </div>
+
+      {showLoginPrompt && (
+        <LoginPrompt
+          concertId={concert.id}
+          onClose={() => setShowLoginPrompt(false)}
+        />
+      )}
     </div>
   );
 }
@@ -415,6 +448,37 @@ function SeatMapVisualization({ zones }: { zones: { id: string; name: string; co
         })}
       </div>
       <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ mô phỏng từ Seat Zone API.</p>
+    </div>
+  );
+}
+
+function LoginPrompt({ concertId, onClose }: { concertId: string; onClose: () => void }) {
+  function rememberRedirect() {
+    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertId}`);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur" onClick={onClose}>
+      <section className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111118] p-8 text-center" onClick={(event) => event.stopPropagation()}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#E8315B]/25 bg-[#E8315B]/10 text-[#E8315B]">
+          <LogIn className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Đăng nhập để mua vé</h2>
+        <p className="mt-2 text-sm leading-6 text-[#8585A0]">
+          Bạn cần đăng nhập bằng tài khoản khán giả để tiếp tục chọn vé và thanh toán.
+        </p>
+        <div className="mt-6 grid gap-3">
+          <Link to="/login" onClick={rememberRedirect} className="rounded-xl bg-[#E8315B] px-4 py-3 text-sm font-semibold text-white">
+            Đăng nhập ngay
+          </Link>
+          <Link to="/register" onClick={rememberRedirect} className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-[#F0EDEB]">
+            Tạo tài khoản miễn phí
+          </Link>
+          <button type="button" onClick={onClose} className="text-sm text-[#8585A0]">
+            Tiếp tục xem
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

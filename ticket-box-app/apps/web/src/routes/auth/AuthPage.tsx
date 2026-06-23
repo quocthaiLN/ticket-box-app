@@ -76,7 +76,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               otp: form.otp,
             });
 
-      navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
+      const redirectAfterLogin = sessionStorage.getItem("ticketbox.redirectAfterLogin");
+      if (redirectAfterLogin && auth.user.role === "AUDIENCE") {
+        sessionStorage.removeItem("ticketbox.redirectAfterLogin");
+        navigate(redirectAfterLogin, { replace: true });
+      } else {
+        navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Xác thực thất bại.");
     } finally {
