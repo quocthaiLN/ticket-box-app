@@ -89,7 +89,7 @@ export function AdminOrganizerRequestsPage() {
     setMessage("");
     setApproveResult(null);
     try {
-      const result = await approveAdminOrganizerRequest(requestId, reviewNote);
+      const result = await approveAdminOrganizerRequest(requestId);
       setApproveResult(result);
       setReviewingId(null);
       setReviewNote("");
@@ -326,7 +326,7 @@ function RequestReviewCard({
             <p className="text-xs text-[#B0B0C0]">Duyệt hồ sơ sẽ tạo concert bản nháp, zone, loại vé, cổng và tài khoản soát vé trong một transaction.</p>
           </div>
           <label className="grid gap-1.5 text-xs font-semibold text-[#8585A0]">
-            Ghi chú duyệt
+            Ghi chú khi từ chối
             <textarea value={reviewNote} onChange={(event) => onReviewNote(event.target.value)} className={inputClass} style={inputStyle} />
           </label>
           <div className="mt-3 flex flex-wrap gap-3">

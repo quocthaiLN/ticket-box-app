@@ -251,15 +251,6 @@ function requestTicketTypes(concert, saleStartAt = "2026-06-01T10:00:00+07:00", 
 }
 
 async function seedUsers() {
-  const passwordHashes = {
-    audience: "$2b$12$uaRbozsEIfuvo5KHYQ5XWeFmyCXzaIPf4gc2YH.LU/ufXNSVRbzSm",
-    organizer: "$2b$12$IKoiNlNKhN4WLAfHpoLR7utwZBFLSTwnetX3pytcEBe5WKSVInCui",
-    admin: "$2b$12$dnTLJFyHxmChr5D/zKxI7eNJhYEW0/wuf1QwSoQa5iGLku9iJbLDi",
-    checkerSecretOne: "$2b$12$qX0ONg0kDb.HtKVkmNAs7uFWFQlN4Y9C9v4V0./eN0Ee3zcZFCnx2",
-    checkerSecretTwo: "$2b$12$qX0ONg0kDb.HtKVkmNAs7uFWFQlN4Y9C9v4V0./eN0Ee3zcZFCnx2",
-    organizerTwo: "$2b$12$IKoiNlNKhN4WLAfHpoLR7utwZBFLSTwnetX3pytcEBe5WKSVInCui",
-  };
-
   const users = [
     ["audience", "audience@gmail.com", "Khán giả 1", "+84900000001", "AUDIENCE"],
     ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
