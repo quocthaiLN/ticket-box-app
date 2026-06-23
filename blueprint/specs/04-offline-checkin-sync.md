@@ -31,9 +31,9 @@
 
 ## 4. Luồng chính
 
-1. Trước sự kiện, admin tạo các cổng check-in trong `checkin_gates` cho từng concert, ví dụ `SVIP_GATE`, `VIP_GATE`, `CAT1_GATE`, `CAT2_GATE`, `GA_GATE`.
-2. Admin cấu hình mapping trong `checkin_gate_zones`: cổng nào được nhận vé/guest của khu nào.
-3. Thiết bị đăng ký vào `checkin_devices` và được gắn với `staff_id`, `concert_id`, `gate_id`.
+1. Trước sự kiện, luồng admin duyệt hồ sơ organizer tạo các cổng check-in trong `checkin_gates` theo `gate_count`, ví dụ `GATE-1`, `GATE-2`.
+2. Hệ thống/internal tooling cấu hình mapping trong `checkin_gate_zones`: cổng nào được nhận vé/guest của khu nào. Public admin API gate-zone write đã bỏ ở Sprint 6.
+3. Thiết bị được provisioning vào `checkin_devices` bằng seed/internal tooling và gắn với `staff_id`, `concert_id`, `gate_id`. Public admin device API đã bỏ ở Sprint 6.
 4. Khi còn mạng, app tải dữ liệu preload theo `device_id`/`gate_id`, gồm:
    - `concert_id`
    - `gate_id`
@@ -55,7 +55,7 @@
     - verify `seat_zone_id` của ticket/guest nằm trong `checkin_gate_zones` của `gate_id`;
     - nếu hợp lệ và chưa check-in: cập nhật `tickets.status = CHECKED_IN` hoặc `guest_list.status = CHECKED_IN`;
     - ghi `checkin_logs`.
-14. Sau batch, server cập nhật `item_count`, `conflict_count`, `status = DONE`, `checkin_devices.last_sync_at`.
+14. Sau batch, server cập nhật `item_count`, `conflict_count`, `status = DONE`, và heartbeat thiết bị như `checkin_devices.last_seen_at`.
 
 ## 5. Kịch bản lỗi
 
@@ -77,6 +77,7 @@
 - Server là nguồn quyết định cuối cùng khi có conflict.
 - Mọi lần quét, kể cả `WRONG_GATE`, `CONFLICT`, `INVALID`, phải ghi log hoặc item để audit.
 - Thiết bị phải được cấp quyền theo concert và gate trước khi sync.
+- `checkin_devices` vẫn là bảng runtime bắt buộc cho preload/scan/offline sync; phần bị bỏ ở Sprint 6 là route quản trị device công khai, không phải model/bảng.
 
 ## 7. Tiêu chí chấp nhận
 
