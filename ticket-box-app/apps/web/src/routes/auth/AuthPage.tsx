@@ -40,7 +40,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   async function handleSendCode() {
     if (!EMAIL_PATTERN.test(form.email)) {
-      setError("Please enter a valid email before requesting a code.");
+      setError("Vui lòng nhập email hợp lệ trước khi lấy mã xác thực.");
       return;
     }
     setOtpLoading(true);
@@ -50,7 +50,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       setOtpCooldown(60);
       setOtpSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send verification code.");
+      setError(err instanceof Error ? err.message : "Không thể gửi mã xác thực.");
     } finally {
       setOtpLoading(false);
     }
@@ -76,9 +76,15 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               otp: form.otp,
             });
 
-      navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
+      const redirectAfterLogin = sessionStorage.getItem("ticketbox.redirectAfterLogin");
+      if (redirectAfterLogin && auth.user.role === "AUDIENCE") {
+        sessionStorage.removeItem("ticketbox.redirectAfterLogin");
+        navigate(redirectAfterLogin, { replace: true });
+      } else {
+        navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      setError(err instanceof Error ? err.message : "Xác thực thất bại.");
     } finally {
       setLoading(false);
     }
@@ -135,10 +141,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 fontWeight: 700,
               }}
             >
-              {isLogin ? "Welcome back" : "Create your account"}
+              {isLogin ? "Chào mừng trở lại" : "Tạo tài khoản"}
             </h1>
             <p className="text-sm" style={{ color: "#8585A0" }}>
-              {isLogin ? "Sign in to buy tickets and manage your events." : "Join TicketBox for a smoother ticket experience."}
+              {isLogin ? "Đăng nhập để mua vé và quản lý trải nghiệm sự kiện." : "Tham gia TicketBox để mua vé nhanh và nhận e-ticket thuận tiện."}
             </p>
           </div>
 
@@ -159,7 +165,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             {!isLogin && (
               <AuthField
                 icon={<User className="h-4 w-4" />}
-                placeholder="Full name *"
+                placeholder="Họ và tên *"
                 type="text"
                 value={form.fullName}
                 onChange={(value) => setForm({ ...form, fullName: value })}
@@ -180,7 +186,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             />
 
             <PasswordField
-              placeholder="Password *"
+              placeholder="Mật khẩu *"
               value={form.password}
               visible={showPassword}
               onVisibleChange={() => setShowPassword((value) => !value)}
@@ -190,7 +196,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
             {!isLogin && (
               <PasswordField
-                placeholder="Confirm password *"
+                placeholder="Xác nhận mật khẩu *"
                 value={form.confirmPassword}
                 visible={showPassword}
                 onVisibleChange={() => setShowPassword((value) => !value)}
@@ -203,7 +209,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               form.confirmPassword.length > 0 &&
               form.confirmPassword !== form.password && (
                 <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
-                  Passwords do not match.
+                  Mật khẩu xác nhận không khớp.
                 </p>
               )}
 
@@ -227,7 +233,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
-                    placeholder="Verification code *"
+                    placeholder="Mã xác thực *"
                     value={form.otp}
                     onChange={(e) =>
                       setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
@@ -261,16 +267,15 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {otpLoading ? "Sending..." : otpCooldown > 0 ? `Resend (${otpCooldown}s)` : "Send code"}
+                  {otpLoading ? "Đang gửi..." : otpCooldown > 0 ? `Gửi lại (${otpCooldown}s)` : "Gửi mã"}
                 </button>
               </div>
             )}
 
             {!isLogin && otpSent && (
               <p className="text-xs" style={{ color: "#8585A0", marginTop: "-0.25rem" }}>
-                A 6-digit code was sent to{" "}
-                <span style={{ color: "#F0EDEB" }}>{form.email}</span>. Check your
-                inbox and spam folder.
+                Mã 6 chữ số đã được gửi đến{" "}
+                <span style={{ color: "#F0EDEB" }}>{form.email}</span>. Vui lòng kiểm tra hộp thư và spam.
               </p>
             )}
 
@@ -281,7 +286,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   className="text-xs transition-colors hover:text-amber-400"
                   style={{ color: "#8585A0" }}
                 >
-                  Forgot password?
+                  Quên mật khẩu?
                 </Link>
               </div>
             )}
@@ -297,7 +302,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 marginTop: "0.5rem",
               }}
             >
-              {loading ? "Working..." : isLogin ? "Sign in" : "Create account"}
+              {loading ? "Đang xử lý..." : isLogin ? "Đăng nhập" : "Tạo tài khoản"}
             </button>
           </form>
 
@@ -307,7 +312,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             </div>
             <div className="relative flex justify-center text-xs">
               <span className="px-3" style={{ background: "#111118", color: "#8585A0" }}>
-                {isLogin ? "or sign in with" : "or register in with"}
+                {isLogin ? "hoặc đăng nhập với" : "hoặc đăng ký với"}
               </span>
             </div>
           </div>
@@ -321,13 +326,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           </div>
 
           <p className="text-center text-xs" style={{ color: "#8585A0" }}>
-            {isLogin ? "No account yet?" : "Already have an account?"}{" "}
+            {isLogin ? "Chưa có tài khoản?" : "Đã có tài khoản?"}{" "}
             <Link
               to={isLogin ? "/register" : "/login"}
               className="font-medium transition-colors hover:text-amber-400"
               style={{ color: "#F5C842" }}
             >
-              {isLogin ? "Register" : "Sign in"}
+              {isLogin ? "Đăng ký" : "Đăng nhập"}
             </Link>
           </p>
         </div>
@@ -440,7 +445,7 @@ function PasswordField({
           type="button"
           onClick={onVisibleChange}
           className="shrink-0 rounded-md p-1 text-[#8585A0] transition-colors hover:text-[#F0EDEB]"
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
         >
           {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>

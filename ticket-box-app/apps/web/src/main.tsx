@@ -9,7 +9,10 @@ import { AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequest
 import { AuthPage } from "./routes/auth/AuthPage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
+import { CheckoutPage } from "./routes/audience/CheckoutPage";
 import { EventsPage } from "./routes/audience/EventsPage";
+import { MyTicketsPage } from "./routes/audience/MyTicketsPage";
+import { SeatSelectionPage } from "./routes/audience/SeatSelectionPage";
 import { CheckerPage } from "./routes/checker/CheckerPage";
 import { PaymentResultPage } from "./routes/payment/PaymentResultPage";
 import { OrganizerWorkspacePage } from "./routes/organizer/OrganizerWorkspacePage";
@@ -31,6 +34,18 @@ const router = createBrowserRouter([
       {
         path: "concerts/:concertId",
         element: <ConcertDetailPage />
+      },
+      {
+        path: "concerts/:concertId/seats",
+        element: <SeatSelectionPage />
+      },
+      {
+        path: "checkout",
+        element: <CheckoutPage />
+      },
+      {
+        path: "my-tickets",
+        element: <MyTicketsPage />
       },
       {
         path: "login",

@@ -1,8 +1,5 @@
 import {
-  createConcert,
-  createSeatZone,
-  createTicketType,
-  createVenue,
+  cancelConcert,
   listAdminConcerts,
   listVenues,
   publishConcert,
@@ -17,29 +14,15 @@ export type AdminCatalogData = {
   concerts: ConcertSummary[];
 };
 
-export type CreateVenueInput = Omit<Venue, "id">;
-
 export async function getAdminCatalogData(): Promise<AdminCatalogData> {
   const [venues, concerts] = await Promise.all([listVenues(), listAdminConcerts()]);
   return { venues, concerts };
 }
 
-export function createCatalogVenue(input: CreateVenueInput) {
-  return createVenue(input);
-}
-
-export function createCatalogConcert(input: Record<string, unknown>) {
-  return createConcert(input);
-}
-
-export function createCatalogSeatZone(concertId: string, input: Record<string, unknown>) {
-  return createSeatZone(concertId, input);
-}
-
-export function createCatalogTicketType(concertId: string, input: Record<string, unknown>) {
-  return createTicketType(concertId, input);
-}
-
 export async function publishCatalogConcert(concertId: string) {
   await publishConcert(concertId);
+}
+
+export async function cancelCatalogConcert(concertId: string) {
+  await cancelConcert(concertId);
 }
