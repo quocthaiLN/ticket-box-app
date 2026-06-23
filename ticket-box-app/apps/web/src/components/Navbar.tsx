@@ -54,10 +54,10 @@ export function Navbar() {
 
           <div className="hidden items-center gap-6 md:flex">
             <NavItem to="/" active={location.pathname === "/"}>
-              Home
+              Trang chủ
             </NavItem>
             <NavItem to="/events" active={location.pathname === "/events"}>
-              Explore
+              Khám phá
             </NavItem>
           </div>
 
@@ -72,7 +72,7 @@ export function Navbar() {
               <Search className="h-4 w-4" style={{ color: "#8585A0" }} />
               <input
                 type="text"
-                placeholder="Search events..."
+                placeholder="Tìm sự kiện..."
                 className="w-full bg-transparent text-sm outline-none placeholder:text-[#8585A0]"
                 onKeyDown={submitSearch}
                 style={{
@@ -100,7 +100,8 @@ export function Navbar() {
                   type="button"
                   onClick={handleLogout}
                   className="rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[#8585A0] transition-colors hover:text-[#F0EDEB]"
-                  aria-label="Sign out"
+                  aria-label="Đăng xuất"
+                  title="Đăng xuất"
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
@@ -108,10 +109,10 @@ export function Navbar() {
             ) : (
               <>
                 <Link to="/login" className="rounded-lg px-3 py-2 text-sm text-[#8585A0] transition-colors hover:text-[#F0EDEB]">
-                  Sign in
+                  Đăng nhập
                 </Link>
                 <Link to="/register" className="rounded-lg bg-[#E8315B] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#C41E42]">
-                  Register
+                  Đăng ký
                 </Link>
               </>
             )}
@@ -130,8 +131,8 @@ export function Navbar() {
 
       {menuOpen && (
         <div className="space-y-2 border-t border-white/10 bg-[#08080E]/95 px-4 py-4 md:hidden">
-          <MobileNavLink to="/" label="Home" onClick={() => setMenuOpen(false)} />
-          <MobileNavLink to="/events" label="Explore" onClick={() => setMenuOpen(false)} />
+          <MobileNavLink to="/" label="Trang chủ" onClick={() => setMenuOpen(false)} />
+          <MobileNavLink to="/events" label="Khám phá" onClick={() => setMenuOpen(false)} />
           {session ? (
             <>
               {session.user.role === "ADMIN" && (
@@ -148,13 +149,13 @@ export function Navbar() {
                 onClick={handleLogout}
                 className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[#F0EDEB]"
               >
-                Sign out
+                Đăng xuất
               </button>
             </>
           ) : (
             <>
-              <MobileNavLink to="/login" label="Sign in" onClick={() => setMenuOpen(false)} />
-              <MobileNavLink to="/register" label="Register" onClick={() => setMenuOpen(false)} />
+              <MobileNavLink to="/login" label="Đăng nhập" onClick={() => setMenuOpen(false)} />
+              <MobileNavLink to="/register" label="Đăng ký" onClick={() => setMenuOpen(false)} />
             </>
           )}
         </div>

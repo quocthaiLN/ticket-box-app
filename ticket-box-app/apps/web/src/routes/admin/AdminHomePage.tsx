@@ -55,25 +55,25 @@ export function AdminHomePage() {
 
     return [
       {
-        label: "Published events",
+        label: "Sự kiện đã đăng",
         value: published,
         icon: <CheckCircle2 className="h-4 w-4" />,
         tone: "#2DBE6C",
       },
       {
-        label: "Draft pipeline",
+        label: "Bản nháp",
         value: drafts,
         icon: <Activity className="h-4 w-4" />,
         tone: "#F5C842",
       },
       {
-        label: "Upcoming events",
+        label: "Sắp diễn ra",
         value: upcoming,
         icon: <CalendarDays className="h-4 w-4" />,
         tone: "#7B61FF",
       },
       {
-        label: "Venues",
+        label: "Địa điểm",
         value: venueCount,
         icon: <Building2 className="h-4 w-4" />,
         tone: "#E8315B",
@@ -97,16 +97,16 @@ export function AdminHomePage() {
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase text-[#F5C842]">
               <ShieldCheck className="h-4 w-4" />
-              Website operator
+              Vận hành hệ thống
             </div>
             <h1
               className="text-3xl font-bold"
               style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
             >
-              Admin Operations
+              Bảng điều hành admin
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-[#8585A0]">
-              Concert publishing, venue setup, ticket configuration, guest operations, and platform control.
+              Theo dõi danh mục, duyệt hồ sơ ban tổ chức, đăng công khai concert và vận hành nền tảng TicketBox.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -115,13 +115,13 @@ export function AdminHomePage() {
               className="inline-flex items-center gap-2 rounded-lg bg-[#E8315B] px-4 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
             >
               <Plus className="h-4 w-4" />
-              Catalog
+              Danh mục
             </Link>
             <Link
               to="/events"
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-[#F0EDEB]"
             >
-              Public site
+              Trang khách
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
@@ -129,7 +129,7 @@ export function AdminHomePage() {
 
         {loadState === "error" && (
           <div className="mb-5 rounded-lg border border-[#E8315B]/25 bg-[#E8315B]/10 px-4 py-3 text-sm text-[#E8315B]">
-            Could not load admin catalog data.
+            Không thể tải dữ liệu quản trị.
           </div>
         )}
 
@@ -157,20 +157,20 @@ export function AdminHomePage() {
           <div className="overflow-hidden rounded-lg border border-white/10 bg-[#111118]">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div>
-                <h2 className="text-sm font-semibold">Recent events</h2>
-                <p className="mt-1 text-xs text-[#8585A0]">{concerts.length} total catalog records</p>
+                <h2 className="text-sm font-semibold">Sự kiện gần đây</h2>
+                <p className="mt-1 text-xs text-[#8585A0]">{concerts.length} bản ghi catalog</p>
               </div>
               <Link
                 to="/admin/catalog"
                 className="inline-flex items-center gap-1 text-xs text-[#F5C842]"
               >
-                View all
+                Xem tất cả
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <div className="divide-y divide-white/[0.06]">
-              {loadState === "loading" && <EmptyRow text="Loading catalog..." />}
-              {loadState === "ready" && recentConcerts.length === 0 && <EmptyRow text="No events yet." />}
+              {loadState === "loading" && <EmptyRow text="Đang tải catalog..." />}
+              {loadState === "ready" && recentConcerts.length === 0 && <EmptyRow text="Chưa có sự kiện." />}
               {recentConcerts.map((concert) => (
                 <Link
                   key={concert.id}
@@ -194,25 +194,25 @@ export function AdminHomePage() {
             <OperatorLink
               to="/admin/catalog"
               icon={<LayoutDashboard className="h-4 w-4" />}
-              title="Catalog control"
-              detail="Events, venues, zones, and ticket types"
+              title="Điều phối catalog"
+              detail="Sự kiện, địa điểm, khu ghế và loại vé"
             />
             <OperatorLink
               to="/admin/organizer-requests"
               icon={<UserCheck className="h-4 w-4" />}
-              title="Organizer approvals"
-              detail="Review applications and provision checker accounts"
+              title="Duyệt hồ sơ BTC"
+              detail="Xem xét hồ sơ và cấp tài khoản soát vé"
             />
             <OperatorLink
               to="/admin/catalog"
               icon={<Ticket className="h-4 w-4" />}
-              title="Ticket setup"
-              detail="Inventory rules and sale windows"
+              title="Cấu hình vé"
+              detail="Tồn kho, giới hạn và khung giờ mở bán"
             />
             <div className="rounded-lg border border-white/10 bg-[#111118] p-5">
-              <p className="mb-2 text-xs font-semibold uppercase text-[#F5C842]">Role boundary</p>
+              <p className="mb-2 text-xs font-semibold uppercase text-[#F5C842]">Ranh giới vai trò</p>
               <p className="text-sm leading-6 text-[#8585A0]">
-                Admin accounts operate the website. Organizer accounts belong to event partners. Checker accounts are for mobile gate scanning.
+                Admin vận hành website. Organizer thuộc ban tổ chức sự kiện. Checker chỉ dùng cho soát vé tại cổng.
               </p>
             </div>
           </div>
@@ -231,15 +231,15 @@ function AdminAccessState({ role }: { role?: string }) {
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8315B]/15 text-[#E8315B]">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <h1 className="mb-2 text-xl font-semibold">Admin access only</h1>
+        <h1 className="mb-2 text-xl font-semibold">Chỉ dành cho admin</h1>
         <p className="mb-5 text-sm leading-6 text-[#8585A0]">
-          Current role: {label}. Admin is reserved for website operators.
+          Vai trò hiện tại: {label}. Khu vực này chỉ dành cho tài khoản vận hành hệ thống.
         </p>
         <Link
           to="/"
           className="inline-flex items-center gap-2 rounded-lg bg-[#E8315B] px-4 py-2.5 text-sm font-semibold text-white"
         >
-          Back to site
+          Về trang khách
           <ChevronRight className="h-4 w-4" />
         </Link>
       </section>
@@ -283,10 +283,10 @@ function EmptyRow({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: ConcertSummary["status"] }) {
   const styles: Record<ConcertSummary["status"], { label: string; bg: string; color: string }> = {
-    PUBLISHED: { label: "Published", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C" },
-    DRAFT: { label: "Draft", bg: "rgba(245,200,66,0.12)", color: "#F5C842" },
-    CANCELLED: { label: "Cancelled", bg: "rgba(232,49,91,0.12)", color: "#E8315B" },
-    COMPLETED: { label: "Completed", bg: "rgba(255,255,255,0.08)", color: "#8585A0" },
+    PUBLISHED: { label: "Đã đăng", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C" },
+    DRAFT: { label: "Nháp", bg: "rgba(245,200,66,0.12)", color: "#F5C842" },
+    CANCELLED: { label: "Đã hủy", bg: "rgba(232,49,91,0.12)", color: "#E8315B" },
+    COMPLETED: { label: "Hoàn tất", bg: "rgba(255,255,255,0.08)", color: "#8585A0" },
   };
   const style = styles[status];
 
@@ -301,7 +301,7 @@ function StatusBadge({ status }: { status: ConcertSummary["status"] }) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "short",
     year: "numeric",

@@ -41,17 +41,17 @@ export function EventsPage() {
             className="mb-2 text-[#F0EDEB]"
             style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "clamp(1.8rem,4vw,2.8rem)", fontWeight: 700 }}
           >
-            Explore events
+            Khám phá sự kiện
           </h1>
           <p className="mb-6 text-sm text-[#8585A0]">
-            {status === "ready" ? `${concerts.length} matching events` : "Public catalog from the TicketBox API"}
+            {status === "ready" ? `${concerts.length} sự kiện phù hợp` : "Danh mục công khai từ TicketBox API"}
           </p>
 
           <div className="flex max-w-2xl items-center gap-3 rounded-2xl border border-white/10 bg-[#111118] px-4 py-3">
             <Search className="h-5 w-5 shrink-0 text-[#8585A0]" />
             <input
               type="text"
-              placeholder="Search event names or artists..."
+              placeholder="Tìm tên sự kiện hoặc nghệ sĩ..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="flex-1 bg-transparent text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
@@ -67,20 +67,20 @@ export function EventsPage() {
               <div className="border-b border-white/10 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="h-4 w-4 text-[#F5C842]" />
-                  <span className="text-sm font-semibold text-[#F0EDEB]">Filters</span>
+                  <span className="text-sm font-semibold text-[#F0EDEB]">Bộ lọc</span>
                 </div>
               </div>
               <div className="space-y-5 p-4">
                 <div>
                   <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[#8585A0]">
                     <MapPin className="h-3 w-3" />
-                    City
+                    Thành phố
                   </p>
                   <div className="space-y-1">
                     {cities.map((item) => (
                       <FilterButton
                         key={item}
-                        label={item === "all" ? "All" : item}
+                        label={item === "all" ? "Tất cả" : item}
                         active={city === item}
                         onClick={() => setCity(item)}
                       />
@@ -97,7 +97,7 @@ export function EventsPage() {
                     }}
                     className="w-full rounded-lg py-2 text-xs text-[#E8315B] transition-colors hover:bg-white/5"
                   >
-                    Clear filters
+                    Xóa bộ lọc
                   </button>
                 )}
               </div>
@@ -107,13 +107,13 @@ export function EventsPage() {
           <main className="min-w-0 flex-1">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm text-[#8585A0]">
-                {status === "loading" ? "Loading..." : `${concerts.length} results${search ? ` for "${search}"` : ""}`}
+                {status === "loading" ? "Đang tải..." : `${concerts.length} kết quả${search ? ` cho "${search}"` : ""}`}
               </p>
             </div>
 
-            {status === "error" && <StatePanel text="Could not load the Catalog API." tone="error" />}
-            {status === "ready" && concerts.length === 0 && <StatePanel text="No matching events found." />}
-            {status === "loading" && <StatePanel text="Loading catalog..." />}
+            {status === "error" && <StatePanel text="Không thể tải dữ liệu sự kiện." tone="error" />}
+            {status === "ready" && concerts.length === 0 && <StatePanel text="Không tìm thấy sự kiện phù hợp." />}
+            {status === "loading" && <StatePanel text="Đang tải danh mục sự kiện..." />}
 
             {status === "ready" && concerts.length > 0 && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

@@ -102,7 +102,7 @@ export function AdminCatalogPage() {
         map_url: text(data, "map_url") || undefined,
       });
       form.reset();
-    }, "Venue created.");
+    }, "Đã tạo địa điểm.");
   }
 
   async function handleConcertSubmit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
@@ -123,7 +123,7 @@ export function AdminCatalogPage() {
         seat_map_url: text(data, "seat_map_url") || undefined,
       });
       form.reset();
-    }, "Draft concert created.");
+    }, "Đã tạo concert nháp.");
   }
 
   async function handleZoneSubmit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
@@ -141,7 +141,7 @@ export function AdminCatalogPage() {
         svg_path: text(data, "svg_path") || undefined,
       });
       form.reset();
-    }, "Seat zone created.");
+    }, "Đã tạo khu ghế.");
   }
 
   async function handleTicketSubmit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
@@ -164,7 +164,7 @@ export function AdminCatalogPage() {
         sale_end_at: dateTime(data, "sale_end_at"),
       });
       form.reset();
-    }, "Draft ticket type created.");
+    }, "Đã tạo loại vé nháp.");
   }
 
   async function runAction(action: () => Promise<void>, successMessage: string) {
@@ -174,7 +174,7 @@ export function AdminCatalogPage() {
       await reload();
       setMessage(successMessage);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Action failed.");
+      setMessage(err instanceof Error ? err.message : "Không thể thực hiện thao tác.");
     }
   }
 
@@ -185,23 +185,23 @@ export function AdminCatalogPage() {
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase text-[#F5C842]">
               <ShieldCheck className="h-4 w-4" />
-              Admin catalog
+              Quản trị catalog
             </div>
             <h1
               className="text-3xl font-bold"
               style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
             >
-              Event Inventory Control
+              Điều phối danh mục sự kiện
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-[#8585A0]">
-              Website operator workspace for publishing events and configuring sale inventory.
+              Không gian vận hành để xem danh mục, đăng công khai concert và cấu hình tồn kho mở bán.
             </p>
           </div>
           <Link
             to="/admin"
             className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-[#F0EDEB]"
           >
-            Dashboard
+            Tổng quan
             <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
@@ -221,15 +221,15 @@ export function AdminCatalogPage() {
 
         {loadStatus === "error" && (
           <div className="mb-5 rounded-lg border border-[#E8315B]/25 bg-[#E8315B]/10 px-4 py-3 text-sm text-[#E8315B]">
-            Could not load Catalog admin API.
+            Không thể tải API quản trị catalog.
           </div>
         )}
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={<Ticket className="h-4 w-4" />} label="Events" value={stats.total} tone="#F5C842" />
-          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Published" value={stats.published} tone="#2DBE6C" />
-          <StatCard icon={<CalendarDays className="h-4 w-4" />} label="Drafts" value={stats.draft} tone="#7B61FF" />
-          <StatCard icon={<Building2 className="h-4 w-4" />} label="Venues" value={stats.venues} tone="#E8315B" />
+          <StatCard icon={<Ticket className="h-4 w-4" />} label="Sự kiện" value={stats.total} tone="#F5C842" />
+          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Đã đăng" value={stats.published} tone="#2DBE6C" />
+          <StatCard icon={<CalendarDays className="h-4 w-4" />} label="Nháp" value={stats.draft} tone="#7B61FF" />
+          <StatCard icon={<Building2 className="h-4 w-4" />} label="Địa điểm" value={stats.venues} tone="#E8315B" />
         </section>
 
         <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -240,7 +240,7 @@ export function AdminCatalogPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search events, artists, city..."
+                  placeholder="Tìm sự kiện, nghệ sĩ, thành phố..."
                   className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
                   style={{ border: 0, background: "transparent" }}
                 />
@@ -253,7 +253,7 @@ export function AdminCatalogPage() {
               >
                 {statusOptions.map((status) => (
                   <option key={status} value={status}>
-                    {status === "all" ? "All statuses" : statusLabel(status)}
+                    {status === "all" ? "Tất cả trạng thái" : statusLabel(status)}
                   </option>
                 ))}
               </select>
@@ -261,15 +261,15 @@ export function AdminCatalogPage() {
 
             <div className="overflow-hidden rounded-lg border border-white/10 bg-[#111118]">
               <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_140px_110px_96px] border-b border-white/10 px-4 py-3 text-xs font-semibold text-[#8585A0] max-lg:hidden">
-                <span>Event</span>
-                <span>Date</span>
-                <span>Venue</span>
-                <span>Status</span>
+                <span>Sự kiện</span>
+                <span>Ngày</span>
+                <span>Địa điểm</span>
+                <span>Trạng thái</span>
                 <span></span>
               </div>
 
-              {loadStatus === "loading" && <EmptyState text="Loading catalog..." />}
-              {loadStatus === "ready" && filteredConcerts.length === 0 && <EmptyState text="No events match the current filters." />}
+              {loadStatus === "loading" && <EmptyState text="Đang tải catalog..." />}
+              {loadStatus === "ready" && filteredConcerts.length === 0 && <EmptyState text="Không có sự kiện phù hợp bộ lọc." />}
 
               <div className="divide-y divide-white/[0.06]">
                 {filteredConcerts.map((concert) => (
@@ -295,7 +295,7 @@ export function AdminCatalogPage() {
                       <Link
                         to={`/concerts/${concert.id}`}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]"
-                        title="Open public event"
+                        title="Mở trang công khai"
                         onClick={(event) => event.stopPropagation()}
                       >
                         <Eye className="h-4 w-4" />
@@ -309,7 +309,7 @@ export function AdminCatalogPage() {
 
           <aside className="space-y-4">
             <div className="rounded-lg border border-white/10 bg-[#111118] p-4">
-              <p className="mb-1 text-xs uppercase text-[#8585A0]">Selected event</p>
+              <p className="mb-1 text-xs uppercase text-[#8585A0]">Sự kiện đang chọn</p>
               {selectedConcert ? (
                 <>
                   <h2 className="text-base font-semibold">{selectedConcert.title}</h2>
@@ -321,22 +321,22 @@ export function AdminCatalogPage() {
                       type="button"
                       className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#E8315B] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={selectedConcert.status === "PUBLISHED"}
-                      onClick={() => runAction(() => publishCatalogConcert(selectedConcert.id), "Concert published.")}
+                      onClick={() => runAction(() => publishCatalogConcert(selectedConcert.id), "Đã đăng công khai concert.")}
                     >
                       <CheckCircle2 className="h-4 w-4" />
-                      Publish
+                      Đăng
                     </button>
                     <Link
                       to={`/concerts/${selectedConcert.id}`}
                       className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#8585A0] hover:text-[#F0EDEB]"
-                      title="Open public event"
+                      title="Mở trang công khai"
                     >
                       <Eye className="h-4 w-4" />
                     </Link>
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-[#8585A0]">No event selected.</p>
+                <p className="text-sm text-[#8585A0]">Chưa chọn sự kiện.</p>
               )}
             </div>
 
@@ -359,15 +359,15 @@ export function AdminCatalogPage() {
               </div>
               <div className="p-4">
                 {activeForm === "concert" && (
-                  <CatalogForm title="Create draft event" onSubmit={handleConcertSubmit}>
-                    <Field name="title" label="Event name" required />
+                  <CatalogForm title="Tạo concert nháp" onSubmit={handleConcertSubmit}>
+                    <Field name="title" label="Tên sự kiện" required />
                     <Field name="slug" label="Slug" placeholder="auto-from-title" />
-                    <Field name="artist_name" label="Artist" required />
+                    <Field name="artist_name" label="Nghệ sĩ" required />
                     <label className="grid gap-1.5 text-xs font-semibold text-[#8585A0]">
-                      Venue
+                      Địa điểm
                       <select name="venue_id" required className={inputClass} style={inputStyle} defaultValue="">
                         <option value="" disabled>
-                          Select venue
+                          Chọn địa điểm
                         </option>
                         {venues.map((venue) => (
                           <option key={venue.id} value={venue.id}>
@@ -376,49 +376,49 @@ export function AdminCatalogPage() {
                         ))}
                       </select>
                     </label>
-                    <Field name="starts_at" label="Start" type="datetime-local" required />
-                    <Field name="ends_at" label="End" type="datetime-local" required />
-                    <Field name="cover_image_url" label="Cover URL" />
-                    <Field name="seat_map_url" label="Seat map URL" />
-                    <TextArea name="description" label="Description" />
-                    <SubmitButton icon={<Plus className="h-4 w-4" />} label="Create event" />
+                    <Field name="starts_at" label="Bắt đầu" type="datetime-local" required />
+                    <Field name="ends_at" label="Kết thúc" type="datetime-local" required />
+                    <Field name="cover_image_url" label="URL ảnh bìa" />
+                    <Field name="seat_map_url" label="URL sơ đồ ghế" />
+                    <TextArea name="description" label="Mô tả" />
+                    <SubmitButton icon={<Plus className="h-4 w-4" />} label="Tạo sự kiện" />
                   </CatalogForm>
                 )}
 
                 {activeForm === "venue" && (
-                  <CatalogForm title="Create venue" onSubmit={handleVenueSubmit}>
-                    <Field name="name" label="Venue name" required />
-                    <Field name="city" label="City" required />
-                    <Field name="address" label="Address" required />
-                    <Field name="capacity" label="Capacity" type="number" min="1" />
-                    <Field name="map_url" label="Map URL" />
-                    <SubmitButton icon={<Building2 className="h-4 w-4" />} label="Create venue" />
+                  <CatalogForm title="Tạo địa điểm" onSubmit={handleVenueSubmit}>
+                    <Field name="name" label="Tên địa điểm" required />
+                    <Field name="city" label="Thành phố" required />
+                    <Field name="address" label="Địa chỉ" required />
+                    <Field name="capacity" label="Sức chứa" type="number" min="1" />
+                    <Field name="map_url" label="URL bản đồ" />
+                    <SubmitButton icon={<Building2 className="h-4 w-4" />} label="Tạo địa điểm" />
                   </CatalogForm>
                 )}
 
                 {activeForm === "zone" && (
-                  <CatalogForm title="Create seat zone" onSubmit={handleZoneSubmit}>
-                    <Field name="code" label="Code" placeholder="VIP" required />
-                    <Field name="name" label="Name" placeholder="VIP" required />
-                    <Field name="capacity" label="Capacity" type="number" min="1" required />
-                    <Field name="sort_order" label="Sort order" type="number" />
+                  <CatalogForm title="Tạo khu ghế" onSubmit={handleZoneSubmit}>
+                    <Field name="code" label="Mã khu" placeholder="VIP" required />
+                    <Field name="name" label="Tên khu" placeholder="VIP" required />
+                    <Field name="capacity" label="Sức chứa" type="number" min="1" required />
+                    <Field name="sort_order" label="Thứ tự hiển thị" type="number" />
                     <Field name="svg_path" label="SVG path" />
-                    <TextArea name="description" label="Description" />
-                    <SubmitButton icon={<Plus className="h-4 w-4" />} label="Create zone" disabled={!selectedConcert} />
+                    <TextArea name="description" label="Mô tả" />
+                    <SubmitButton icon={<Plus className="h-4 w-4" />} label="Tạo khu" disabled={!selectedConcert} />
                   </CatalogForm>
                 )}
 
                 {activeForm === "ticket" && (
-                  <CatalogForm title="Create ticket type" onSubmit={handleTicketSubmit}>
-                    <Field name="seat_zone_id" label="Seat zone ID" required />
-                    <Field name="name" label="Ticket name" required />
-                    <Field name="price" label="Price" type="number" min="0" required />
-                    <Field name="total_quantity" label="Quantity" type="number" min="1" required />
-                    <Field name="max_per_user" label="Limit per user" type="number" min="1" required />
-                    <Field name="sale_start_at" label="Sale start" type="datetime-local" required />
-                    <Field name="sale_end_at" label="Sale end" type="datetime-local" required />
-                    <TextArea name="description" label="Description" />
-                    <SubmitButton icon={<Ticket className="h-4 w-4" />} label="Create ticket" disabled={!selectedConcert} />
+                  <CatalogForm title="Tạo loại vé" onSubmit={handleTicketSubmit}>
+                    <Field name="seat_zone_id" label="ID khu ghế" required />
+                    <Field name="name" label="Tên vé" required />
+                    <Field name="price" label="Giá" type="number" min="0" required />
+                    <Field name="total_quantity" label="Số lượng" type="number" min="1" required />
+                    <Field name="max_per_user" label="Giới hạn mỗi tài khoản" type="number" min="1" required />
+                    <Field name="sale_start_at" label="Mở bán" type="datetime-local" required />
+                    <Field name="sale_end_at" label="Kết thúc bán" type="datetime-local" required />
+                    <TextArea name="description" label="Mô tả" />
+                    <SubmitButton icon={<Ticket className="h-4 w-4" />} label="Tạo vé" disabled={!selectedConcert} />
                   </CatalogForm>
                 )}
               </div>
@@ -437,12 +437,12 @@ function AdminAccessState({ role }: { role?: string }) {
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8315B]/15 text-[#E8315B]">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <h1 className="mb-2 text-xl font-semibold">Admin access only</h1>
+        <h1 className="mb-2 text-xl font-semibold">Chỉ dành cho admin</h1>
         <p className="mb-5 text-sm leading-6 text-[#8585A0]">
-          Current role: {role ?? "guest"}. Organizer and checker accounts use role-specific workflows.
+          Vai trò hiện tại: {role ?? "khách"}. Organizer và checker dùng khu vực riêng theo vai trò.
         </p>
         <Link to="/" className="inline-flex items-center gap-2 rounded-lg bg-[#E8315B] px-4 py-2.5 text-sm font-semibold text-white">
-          Back to site
+          Về trang khách
           <ChevronRight className="h-4 w-4" />
         </Link>
       </section>
@@ -558,10 +558,10 @@ function EmptyState({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: ConcertSummary["status"] }) {
   const styles: Record<ConcertSummary["status"], { label: string; bg: string; color: string }> = {
-    PUBLISHED: { label: "Published", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C" },
-    DRAFT: { label: "Draft", bg: "rgba(245,200,66,0.12)", color: "#F5C842" },
-    CANCELLED: { label: "Cancelled", bg: "rgba(232,49,91,0.12)", color: "#E8315B" },
-    COMPLETED: { label: "Completed", bg: "rgba(255,255,255,0.08)", color: "#8585A0" },
+    PUBLISHED: { label: "Đã đăng", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C" },
+    DRAFT: { label: "Nháp", bg: "rgba(245,200,66,0.12)", color: "#F5C842" },
+    CANCELLED: { label: "Đã hủy", bg: "rgba(232,49,91,0.12)", color: "#E8315B" },
+    COMPLETED: { label: "Hoàn tất", bg: "rgba(255,255,255,0.08)", color: "#8585A0" },
   };
   const style = styles[status];
 
@@ -577,20 +577,20 @@ function StatusBadge({ status }: { status: ConcertSummary["status"] }) {
 
 function tabLabel(tab: FormTab) {
   const labels: Record<FormTab, string> = {
-    concert: "Event",
-    venue: "Venue",
-    zone: "Zone",
-    ticket: "Ticket",
+    concert: "Sự kiện",
+    venue: "Địa điểm",
+    zone: "Khu",
+    ticket: "Vé",
   };
   return labels[tab];
 }
 
 function statusLabel(status: Exclude<(typeof statusOptions)[number], "all">) {
   const labels: Record<Exclude<(typeof statusOptions)[number], "all">, string> = {
-    PUBLISHED: "Published",
-    DRAFT: "Draft",
-    CANCELLED: "Cancelled",
-    COMPLETED: "Completed",
+    PUBLISHED: "Đã đăng",
+    DRAFT: "Nháp",
+    CANCELLED: "Đã hủy",
+    COMPLETED: "Hoàn tất",
   };
   return labels[status];
 }
@@ -619,7 +619,7 @@ function slugify(value: string) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
