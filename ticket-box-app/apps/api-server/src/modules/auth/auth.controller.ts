@@ -6,8 +6,11 @@ import {
   loginSchema,
   registerSchema,
   requestOtpSchema,
+  updateMeSchema,
+  updateRoleByEmailSchema,
   updateRoleSchema,
 } from "./auth.schema.js";
+import { redirectPathForRole } from "./auth.utils.js";
 import { z } from "zod";
 
 const REFRESH_COOKIE = "refresh_token";
@@ -93,6 +96,7 @@ export async function handleLogin(
           access_token: tokens.access_token,
           expires_in: tokens.expires_in,
           user,
+          redirect_to: redirectPathForRole(user.role),
         },
         req.requestId,
       ),
@@ -140,6 +144,46 @@ export async function handleMe(
     const user = await authService.me(userId);
     res.status(200).json(ok(user, req.requestId));
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleUpdateMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const userId: string = res.locals.auth?.user_id;
+    const body = updateMeSchema.parse(req.body);
+    const updated = await authService.updateProfile(userId, {
+      full_name: body.full_name,
+      phone: body.phone,
+    });
+    res.status(200).json(
+      ok(
+        {
+          id: updated.id,
+          full_name: updated.full_name,
+          phone: updated.phone,
+          updated_at: updated.updated_at,
+        },
+        req.requestId,
+      ),
+    );
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(
+        Errors.validationError(
+          "Request body failed validation.",
+          err.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
+        ),
+      );
+      return;
+    }
     next(err);
   }
 }
@@ -220,6 +264,39 @@ export async function handleAdminUpdateRole(
           req.requestId,
         ),
       );
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(Errors.invalidRole());
+      return;
+    }
+    next(err);
+  }
+}
+
+export async function handleAdminUpdateRoleByEmail(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const body = updateRoleByEmailSchema.parse(req.body);
+    const actorId: string = res.locals.auth?.user_id;
+    const updated = await authService.updateUserRoleByEmail(
+      actorId,
+      body.email,
+      body.role,
+    );
+    res.status(200).json(
+      ok(
+        {
+          user_id: updated.id,
+          email: updated.email,
+          role: updated.role,
+          updated_at: new Date(),
+        },
+        req.requestId,
+      ),
+    );
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(Errors.invalidRole());

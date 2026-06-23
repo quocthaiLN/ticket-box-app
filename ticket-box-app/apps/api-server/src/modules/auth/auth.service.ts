@@ -181,6 +181,61 @@ export const authService = {
     return toAuthUser(updated);
   },
 
+  async updateUserRoleByEmail(
+    actorId: string,
+    email: string,
+    role: Role,
+  ): Promise<AuthUser> {
+    const target = await authRepository.findByEmail(email);
+    if (!target) {
+      throw Errors.userNotFoundByEmail(email);
+    }
+
+    const updated = await authRepository.updateRole(target.id, role);
+    await authRepository.createAuditLog({
+      actorUserId: actorId,
+      action: "UPDATE_USER_ROLE",
+      entityType: "user",
+      entityId: target.id,
+      metadata: { from: target.role, to: role, via: "email" },
+    });
+
+    return toAuthUser(updated);
+  },
+
+  async updateProfile(
+    userId: string,
+    input: { full_name?: string; phone?: string },
+  ): Promise<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    updated_at: Date;
+  }> {
+    try {
+      const updated = await authRepository.updateProfile(userId, {
+        fullName: input.full_name,
+        phone: input.phone,
+      });
+      return {
+        id: updated.id,
+        full_name: updated.fullName,
+        phone: updated.phone,
+        updated_at: updated.updatedAt,
+      };
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        throw Errors.phoneAlreadyExists();
+      }
+      throw err;
+    }
+  },
+
   async updateUserStatus(
     actorId: string,
     targetUserId: string,

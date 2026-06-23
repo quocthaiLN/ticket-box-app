@@ -3,11 +3,13 @@ import {
   handleLogin,
   handleLogout,
   handleMe,
+  handleUpdateMe,
   handleRefresh,
   handleRegister,
   handleRequestOtp,
   handleAdminListUsers,
   handleAdminUpdateRole,
+  handleAdminUpdateRoleByEmail,
   handleAdminUpdateStatus,
 } from "./auth.controller.js";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
@@ -24,6 +26,7 @@ authRouter.post("/refresh", handleRefresh);
 // Protected (yêu cầu Bearer token)
 authRouter.post("/logout", requireAuth, handleLogout);
 authRouter.get("/me", requireAuth, handleMe);
+authRouter.patch("/me", requireAuth, handleUpdateMe);
 
 // Admin-only
 authRouter.get(
@@ -31,6 +34,14 @@ authRouter.get(
   requireAuth,
   requireRole("ADMIN"),
   handleAdminListUsers,
+);
+// Đặt route role-by-email TRƯỚC /:user_id/role để Express không bắt nhầm
+// "role-by-email" thành tham số :user_id.
+authRouter.patch(
+  "/admin/users/role-by-email",
+  requireAuth,
+  requireRole("ADMIN"),
+  handleAdminUpdateRoleByEmail,
 );
 authRouter.patch(
   "/admin/users/:user_id/role",
