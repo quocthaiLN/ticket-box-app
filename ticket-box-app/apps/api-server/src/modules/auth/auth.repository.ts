@@ -34,6 +34,19 @@ export const authRepository = {
     });
   },
 
+  async updateProfile(
+    userId: string,
+    data: { fullName?: string; phone?: string },
+  ) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.fullName !== undefined ? { fullName: data.fullName } : {}),
+        ...(data.phone !== undefined ? { phone: data.phone } : {}),
+      },
+    });
+  },
+
   async listUsers(params: { limit: number; cursor?: string }) {
     return prisma.user.findMany({
       take: params.limit + 1,

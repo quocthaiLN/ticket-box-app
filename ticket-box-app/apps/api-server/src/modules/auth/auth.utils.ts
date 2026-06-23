@@ -90,3 +90,18 @@ export function verifyRefreshToken(token: string): {
 export function getTokenRemainingTtl(exp: number): number {
   return Math.max(0, exp - Math.floor(Date.now() / 1000));
 }
+
+/** Workspace mặc định theo role — client dùng để điều hướng sau khi login. */
+export function redirectPathForRole(role: Role): string {
+  switch (role) {
+    case "ADMIN":
+      return "/admin";
+    case "ORGANIZER":
+      return "/organizer";
+    case "CHECKER":
+      return "/checker";
+    case "AUDIENCE":
+    default:
+      return "/";
+  }
+}

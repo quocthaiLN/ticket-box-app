@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+// Mật khẩu chung cho mọi tài khoản demo do seed tạo (xem README mục 11).
+const DEMO_PASSWORD = "Password@123";
 
 const userIds = {
   audience: "00000000-0000-0000-0000-000000000001",
@@ -247,15 +251,6 @@ function requestTicketTypes(concert, saleStartAt = "2026-06-01T10:00:00+07:00", 
 }
 
 async function seedUsers() {
-  const passwordHashes = {
-    audience: "$2b$12$uaRbozsEIfuvo5KHYQ5XWeFmyCXzaIPf4gc2YH.LU/ufXNSVRbzSm",
-    organizer: "$2b$12$IKoiNlNKhN4WLAfHpoLR7utwZBFLSTwnetX3pytcEBe5WKSVInCui",
-    admin: "$2b$12$dnTLJFyHxmChr5D/zKxI7eNJhYEW0/wuf1QwSoQa5iGLku9iJbLDi",
-    checkerSecretOne: "$2b$12$qX0ONg0kDb.HtKVkmNAs7uFWFQlN4Y9C9v4V0./eN0Ee3zcZFCnx2",
-    checkerSecretTwo: "$2b$12$qX0ONg0kDb.HtKVkmNAs7uFWFQlN4Y9C9v4V0./eN0Ee3zcZFCnx2",
-    organizerTwo: "$2b$12$IKoiNlNKhN4WLAfHpoLR7utwZBFLSTwnetX3pytcEBe5WKSVInCui",
-  };
-
   const users = [
     ["audience", "audience@gmail.com", "Khán giả 1", "+84900000001", "AUDIENCE"],
     ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
@@ -265,19 +260,22 @@ async function seedUsers() {
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
   ];
 
+  // Bcrypt hash thật (12 rounds, khớp hashPassword của api-server) để demo login được.
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 12);
+
   for (const [key, email, fullName, phone, role] of users) {
     await prisma.user.upsert({
       where: { id: userIds[key] },
       create: {
         id: userIds[key],
         email,
-        passwordHash: passwordHashes[key],
+        passwordHash,
         fullName,
         phone,
         role,
         status: "ACTIVE",
       },
-      update: { email, passwordHash: passwordHashes[key], fullName, phone, role, status: "ACTIVE" },
+      update: { email, fullName, phone, role, status: "ACTIVE", passwordHash },
     });
   }
 }
