@@ -7,6 +7,7 @@ import { checkinRouter } from "./modules/checkin/checkin.router.js";
 import { guestListRouter } from "./modules/guest-list/guest-list.router.js";
 import inventoryRouter from "./modules/inventory/inventory.router.js";
 import orderRouter from "./modules/orders/order.router.js";
+import { organizerRouter } from "./modules/organizer/organizer.router.js";
 import paymentRouter from "./modules/payments/payment.router.js";
 import ticketRouter from "./modules/tickets/ticket.router.js";
 import { notificationsRouter } from "./modules/notifications/notifications.router.js";
@@ -60,6 +61,7 @@ export function createApp() {
 
   // ── Notifications (admin + internal) ───────────────────────────────────────
   app.use("/v1", notificationsRouter);
+  app.use("/v1", organizerRouter);
 
   // ── Check-in ───────────────────────────────────────────────────────────────
   app.use("/v1", checkinRouter);
