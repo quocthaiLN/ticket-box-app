@@ -11,7 +11,7 @@ import {
 
 export const notificationsRouter = Router();
 
-const adminOnly = [requireAuth, requireRole("ORGANIZER", "ADMIN")] as const;
+const adminOnly = [requireAuth, requireRole("ADMIN")] as const;
 
 // GET /admin/notifications — list với filters
 notificationsRouter.get(

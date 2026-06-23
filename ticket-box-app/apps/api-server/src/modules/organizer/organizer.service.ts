@@ -43,7 +43,7 @@ export class OrganizerService {
   async getRequest(organizerId: string, requestId: string) {
     const request = await this.repository.getRequest(organizerId, requestId);
     if (!request) {
-      throw organizerRequestNotFound(requestId);
+      throw Errors.organizerRequestNotFound(requestId);
     }
 
     return request;
@@ -65,7 +65,7 @@ export class OrganizerService {
     }
 
     if (concert.status !== ConcertStatus.DRAFT) {
-      throw concertNotEditable(concertId);
+      throw Errors.concertNotEditable(concertId);
     }
 
     const startsAt = input.starts_at ?? concert.startsAt.toISOString();
@@ -180,30 +180,12 @@ export class OrganizerService {
   }
 }
 
-function organizerRequestNotFound(id: string) {
-  return new ApiError({
-    title: "Organizer request not found",
-    status: 404,
-    code: "ORGANIZER_REQUEST_NOT_FOUND",
-    detail: `Organizer request ${id} was not found.`,
-  });
-}
-
 function venueNotFound(id: string) {
   return new ApiError({
     title: "Venue not found",
     status: 404,
     code: "VENUE_NOT_FOUND",
     detail: `Venue ${id} was not found.`,
-  });
-}
-
-function concertNotEditable(id: string) {
-  return new ApiError({
-    title: "Concert not editable",
-    status: 409,
-    code: "CONCERT_NOT_EDITABLE",
-    detail: `Concert ${id} is not in DRAFT status.`,
   });
 }
 

@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+// Mật khẩu chung cho mọi tài khoản demo do seed tạo (xem README mục 11).
+const DEMO_PASSWORD = "Password@123";
 
 const userIds = {
   audience: "00000000-0000-0000-0000-000000000001",
@@ -265,19 +269,22 @@ async function seedUsers() {
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
   ];
 
+  // Bcrypt hash thật (12 rounds, khớp hashPassword của api-server) để demo login được.
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 12);
+
   for (const [key, email, fullName, phone, role] of users) {
     await prisma.user.upsert({
       where: { id: userIds[key] },
       create: {
         id: userIds[key],
         email,
-        passwordHash: passwordHashes[key],
+        passwordHash,
         fullName,
         phone,
         role,
         status: "ACTIVE",
       },
-      update: { email, passwordHash: passwordHashes[key], fullName, phone, role, status: "ACTIVE" },
+      update: { email, fullName, phone, role, status: "ACTIVE", passwordHash },
     });
   }
 }

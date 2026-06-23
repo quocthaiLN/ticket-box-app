@@ -72,6 +72,24 @@ export const Errors = {
       detail: "An account with this email already exists.",
     }),
 
+  phoneAlreadyExists: () =>
+    new ApiError({
+      title: "Phone already exists",
+      status: 409,
+      code: "PHONE_ALREADY_EXISTS",
+      detail: "An account with this phone number already exists.",
+    }),
+
+  userNotFoundByEmail: (email?: string) =>
+    new ApiError({
+      title: "User not found",
+      status: 404,
+      code: "USER_NOT_FOUND_BY_EMAIL",
+      detail: email
+        ? `No user exists with email ${email}.`
+        : "No user exists with the provided email.",
+    }),
+
   otpInvalid: () =>
     new ApiError({
       title: "Invalid OTP",
@@ -572,6 +590,53 @@ export const Errors = {
       status: 400,
       code: "INVALID_CSV",
       detail,
+    }),
+
+  // Organizer / Admin approval
+  organizerRequestNotFound: (id?: string) =>
+    new ApiError({
+      title: "Organizer request not found",
+      status: 404,
+      code: "ORGANIZER_REQUEST_NOT_FOUND",
+      detail: id
+        ? `Organizer request ${id} was not found.`
+        : "Organizer request was not found.",
+    }),
+
+  organizerRequestNotPending: () =>
+    new ApiError({
+      title: "Organizer request not pending",
+      status: 409,
+      code: "ORGANIZER_REQUEST_NOT_PENDING",
+      detail: "This organizer request has already been approved or rejected.",
+    }),
+
+  deletionRequestNotFound: (id?: string) =>
+    new ApiError({
+      title: "Deletion request not found",
+      status: 404,
+      code: "DELETION_REQUEST_NOT_FOUND",
+      detail: id
+        ? `Concert deletion request ${id} was not found.`
+        : "Concert deletion request was not found.",
+    }),
+
+  deletionRequestNotPending: () =>
+    new ApiError({
+      title: "Deletion request not pending",
+      status: 409,
+      code: "DELETION_REQUEST_NOT_PENDING",
+      detail: "This deletion request has already been approved or rejected.",
+    }),
+
+  concertNotEditable: (id?: string) =>
+    new ApiError({
+      title: "Concert not editable",
+      status: 409,
+      code: "CONCERT_NOT_EDITABLE",
+      detail: id
+        ? `Concert ${id} is not in DRAFT status.`
+        : "Concert is not in DRAFT status.",
     }),
 
   // Internal
