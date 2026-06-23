@@ -45,6 +45,7 @@ Thành phần ngoài PostgreSQL:
 - Notification: gộp template/log/dead-letter thành một bảng `notifications`.
 - AI Artist Bio: gộp `artist_bios` vào `artist_bio_jobs.generated_bio`; nội dung public nằm ở `concerts.artist_bio`.
 - Rate limit: bỏ `rate_limit_buckets`; rate limit nằm trong Redis.
+- Sprint 6 role/route: tách `/organizer/*` khỏi `/admin/*`; thêm hồ sơ organizer và duyệt admin. Admin check-in chỉ còn `GET /admin/check-in/gates`; các route public để tạo/sửa/xóa device, gate và gate-zone mapping đã bỏ. `checkin_devices` **không bị bỏ khỏi database**; bảng này vẫn là dữ liệu runtime để scan/preload/offline sync xác thực thiết bị.
 
 ## 4. Danh sách bảng chính
 
@@ -53,6 +54,9 @@ Thành phần ngoài PostgreSQL:
 | `users` | Tài khoản và role chính. |
 | `venues` | Địa điểm tổ chức concert. |
 | `concerts` | Thông tin concert, artist public bio, seat map URL. |
+| `organizer_requests` | Hồ sơ BTC xin tổ chức concert. |
+| `concert_deletion_requests` | Yêu cầu BTC xin hủy/xóa concert để admin duyệt. |
+| `concert_checker_accounts` | Gắn checker account với concert. |
 | `seat_zones` | Khu vé trong từng concert. |
 | `checkin_gates` | Cổng check-in theo concert. |
 | `checkin_gate_zones` | Mapping gate được phép nhận zone. |
@@ -62,7 +66,7 @@ Thành phần ngoài PostgreSQL:
 | `order_items` | Dòng vé trong order. |
 | `payments` | Payment attempt và raw webhook payload MVP. |
 | `tickets` | E-ticket QR đã phát hành. |
-| `checkin_devices` | Thiết bị/staff/gate dùng để check-in. |
+| `checkin_devices` | Thiết bị/staff/gate runtime dùng để check-in; không còn public admin device API trong Sprint 6. |
 | `checkin_logs` | Log mọi lần scan online hoặc sync. |
 | `offline_checkin_batches` | Batch sync offline từ mobile. |
 | `offline_checkin_items` | Từng item scan offline. |
@@ -80,7 +84,7 @@ Thành phần ngoài PostgreSQL:
 #### 5.1.1 `users`
 
 - **Mục đích:** lưu tài khoản audience, organizer, checker, admin.
-- **Quan hệ chính:** organizer của `concerts`, owner của `orders/tickets`, checker của `checkin_devices/checkin_logs`, actor của `audit_logs`.
+- **Quan hệ chính:** organizer của `concerts` và `organizer_requests`, reviewer của hồ sơ/yêu cầu xóa, owner của `orders/tickets`, checker của `checkin_devices/checkin_logs`, checker account trong `concert_checker_accounts`, actor của `audit_logs`.
 - **Constraint/index:** unique `email`, unique `phone`, index `role`, index `status`, check định dạng email/phone.
 
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
@@ -126,7 +130,7 @@ AUDIENCE, ORGANIZER, CHECKER, ADMIN
 #### 5.2.2 `concerts`
 
 - **Mục đích:** lưu thông tin concert public/admin.
-- **Quan hệ chính:** thuộc `venues`, thuộc organizer `users`, có `seat_zones`, `ticket_types`, `checkin_gates`.
+- **Quan hệ chính:** thuộc `venues`, thuộc organizer `users`, có `seat_zones`, `ticket_types`, `checkin_gates`, có thể được tạo từ `organizer_requests`.
 - **Constraint/index:** unique `slug`, `ends_at > starts_at`, index `(status, starts_at)`, `(organizer_id, status)`.
 
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
@@ -141,13 +145,77 @@ AUDIENCE, ORGANIZER, CHECKER, ADMIN
 | `artist_bio` | TEXT | nullable | Bio public hiện hành. |
 | `starts_at` | TIMESTAMP | NOT NULL, index cùng `status` | Thời điểm bắt đầu. |
 | `ends_at` | TIMESTAMP | NOT NULL, check `ends_at > starts_at` | Thời điểm kết thúc. |
+| `planned_publish_at` | TIMESTAMP | nullable | Thời điểm dự kiến publish, lấy từ hồ sơ organizer khi admin duyệt. |
 | `status` | `concert_status` | NOT NULL, default `DRAFT`, index | Trạng thái publish. |
 | `cover_image_url` | TEXT | nullable | Ảnh bìa trên Object Storage/CDN. |
 | `seat_map_url` | TEXT | nullable | URL sơ đồ tổng. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
 
-#### 5.2.3 `seat_zones`
+#### 5.2.3 `organizer_requests`
+
+- **Mục đích:** lưu hồ sơ BTC xin tổ chức concert. BTC không tạo concert trực tiếp; admin approve hồ sơ thì hệ thống tạo concert `DRAFT` và các cấu hình vận hành liên quan.
+- **Quan hệ chính:** thuộc organizer `users`, chọn `venues`, reviewer là admin `users`, liên kết `concerts` sau khi approve.
+- **Constraint/index:** `ends_at > starts_at`, `gate_count >= 1`, `checker_count >= 1`, `ticket_types` là JSON array, index `(organizer_id, status, created_at)`, `(status, created_at)`, unique nullable `concert_id`.
+
+| Field | Kiểu | Ràng buộc chính | Ý nghĩa |
+| --- | --- | --- | --- |
+| `id` | UUID | PK | Định danh hồ sơ. |
+| `organizer_id` | UUID | FK `users.id`, index | BTC nộp hồ sơ. |
+| `venue_id` | UUID | FK `venues.id`, index | Địa điểm đề xuất. |
+| `title` | VARCHAR(255) | NOT NULL | Tên concert đề xuất. |
+| `artist_name` | VARCHAR(255) | NOT NULL | Nghệ sĩ/lineup. |
+| `description` | TEXT | nullable | Mô tả đề xuất. |
+| `starts_at` | TIMESTAMP | NOT NULL | Thời điểm bắt đầu. |
+| `ends_at` | TIMESTAMP | NOT NULL | Thời điểm kết thúc. |
+| `planned_publish_at` | TIMESTAMP | nullable | Thời điểm dự kiến publish. |
+| `gate_count` | INTEGER | NOT NULL, default `1`, check `>= 1` | Số cổng cần tạo khi duyệt. |
+| `checker_count` | INTEGER | NOT NULL, default `1`, check `>= 1` | Số tài khoản checker cần tạo khi duyệt. |
+| `press_kit_url` | TEXT | nullable | File/URL press kit nếu có. |
+| `ticket_types` | JSONB | NOT NULL, check array | Ticket type/zone khai báo trong hồ sơ, materialize khi approve. |
+| `status` | `approval_status` | NOT NULL, default `PENDING`, index | Trạng thái duyệt. |
+| `reviewed_by` | UUID | FK `users.id`, nullable | Admin duyệt/từ chối. |
+| `reviewed_at` | TIMESTAMP | nullable | Thời điểm review. |
+| `review_note` | TEXT | nullable | Ghi chú review. |
+| `concert_id` | UUID | FK `concerts.id`, UNIQUE nullable | Concert được tạo sau approve. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
+| `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
+
+#### 5.2.4 `concert_deletion_requests`
+
+- **Mục đích:** lưu yêu cầu BTC xin hủy/xóa concert để admin duyệt; không xóa vật lý concert đã có nghiệp vụ.
+- **Quan hệ chính:** thuộc `concerts`, organizer `users`, reviewer admin `users`.
+- **Constraint/index:** index `(concert_id, status)`, `(organizer_id, status, created_at)`, `(status, created_at)`.
+
+| Field | Kiểu | Ràng buộc chính | Ý nghĩa |
+| --- | --- | --- | --- |
+| `id` | UUID | PK | Định danh yêu cầu. |
+| `concert_id` | UUID | FK `concerts.id`, index | Concert xin hủy. |
+| `organizer_id` | UUID | FK `users.id`, index | BTC gửi yêu cầu. |
+| `reason` | TEXT | nullable | Lý do xin hủy. |
+| `status` | `approval_status` | NOT NULL, default `PENDING`, index | Trạng thái duyệt. |
+| `reviewed_by` | UUID | FK `users.id`, nullable | Admin duyệt/từ chối. |
+| `reviewed_at` | TIMESTAMP | nullable | Thời điểm review. |
+| `review_note` | TEXT | nullable | Ghi chú review. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
+| `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
+
+#### 5.2.5 `concert_checker_accounts`
+
+- **Mục đích:** gắn tài khoản `CHECKER` với concert; dùng để organizer/admin xem danh sách checker và để disable checker khi concert hủy/kết thúc.
+- **Quan hệ chính:** thuộc `concerts`, tham chiếu checker `users`, có thể liên kết hồ sơ `organizer_requests` đã tạo checker.
+- **Constraint/index:** unique `(concert_id, user_id)`, index `user_id`, `organizer_request_id`.
+
+| Field | Kiểu | Ràng buộc chính | Ý nghĩa |
+| --- | --- | --- | --- |
+| `id` | UUID | PK | Định danh link checker. |
+| `concert_id` | UUID | FK `concerts.id`, UNIQUE cùng `user_id` | Concert được phân công. |
+| `user_id` | UUID | FK `users.id`, UNIQUE cùng `concert_id` | Tài khoản checker. |
+| `organizer_request_id` | UUID | FK `organizer_requests.id`, nullable | Hồ sơ đã sinh tài khoản này. |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
+| `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
+
+#### 5.2.6 `seat_zones`
 
 - **Mục đích:** mô tả khu SVIP/VIP/CAT1/CAT2/GA trong từng concert.
 - **Quan hệ chính:** thuộc `concerts`, được `ticket_types` tham chiếu, được `checkin_gate_zones` dùng để validate.
@@ -171,8 +239,9 @@ AUDIENCE, ORGANIZER, CHECKER, ADMIN
 #### 5.3.1 `checkin_gates`
 
 - **Mục đích:** cổng check-in của từng concert.
-- **Quan hệ chính:** thuộc `concerts`, có nhiều `checkin_gate_zones`, được `checkin_devices` gán vào.
+- **Quan hệ chính:** thuộc `concerts`, có nhiều `checkin_gate_zones`, có thể được `checkin_devices` tham chiếu trong runtime check-in.
 - **Constraint/index:** unique `(concert_id, code)`, unique `(id, concert_id)`, index `(concert_id, is_active)`.
+- **Sprint 6:** gate được tạo trong transaction admin approve hồ sơ organizer (`gate_count`). Public admin API chỉ còn `GET /admin/check-in/gates`; các route tạo/sửa/xóa gate đã bỏ và phải trả `404`.
 
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
 | --- | --- | --- | --- |
@@ -381,9 +450,10 @@ Idempotency:
 
 #### 5.7.1 `checkin_devices`
 
-- **Mục đích:** map thiết bị với staff, concert và gate.
+- **Mục đích:** map thiết bị runtime với staff, concert và gate để server xác thực preload, scan online và offline sync.
 - **Quan hệ chính:** staff `users`, concert, gate.
 - **Constraint/index:** unique `device_code`, index `(staff_id, status)`, `(concert_id, gate_id, status)`.
+- **Sprint 6:** bảng này vẫn còn trong database/model. Chỉ các public admin route quản trị device bị bỏ; provisioning thiết bị/checker cho demo hoặc vận hành MVP đi qua seed/internal tooling cho đến khi có API mới được thiết kế.
 
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
 | --- | --- | --- | --- |

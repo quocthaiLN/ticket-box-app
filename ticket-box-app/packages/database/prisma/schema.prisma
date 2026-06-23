@@ -24,6 +24,14 @@ enum UserStatus {
   @@map("user_status")
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("approval_status")
+}
+
 enum ConcertStatus {
   DRAFT
   PUBLISHED
@@ -191,19 +199,24 @@ model User {
   updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime?  @map("deleted_at")
 
-  organizedConcerts     Concert[]               @relation("ConcertOrganizer")
-  orders                Order[]
-  tickets               Ticket[]
-  checkedInTickets      Ticket[]                @relation("TicketCheckedInBy")
-  checkinDevices        CheckinDevice[]         @relation("DeviceStaff")
-  checkinLogs           CheckinLog[]            @relation("CheckinStaff")
-  offlineBatches        OfflineCheckinBatch[]   @relation("OfflineBatchStaff")
-  guestImportJobs       GuestImportJob[]        @relation("GuestImportCreator")
-  checkedInGuests       GuestList[]             @relation("GuestCheckedInBy")
-  artistBioJobs         ArtistBioJob[]          @relation("ArtistBioRequestedBy")
-  notifications         Notification[]
-  auditLogs             AuditLog[]              @relation("AuditActor")
-  UserTicketTypeCounter UserTicketTypeCounter[]
+  organizedConcerts         Concert[]                @relation("ConcertOrganizer")
+  orders                    Order[]
+  tickets                   Ticket[]
+  checkedInTickets          Ticket[]                 @relation("TicketCheckedInBy")
+  checkinDevices            CheckinDevice[]          @relation("DeviceStaff")
+  checkinLogs               CheckinLog[]             @relation("CheckinStaff")
+  offlineBatches            OfflineCheckinBatch[]    @relation("OfflineBatchStaff")
+  guestImportJobs           GuestImportJob[]         @relation("GuestImportCreator")
+  checkedInGuests           GuestList[]              @relation("GuestCheckedInBy")
+  artistBioJobs             ArtistBioJob[]           @relation("ArtistBioRequestedBy")
+  notifications             Notification[]
+  auditLogs                 AuditLog[]               @relation("AuditActor")
+  UserTicketTypeCounter     UserTicketTypeCounter[]
+  organizerRequests         OrganizerRequest[]       @relation("OrganizerRequestOwner")
+  reviewedOrganizerRequests OrganizerRequest[]       @relation("OrganizerRequestReviewer")
+  concertDeletionRequests   ConcertDeletionRequest[] @relation("ConcertDeletionRequestOwner")
+  reviewedDeletionRequests  ConcertDeletionRequest[] @relation("ConcertDeletionRequestReviewer")
+  concertCheckerAccounts    ConcertCheckerAccount[]
 
   @@index([role])
   @@index([status])
@@ -220,48 +233,129 @@ model Venue {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  concerts Concert[]
+  concerts          Concert[]
+  organizerRequests OrganizerRequest[]
 
   @@index([city])
   @@map("venues")
 }
 
 model Concert {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  venueId       String        @map("venue_id") @db.Uuid
-  organizerId   String        @map("organizer_id") @db.Uuid
-  title         String        @db.VarChar(255)
-  slug          String        @unique @db.VarChar(255)
-  description   String?
-  artistName    String        @map("artist_name") @db.VarChar(255)
-  artistBio     String?       @map("artist_bio")
-  startsAt      DateTime      @map("starts_at")
-  endsAt        DateTime      @map("ends_at")
-  status        ConcertStatus @default(DRAFT)
-  coverImageUrl String?       @map("cover_image_url")
-  seatMapUrl    String?       @map("seat_map_url")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at")
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venueId          String        @map("venue_id") @db.Uuid
+  organizerId      String        @map("organizer_id") @db.Uuid
+  title            String        @db.VarChar(255)
+  slug             String        @unique @db.VarChar(255)
+  description      String?
+  artistName       String        @map("artist_name") @db.VarChar(255)
+  artistBio        String?       @map("artist_bio")
+  startsAt         DateTime      @map("starts_at")
+  endsAt           DateTime      @map("ends_at")
+  plannedPublishAt DateTime?     @map("planned_publish_at")
+  status           ConcertStatus @default(DRAFT)
+  coverImageUrl    String?       @map("cover_image_url")
+  seatMapUrl       String?       @map("seat_map_url")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
 
-  venue           Venue                 @relation(fields: [venueId], references: [id], onDelete: Restrict)
-  organizer       User                  @relation("ConcertOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
-  seatZones       SeatZone[]
-  checkinGates    CheckinGate[]
-  ticketTypes     TicketType[]
-  orders          Order[]
-  tickets         Ticket[]
-  checkinDevices  CheckinDevice[]
-  checkinLogs     CheckinLog[]
-  offlineBatches  OfflineCheckinBatch[]
-  guestImportJobs GuestImportJob[]
-  guestList       GuestList[]
-  artistBioJobs   ArtistBioJob[]
-  notifications   Notification[]
+  venue            Venue                    @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  organizer        User                     @relation("ConcertOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  seatZones        SeatZone[]
+  checkinGates     CheckinGate[]
+  ticketTypes      TicketType[]
+  orders           Order[]
+  tickets          Ticket[]
+  checkinDevices   CheckinDevice[]
+  checkinLogs      CheckinLog[]
+  offlineBatches   OfflineCheckinBatch[]
+  guestImportJobs  GuestImportJob[]
+  guestList        GuestList[]
+  artistBioJobs    ArtistBioJob[]
+  notifications    Notification[]
+  organizerRequest OrganizerRequest?
+  deletionRequests ConcertDeletionRequest[]
+  checkerAccounts  ConcertCheckerAccount[]
 
   @@index([status, startsAt])
   @@index([venueId])
   @@index([organizerId, status])
   @@map("concerts")
+}
+
+model OrganizerRequest {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizerId      String         @map("organizer_id") @db.Uuid
+  venueId          String         @map("venue_id") @db.Uuid
+  title            String         @db.VarChar(255)
+  artistName       String         @map("artist_name") @db.VarChar(255)
+  description      String?
+  startsAt         DateTime       @map("starts_at")
+  endsAt           DateTime       @map("ends_at")
+  plannedPublishAt DateTime?      @map("planned_publish_at")
+  gateCount        Int            @default(1) @map("gate_count")
+  checkerCount     Int            @default(1) @map("checker_count")
+  pressKitUrl      String?        @map("press_kit_url")
+  ticketTypes      Json           @map("ticket_types") @db.JsonB
+  status           ApprovalStatus @default(PENDING)
+  reviewedById     String?        @map("reviewed_by") @db.Uuid
+  reviewedAt       DateTime?      @map("reviewed_at")
+  reviewNote       String?        @map("review_note")
+  concertId        String?        @unique @map("concert_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  organizer       User                    @relation("OrganizerRequestOwner", fields: [organizerId], references: [id], onDelete: Restrict)
+  venue           Venue                   @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  reviewedBy      User?                   @relation("OrganizerRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  concert         Concert?                @relation(fields: [concertId], references: [id], onDelete: SetNull)
+  checkerAccounts ConcertCheckerAccount[]
+
+  @@index([organizerId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([venueId])
+  @@index([reviewedById])
+  @@map("organizer_requests")
+}
+
+model ConcertDeletionRequest {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  concertId    String         @map("concert_id") @db.Uuid
+  organizerId  String         @map("organizer_id") @db.Uuid
+  reason       String?
+  status       ApprovalStatus @default(PENDING)
+  reviewedById String?        @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime?      @map("reviewed_at")
+  reviewNote   String?        @map("review_note")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  concert    Concert @relation(fields: [concertId], references: [id], onDelete: Restrict)
+  organizer  User    @relation("ConcertDeletionRequestOwner", fields: [organizerId], references: [id], onDelete: Restrict)
+  reviewedBy User?   @relation("ConcertDeletionRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([concertId, status])
+  @@index([organizerId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById])
+  @@map("concert_deletion_requests")
+}
+
+model ConcertCheckerAccount {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  concertId          String   @map("concert_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  organizerRequestId String?  @map("organizer_request_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  concert          Concert           @relation(fields: [concertId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organizerRequest OrganizerRequest? @relation(fields: [organizerRequestId], references: [id], onDelete: SetNull)
+
+  @@unique([concertId, userId])
+  @@index([userId])
+  @@index([organizerRequestId])
+  @@map("concert_checker_accounts")
 }
 
 model SeatZone {

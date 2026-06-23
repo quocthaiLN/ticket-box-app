@@ -7,6 +7,8 @@ const userIds = {
   organizer: "00000000-0000-0000-0000-000000000002",
   checker: "00000000-0000-0000-0000-000000000003",
   admin: "00000000-0000-0000-0000-000000000004",
+  checkerSecretOne: "00000000-0000-0000-0000-000000000005",
+  checkerSecretTwo: "00000000-0000-0000-0000-000000000006",
 };
 
 const venues = [
@@ -57,6 +59,7 @@ const concerts = [
       "Grey D is one of Vietnam's standout indie voices, known for warm vocals and introspective songwriting.",
     startsAt: "2026-07-15T19:30:00+07:00",
     endsAt: "2026-07-15T22:00:00+07:00",
+    plannedPublishAt: "2026-06-10T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
@@ -84,6 +87,7 @@ const concerts = [
       "My Tam is a Vietnamese music icon with more than 20 years of performing and many landmark live concerts.",
     startsAt: "2026-08-20T18:00:00+07:00",
     endsAt: "2026-08-20T21:30:00+07:00",
+    plannedPublishAt: "2026-07-01T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/di-qua-thuong-nho.jpg",
     zones: [
@@ -113,6 +117,7 @@ const concerts = [
       "Thanh Lam and Ha Tran are two major Vietnamese voices, coming together for a refined and emotional performance.",
     startsAt: "2026-09-05T19:00:00+07:00",
     endsAt: "2026-09-05T22:30:00+07:00",
+    plannedPublishAt: "2026-07-20T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/our-20th-moment-2026.jpg",
     zones: [
@@ -140,6 +145,7 @@ const concerts = [
       "Lam Truong is one of the most beloved Vietnamese male singers from the 1990s and 2000s.",
     startsAt: "2026-10-12T19:30:00+07:00",
     endsAt: "2026-10-12T22:00:00+07:00",
+    plannedPublishAt: "2026-08-15T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/mot-thoi-da-yeu.jpg",
     zones: [
@@ -165,6 +171,7 @@ const concerts = [
       "Bich Phuong is a standout Vietnamese pop singer known for catchy songs and a modern stage style.",
     startsAt: "2026-11-08T19:30:00+07:00",
     endsAt: "2026-11-08T21:30:00+07:00",
+    plannedPublishAt: "2026-09-01T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/noi-tinh-yeu-bat-dau.jpg",
     zones: [
@@ -188,10 +195,17 @@ const concerts = [
     artistBio: "",
     startsAt: "2026-12-31T20:00:00+07:00",
     endsAt: "2026-12-31T23:59:00+07:00",
+    plannedPublishAt: "2026-12-01T10:00:00+07:00",
     status: "DRAFT",
     coverImageUrl: "/src/img/secret-show-2026.jpg",
-    zones: [],
-    tickets: [],
+    zones: [
+      zone("VIP", "VIP Secret Circle", "Reserved area for the closest stage view.", 120),
+      zone("GA", "General Admission", "Standing area for the secret show.", 1200),
+    ],
+    tickets: [
+      ticket("VIP", "VIP Secret Circle", "Draft VIP ticket configured by approved request.", 1800000, 120, 0, 0, 2, "DRAFT"),
+      ticket("GA", "GA", "Draft general admission ticket configured by approved request.", 700000, 1200, 0, 0, 4, "DRAFT"),
+    ],
   },
 ];
 
@@ -201,13 +215,34 @@ const fixedId = (number) =>
 const zoneId = (concertIndex, zoneIndex) => fixedId(301 + concertIndex * 5 + zoneIndex);
 const gateId = (concertIndex, zoneIndex) => fixedId(401 + concertIndex * 5 + zoneIndex);
 const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex * 5 + ticketIndex);
+const organizerRequestId = (index) => fixedId(701 + index);
+const deletionRequestId = (index) => fixedId(721 + index);
+const checkerAccountId = (index) => fixedId(741 + index);
 
 function zone(code, name, description, capacity) {
   return { code, name, description, capacity };
 }
 
-function ticket(zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser) {
-  return { zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser };
+function ticket(zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser, status = "ON_SALE") {
+  return { zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser, status };
+}
+
+function requestTicketTypes(concert, saleStartAt = "2026-06-01T10:00:00+07:00", saleEndAt = "2026-12-31T23:59:59+07:00") {
+  return concert.tickets.map((item) => {
+    const zoneItem = concert.zones.find((candidate) => candidate.code === item.zoneCode);
+
+    return {
+      zone_code: item.zoneCode,
+      zone_name: zoneItem?.name ?? item.zoneCode,
+      zone_capacity: zoneItem?.capacity ?? item.totalQuantity,
+      name: item.name,
+      price: { amount: item.price, currency: "VND" },
+      total_quantity: item.totalQuantity,
+      max_per_user: item.maxPerUser,
+      sale_start_at: saleStartAt,
+      sale_end_at: saleEndAt,
+    };
+  });
 }
 
 async function seedUsers() {
@@ -216,6 +251,8 @@ async function seedUsers() {
     ["organizer", "organizer@ticketbox.test", "Demo Organizer", "+84900000002", "ORGANIZER"],
     ["checker", "checker@ticketbox.test", "Demo Checker", "+84900000003", "CHECKER"],
     ["admin", "admin@ticketbox.test", "Demo Admin", "+84900000004", "ADMIN"],
+    ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Secret Show Checker 1", "+84900000005", "CHECKER"],
+    ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Secret Show Checker 2", "+84900000006", "CHECKER"],
   ];
 
   for (const [key, email, fullName, phone, role] of users) {
@@ -258,6 +295,7 @@ async function seedCatalog() {
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
+        plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
         seatMapUrl: null,
@@ -272,6 +310,7 @@ async function seedCatalog() {
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
+        plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
         seatMapUrl: null,
@@ -359,7 +398,7 @@ async function seedCatalog() {
           maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
-          status: "ON_SALE",
+          status: item.status,
         },
         update: {
           concertId: concert.id,
@@ -374,10 +413,183 @@ async function seedCatalog() {
           maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
-          status: "ON_SALE",
+          status: item.status,
         },
       });
     }
+  }
+}
+
+async function seedOrganizerWorkflow() {
+  const pendingRequest = {
+    id: organizerRequestId(0),
+    organizerId: userIds.organizer,
+    venueId: venues[2].id,
+    title: "Saigon Indie Weekend",
+    artistName: "Indie Collective",
+    description: "A pending organizer request for admin review.",
+    startsAt: new Date("2027-01-18T19:00:00+07:00"),
+    endsAt: new Date("2027-01-18T22:30:00+07:00"),
+    plannedPublishAt: new Date("2026-12-05T10:00:00+07:00"),
+    gateCount: 2,
+    checkerCount: 3,
+    pressKitUrl: "/press-kit/saigon-indie-weekend.pdf",
+    ticketTypes: [
+      {
+        zone_code: "VIP",
+        zone_name: "VIP",
+        zone_capacity: 500,
+        name: "VIP",
+        price: { amount: 1500000, currency: "VND" },
+        total_quantity: 500,
+        max_per_user: 2,
+        sale_start_at: "2026-12-10T10:00:00+07:00",
+        sale_end_at: "2027-01-18T12:00:00+07:00",
+      },
+      {
+        zone_code: "GA",
+        zone_name: "General Admission",
+        zone_capacity: 2500,
+        name: "GA",
+        price: { amount: 650000, currency: "VND" },
+        total_quantity: 2500,
+        max_per_user: 4,
+        sale_start_at: "2026-12-10T10:00:00+07:00",
+        sale_end_at: "2027-01-18T12:00:00+07:00",
+      },
+    ],
+    status: "PENDING",
+    reviewedById: null,
+    reviewedAt: null,
+    reviewNote: null,
+    concertId: null,
+  };
+
+  const approvedConcert = concerts.find((concert) => concert.slug === "secret-show-2026");
+  const rejectedRequest = {
+    id: organizerRequestId(2),
+    organizerId: userIds.organizer,
+    venueId: venues[3].id,
+    title: "Midnight Acoustic Archive",
+    artistName: "Archive Session Band",
+    description: "A rejected request kept in seed data for admin review history screens.",
+    startsAt: new Date("2027-02-12T19:30:00+07:00"),
+    endsAt: new Date("2027-02-12T22:00:00+07:00"),
+    plannedPublishAt: new Date("2027-01-05T10:00:00+07:00"),
+    gateCount: 1,
+    checkerCount: 1,
+    pressKitUrl: "/press-kit/midnight-acoustic-archive.pdf",
+    ticketTypes: [
+      {
+        zone_code: "CAT1",
+        zone_name: "CAT 1",
+        zone_capacity: 300,
+        name: "CAT 1",
+        price: { amount: 900000, currency: "VND" },
+        total_quantity: 300,
+        max_per_user: 2,
+        sale_start_at: "2027-01-10T10:00:00+07:00",
+        sale_end_at: "2027-02-12T12:00:00+07:00",
+      },
+    ],
+    status: "REJECTED",
+    reviewedById: userIds.admin,
+    reviewedAt: new Date("2026-06-15T09:30:00+07:00"),
+    reviewNote: "Venue hold document is missing.",
+    concertId: null,
+  };
+
+  const approvedRequest = {
+    id: organizerRequestId(1),
+    organizerId: userIds.organizer,
+    venueId: approvedConcert.venueId,
+    title: approvedConcert.title,
+    artistName: approvedConcert.artistName,
+    description: approvedConcert.description,
+    startsAt: new Date(approvedConcert.startsAt),
+    endsAt: new Date(approvedConcert.endsAt),
+    plannedPublishAt: new Date(approvedConcert.plannedPublishAt),
+    gateCount: approvedConcert.zones.length,
+    checkerCount: 2,
+    pressKitUrl: "/press-kit/secret-show-2026.pdf",
+    ticketTypes: requestTicketTypes(approvedConcert, "2026-12-01T10:00:00+07:00", "2026-12-31T12:00:00+07:00"),
+    status: "APPROVED",
+    reviewedById: userIds.admin,
+    reviewedAt: new Date("2026-06-12T14:00:00+07:00"),
+    reviewNote: "Approved for draft materialization.",
+    concertId: approvedConcert.id,
+  };
+
+  for (const request of [pendingRequest, approvedRequest, rejectedRequest]) {
+    await prisma.organizerRequest.upsert({
+      where: { id: request.id },
+      create: request,
+      update: request,
+    });
+  }
+
+  const legacyCheckerAccounts = concerts
+    .filter((concert) => concert.zones.length > 0 && concert.id !== approvedConcert.id)
+    .map((concert, index) => ({
+      id: checkerAccountId(index),
+      concertId: concert.id,
+      userId: userIds.checker,
+      organizerRequestId: null,
+    }));
+
+  const checkerAccounts = [
+    ...legacyCheckerAccounts,
+    {
+      id: checkerAccountId(5),
+      concertId: approvedConcert.id,
+      userId: userIds.checkerSecretOne,
+      organizerRequestId: approvedRequest.id,
+    },
+    {
+      id: checkerAccountId(6),
+      concertId: approvedConcert.id,
+      userId: userIds.checkerSecretTwo,
+      organizerRequestId: approvedRequest.id,
+    },
+  ];
+
+  for (const account of checkerAccounts) {
+    await prisma.concertCheckerAccount.upsert({
+      where: { id: account.id },
+      create: account,
+      update: account,
+    });
+  }
+
+  const deletionRequests = [
+    {
+      id: deletionRequestId(0),
+      concertId: concerts[4].id,
+      organizerId: userIds.organizer,
+      reason: "Organizer needs to move the show to a larger venue.",
+      status: "PENDING",
+      reviewedById: null,
+      reviewedAt: null,
+      reviewNote: null,
+    },
+    {
+      id: deletionRequestId(1),
+      concertId: concerts[3].id,
+      organizerId: userIds.organizer,
+      reason: "Duplicate request submitted during schedule review.",
+      status: "REJECTED",
+      reviewedById: userIds.admin,
+      reviewedAt: new Date("2026-06-16T15:15:00+07:00"),
+      reviewNote: "Concert remains valid and should stay published.",
+    },
+  ];
+
+  for (const request of deletionRequests) {
+    await prisma.concertDeletionRequest.upsert({
+      where: { id: request.id },
+      create: request,
+      update: request,
+    });
   }
 }
 
@@ -504,13 +716,14 @@ async function seedOperations() {
   for (const [concertIndex, concert] of concerts.entries()) {
     if (concert.zones.length === 0) continue;
     const gateIndex = Math.max(0, concert.zones.findIndex((item) => item.code === "VIP"));
+    const staffId = concert.slug === "secret-show-2026" ? userIds.checkerSecretOne : userIds.checker;
 
     await prisma.checkinDevice.upsert({
       where: { id: fixedId(641 + concertIndex) },
       create: {
         id: fixedId(641 + concertIndex),
         deviceCode: `CHECKER-${concert.slug}`,
-        staffId: userIds.checker,
+        staffId,
         concertId: concert.id,
         gateId: gateId(concertIndex, gateIndex),
         name: `Demo checker device - ${concert.title}`,
@@ -519,7 +732,7 @@ async function seedOperations() {
       },
       update: {
         deviceCode: `CHECKER-${concert.slug}`,
-        staffId: userIds.checker,
+        staffId,
         concertId: concert.id,
         gateId: gateId(concertIndex, gateIndex),
         name: `Demo checker device - ${concert.title}`,
@@ -552,6 +765,7 @@ async function seedOperations() {
 async function main() {
   await seedUsers();
   await seedCatalog();
+  await seedOrganizerWorkflow();
   await seedDemoTickets();
   await seedOperations();
 }
