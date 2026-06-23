@@ -137,6 +137,9 @@ export function Navbar() {
               {session.user.role === "ADMIN" && (
                 <MobileNavLink to="/admin" label="Admin" onClick={() => setMenuOpen(false)} />
               )}
+              {session.user.role === "ORGANIZER" && (
+                <MobileNavLink to="/organizer" label="Organizer" onClick={() => setMenuOpen(false)} />
+              )}
               {session.user.role === "CHECKER" && (
                 <MobileNavLink to="/checker" label="Checker" onClick={() => setMenuOpen(false)} />
               )}
@@ -162,6 +165,7 @@ export function Navbar() {
 
 function profilePathForRole(role: AuthSession["user"]["role"]) {
   if (role === "ADMIN") return "/admin";
+  if (role === "ORGANIZER") return "/organizer";
   if (role === "CHECKER") return "/checker";
   return "/";
 }

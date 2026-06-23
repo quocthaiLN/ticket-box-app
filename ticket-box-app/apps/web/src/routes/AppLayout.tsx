@@ -5,7 +5,9 @@ import { Navbar } from "../components/Navbar";
 export function AppLayout() {
   const location = useLocation();
   const hideFooter =
-    location.pathname.startsWith("/admin") || location.pathname.startsWith("/checker");
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/checker") ||
+    location.pathname.startsWith("/organizer");
 
   return (
     <>

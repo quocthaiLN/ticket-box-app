@@ -8,6 +8,7 @@ import {
   Plus,
   ShieldCheck,
   Ticket,
+  UserCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -195,6 +196,12 @@ export function AdminHomePage() {
               icon={<LayoutDashboard className="h-4 w-4" />}
               title="Catalog control"
               detail="Events, venues, zones, and ticket types"
+            />
+            <OperatorLink
+              to="/admin/organizer-requests"
+              icon={<UserCheck className="h-4 w-4" />}
+              title="Organizer approvals"
+              detail="Review applications and provision checker accounts"
             />
             <OperatorLink
               to="/admin/catalog"
