@@ -1,5 +1,5 @@
 import { MapPin, Search, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConcertCard } from "../../components/ConcertCard";
 import type { UiConcert } from "../../lib/catalog-ui";
@@ -12,7 +12,24 @@ export function EventsPage() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [city, setCity] = useState("all");
   const [concerts, setConcerts] = useState<UiConcert[]>([]);
+  const [cityOptions, setCityOptions] = useState<string[]>(["all"]);
   const [status, setStatus] = useState<LoadStatus>("loading");
+
+  useEffect(() => {
+    let mounted = true;
+
+    getEventsCatalog()
+      .then((items) => {
+        if (mounted) setCityOptions(getCityFilters(items, "all"));
+      })
+      .catch(() => {
+        if (mounted) setCityOptions(["all"]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -28,11 +45,6 @@ export function EventsPage() {
     return () => window.clearTimeout(timeout);
   }, [search, city]);
 
-  const cities = useMemo(
-    () => getCityFilters(concerts, "all"),
-    [concerts],
-  );
-
   return (
     <div className="min-h-screen bg-[#08080E] pt-16" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <header className="border-b border-white/10 px-4 py-12" style={{ background: "linear-gradient(to bottom, #111118, #08080E)" }}>
@@ -47,14 +59,24 @@ export function EventsPage() {
             {status === "ready" ? `${concerts.length} sự kiện phù hợp` : "Danh mục công khai từ TicketBox API"}
           </p>
 
-          <div className="flex max-w-2xl items-center gap-3 rounded-2xl border border-white/10 bg-[#111118] px-4 py-3">
+          <div
+            className="flex max-w-2xl items-center gap-3 rounded-2xl px-4 py-3"
+            style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.09)" }}
+          >
             <Search className="h-5 w-5 shrink-0 text-[#8585A0]" />
             <input
               type="text"
               placeholder="Tìm tên sự kiện hoặc nghệ sĩ..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="flex-1 bg-transparent text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#8585A0]"
+              style={{
+                width: "100%",
+                border: 0,
+                background: "transparent",
+                color: "#F0EDEB",
+                padding: 0,
+              }}
             />
           </div>
         </div>
@@ -77,7 +99,7 @@ export function EventsPage() {
                     Thành phố
                   </p>
                   <div className="space-y-1">
-                    {cities.map((item) => (
+                    {cityOptions.map((item) => (
                       <FilterButton
                         key={item}
                         label={item === "all" ? "Tất cả" : item}
@@ -87,19 +109,6 @@ export function EventsPage() {
                     ))}
                   </div>
                 </div>
-
-                {(city !== "all" || search) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCity("all");
-                      setSearch("");
-                    }}
-                    className="w-full rounded-lg py-2 text-xs text-[#E8315B] transition-colors hover:bg-white/5"
-                  >
-                    Xóa bộ lọc
-                  </button>
-                )}
               </div>
             </div>
           </aside>
@@ -135,7 +144,8 @@ function FilterButton({ label, active, onClick }: { label: string; active: boole
       onClick={onClick}
       className="w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition-all"
       style={{
-        background: active ? "rgba(245,200,66,0.1)" : "transparent",
+        background: active ? "rgba(245,200,66,0.14)" : "transparent",
+        border: active ? "1px solid rgba(245,200,66,0.32)" : "1px solid transparent",
         color: active ? "#F5C842" : "#8585A0",
         fontWeight: active ? 600 : 400,
       }}

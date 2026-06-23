@@ -80,18 +80,18 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
         <div className="flex items-center justify-between border-t border-white/10 pt-3">
           {concert.minPrice !== null ? (
             <div>
-              <span className="text-xs text-[#8585A0]">From </span>
+              <span className="text-xs text-[#8585A0]">Từ </span>
               <span className="text-sm font-semibold text-[#F5C842]">
                 {formatCurrency(concert.minPrice)}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-[#8585A0]">Announcing soon</span>
+            <span className="text-xs text-[#8585A0]">Thông báo sớm</span>
           )}
 
           <span className="inline-flex items-center gap-1 rounded-lg border border-[#E8315B]/30 bg-[#E8315B]/15 px-3 py-1.5 text-xs font-medium text-[#E8315B]">
             <Ticket className="h-3 w-3" />
-            View tickets
+            Mua vé
           </span>
         </div>
       </div>

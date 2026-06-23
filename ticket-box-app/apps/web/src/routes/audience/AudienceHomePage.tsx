@@ -142,14 +142,24 @@ export function AudienceHomePage() {
       <AnimatedSection>
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row">
-            <div className="flex flex-1 items-center gap-3 rounded-xl border border-white/10 bg-[#111118] px-4 py-3">
+            <div
+              className="flex flex-1 items-center gap-3 rounded-xl px-4 py-3"
+              style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
               <Search className="h-4 w-4 shrink-0 text-[#8585A0]" />
               <input
                 type="text"
-                placeholder="Tìm nghệ sĩ, sự kiện hoặc địa điểm..."
+                placeholder="Tìm kiếm nghệ sĩ, sự kiện, địa điểm..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                className="flex-1 bg-transparent text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#8585A0]"
+                style={{
+                  width: "100%",
+                  border: 0,
+                  background: "transparent",
+                  color: "#F0EDEB",
+                  padding: 0,
+                }}
               />
             </div>
           </div>
@@ -198,7 +208,7 @@ export function AudienceHomePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((concert, index) => (
               <AnimatedSection key={concert.id} delay={index * 0.05}>
-                <ConcertCard concert={concert} featured={index === 0 && !searchQuery} />
+                <ConcertCard concert={concert} />
               </AnimatedSection>
             ))}
           </div>

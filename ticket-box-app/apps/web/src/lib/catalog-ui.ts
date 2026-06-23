@@ -165,11 +165,11 @@ export function mapDetailConcert(
 }
 
 export function formatCurrency(amount: number): string {
-  return `VND ${new Intl.NumberFormat("en-US").format(amount)}`;
+  return `${new Intl.NumberFormat("en-US").format(amount)} VND`;
 }
 
 export function formatDate(dateStr: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -177,7 +177,7 @@ export function formatDate(dateStr: string): string {
 }
 
 export function formatTime(dateStr: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(dateStr));
