@@ -2,10 +2,8 @@ import { Ban, Calendar, CheckCircle, Download, QrCode, Ticket as TicketIcon, X }
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  getMyTicket,
   getMyTicketQr,
   listMyTickets,
-  type TicketDetail,
   type TicketListItem,
   type TicketQr,
   type TicketStatus,
@@ -30,7 +28,7 @@ export function MyTicketsPage() {
   useEffect(() => {
     let mounted = true;
     setStatus("loading");
-    listMyTickets({ status: activeTab, limit: 100 })
+    listMyTickets({ limit: 100 })
       .then((items) => {
         if (!mounted) return;
         setTickets(items);
@@ -42,7 +40,7 @@ export function MyTicketsPage() {
     return () => {
       mounted = false;
     };
-  }, [activeTab]);
+  }, []);
 
   const counts = useMemo(
     () => ({
@@ -51,6 +49,11 @@ export function MyTicketsPage() {
       checkedIn: tickets.filter((ticket) => ticket.status === "CHECKED_IN").length,
     }),
     [tickets],
+  );
+
+  const filteredTickets = useMemo(
+    () => tickets.filter((ticket) => activeTab === "all" || ticket.status === activeTab),
+    [activeTab, tickets],
   );
 
   return (
@@ -88,7 +91,7 @@ export function MyTicketsPage() {
 
         {status === "loading" && <StatePanel text="Đang tải vé..." />}
         {status === "error" && <StatePanel text="Không thể tải danh sách vé. Vui lòng đăng nhập bằng tài khoản khán giả." tone="error" />}
-        {status === "ready" && tickets.length === 0 && (
+        {status === "ready" && filteredTickets.length === 0 && (
           <div className="rounded-2xl border border-white/10 bg-[#111118] px-6 py-16 text-center">
             <QrCode className="mx-auto mb-4 h-12 w-12 text-[#8585A0]" />
             <p className="mb-4 text-sm text-[#8585A0]">Chưa có vé nào trong bộ lọc này.</p>
@@ -98,9 +101,9 @@ export function MyTicketsPage() {
           </div>
         )}
 
-        {tickets.length > 0 && (
+        {filteredTickets.length > 0 && (
           <div className="space-y-4">
-            {tickets.map((ticket) => (
+            {filteredTickets.map((ticket) => (
               <TicketCard key={ticket.id} ticket={ticket} onViewQr={() => setSelectedTicket(ticket)} />
             ))}
           </div>
@@ -151,17 +154,15 @@ function TicketCard({ ticket, onViewQr }: { ticket: TicketListItem; onViewQr: ()
 
 function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => void }) {
   const [qr, setQr] = useState<TicketQr | null>(null);
-  const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
     let mounted = true;
     setStatus("loading");
-    Promise.all([getMyTicketQr(ticket.id), getMyTicket(ticket.id)])
-      .then(([qrData, detailData]) => {
+    getMyTicketQr(ticket.id)
+      .then((qrData) => {
         if (!mounted) return;
         setQr(qrData);
-        setDetail(detailData);
         setStatus("ready");
       })
       .catch(() => {
@@ -172,7 +173,18 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
     };
   }, [ticket.id]);
 
-  const qrText = qr ? JSON.stringify(qr.payload) : ticket.id;
+  const payloadText = qr
+    ? JSON.stringify(
+        {
+          ticket_id: qr.ticket_id,
+          payload: qr.payload,
+          qr_signature: qr.qr_signature,
+          expires_at: qr.expires_at,
+        },
+        null,
+        2,
+      )
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur" onClick={onClose}>
@@ -186,15 +198,15 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
             <QrCode className="h-7 w-7" />
           </div>
           <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{ticket.concert_title}</h2>
-          <p className="mt-1 text-xs text-[#8585A0]">{ticket.ticket_type_name} - {detail?.seat_zone.name ?? `Khu ${ticket.zone_code}`}</p>
+          <p className="mt-1 text-xs text-[#8585A0]">{ticket.ticket_type_name} - Khu {ticket.zone_code}</p>
 
-          <div className="my-5 rounded-2xl bg-white p-4">
+          <div className="my-5 rounded-2xl border border-white/10 bg-[#08080E] p-4">
             {status === "loading" ? (
-              <div className="flex h-44 items-center justify-center text-sm text-[#0D0D14]">Đang tải QR...</div>
+              <div className="flex h-44 items-center justify-center text-sm text-[#8585A0]">Đang tải QR...</div>
             ) : status === "error" ? (
-              <div className="flex h-44 items-center justify-center text-sm text-[#0D0D14]">Không thể tải QR</div>
+              <div className="flex h-44 items-center justify-center text-sm text-[#E8315B]">Không thể tải QR</div>
             ) : (
-              <PseudoQr text={qrText} />
+              <PayloadCodePanel text={payloadText} />
             )}
           </div>
 
@@ -209,28 +221,11 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
   );
 }
 
-function PseudoQr({ text }: { text: string }) {
-  const cells = Array.from({ length: 121 }, (_, index) => {
-    const x = index % 11;
-    const y = Math.floor(index / 11);
-    const finder =
-      (x < 3 && y < 3) ||
-      (x > 7 && y < 3) ||
-      (x < 3 && y > 7);
-    const value = finder || hash(`${text}:${index}`) % 5 > 1;
-    return value;
-  });
-
+function PayloadCodePanel({ text }: { text: string }) {
   return (
-    <svg viewBox="0 0 132 132" className="mx-auto h-44 w-44" role="img" aria-label="QR vé">
-      <rect width="132" height="132" fill="#fff" />
-      {cells.map((value, index) => {
-        if (!value) return null;
-        const x = index % 11;
-        const y = Math.floor(index / 11);
-        return <rect key={index} x={x * 12 + 2} y={y * 12 + 2} width="9" height="9" rx="1" fill="#0A0A0F" />;
-      })}
-    </svg>
+    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/30 p-3 text-left font-mono text-[11px] leading-5 text-[#F0EDEB]">
+      {text}
+    </pre>
   );
 }
 
@@ -269,12 +264,4 @@ function statusColor(status: TicketStatus) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(value));
-}
-
-function hash(value: string) {
-  let result = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    result = (result * 31 + value.charCodeAt(index)) >>> 0;
-  }
-  return result;
 }
