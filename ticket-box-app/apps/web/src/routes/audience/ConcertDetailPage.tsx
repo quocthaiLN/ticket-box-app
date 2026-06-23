@@ -221,6 +221,8 @@ export function ConcertDetailPage() {
                 </Panel>
 
                 <Panel title="Câu hỏi thường gặp" icon={<HelpCircle className="h-4 w-4 text-[#7B61FF]" />}>
+                  <FAQItem question="Vé có hoàn trả được không?" answer="Vé đã mua không được hoàn trả, trừ trường hợp sự kiện bị hủy bởi ban tổ chức. Trong trường hợp hủy sự kiện, 100% giá vé sẽ được hoàn lại." />
+                  <FAQItem question="Có thể mua vé tại cửa không?" answer="Tùy theo từng sự kiện. Thông thường vé chỉ bán online qua TicketBox. Vui lòng theo dõi thông báo từ ban tổ chức." />
                   <FAQItem question="Một tài khoản mua được bao nhiêu vé?" answer="Giới hạn phụ thuộc từng loại vé và sẽ được kiểm tra lại khi tạo đơn hàng." />
                   <FAQItem question="E-ticket có an toàn không?" answer="Mỗi vé có QR payload riêng và chỉ có thể check-in một lần tại đúng cổng hoặc đúng khu." />
                 </Panel>
@@ -326,7 +328,7 @@ export function ConcertDetailPage() {
 
             <div className="border-t border-white/10 bg-[#F5C842]/[0.04] px-5 py-3">
               <p className="text-xs leading-relaxed text-[#8585A0]">
-                <span className="text-[#F5C842]">Lưu ý:</span> Luồng đặt vé và thanh toán sẽ được nối ở batch tích hợp tiếp theo.
+                <span className="text-[#F5C842]">Lưu ý:</span> Vé đã mua không hoàn trả trừ trường hợp sự kiện bị hủy.
               </p>
             </div>
           </div>
