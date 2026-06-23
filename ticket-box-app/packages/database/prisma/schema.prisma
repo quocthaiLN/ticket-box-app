@@ -307,6 +307,7 @@ model CheckinGate {
   checkinLogs         CheckinLog[]
   offlineBatches      OfflineCheckinBatch[]
   offlineCheckinItems OfflineCheckinItem[]
+  tickets             Ticket[]
 
   @@unique([concertId, code])
   @@unique([id, concertId])
@@ -457,6 +458,7 @@ model Ticket {
   concertId     String       @map("concert_id") @db.Uuid
   ticketTypeId  String       @map("ticket_type_id") @db.Uuid
   seatZoneId    String       @map("seat_zone_id") @db.Uuid
+  gateId        String       @map("gate_id") @db.Uuid
   qrTokenHash   String       @unique @map("qr_token_hash") @db.VarChar(255)
   qrPayload     Json?        @map("qr_payload") @db.JsonB
   qrSignature   String?      @map("qr_signature")
@@ -473,6 +475,7 @@ model Ticket {
   concert       Concert              @relation(fields: [concertId], references: [id], onDelete: Restrict)
   ticketType    TicketType           @relation(fields: [ticketTypeId, concertId], references: [id, concertId], onDelete: Restrict)
   seatZone      SeatZone             @relation(fields: [seatZoneId, concertId], references: [id, concertId], onDelete: Restrict)
+  gate          CheckinGate          @relation(fields: [gateId, concertId], references: [id, concertId], onDelete: Restrict)
   checkedInBy   User?                @relation("TicketCheckedInBy", fields: [checkedInById], references: [id], onDelete: SetNull)
   checkinLogs   CheckinLog[]
   notifications Notification[]
@@ -484,6 +487,7 @@ model Ticket {
   @@index([userId, ticketTypeId, status])
   @@index([ticketTypeId, status])
   @@index([seatZoneId])
+  @@index([gateId])
   @@index([checkedInAt])
   @@map("tickets")
 }

@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   checkInTicketAtGate,
   CheckinResult,
@@ -8,7 +8,7 @@ import {
   Prisma,
   TicketStatus,
 } from "@ticketbox/database";
-import { env } from "@ticketbox/config";
+import { verifyQrSignature } from "../tickets/ticket.qr.js";
 import type {
   CheckinPreloadQuery,
   CheckinPreloadResponse,
@@ -769,26 +769,6 @@ function normalizePayload(value: unknown): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
-}
-
-// Verify chữ ký QR bằng HMAC để phát hiện payload bị chỉnh sửa.
-function verifyQrSignature(
-  payload: Record<string, unknown>,
-  signature: string,
-) {
-  const payloadWithoutSignature = { ...payload };
-  delete payloadWithoutSignature["qr_signature"];
-  delete payloadWithoutSignature["qrSignature"];
-  const sorted = Object.fromEntries(
-    Object.keys(payloadWithoutSignature)
-      .sort()
-      .map((key) => [key, payloadWithoutSignature[key]]),
-  );
-  const canonical = JSON.stringify(sorted);
-  const expected = createHmac("sha256", env.qr.signingSecret)
-    .update(canonical, "utf8")
-    .digest("base64");
-  return expected === signature;
 }
 
 // Chuyển Prisma gate model sang DTO trả về API.

@@ -1,6 +1,22 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { createPrivateKey, createPublicKey } from "node:crypto";
 import dotenv from "dotenv";
+
+// Cặp khóa Ed25519 dev (chỉ để chạy local out-of-box). PRODUCTION phải override
+// bằng QR_SIGNING_PRIVATE_KEY_B64 / QR_SIGNING_PUBLIC_KEY_B64. Lưu base64(PEM)
+// để key vừa gọn trên 1 dòng .env. Tạo cặp mới:
+//   node -e "const{generateKeyPairSync}=require('node:crypto');const{publicKey,privateKey}=generateKeyPairSync('ed25519');console.log('PRIV',Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'));console.log('PUB',Buffer.from(publicKey.export({type:'spki',format:'pem'})).toString('base64'))"
+const DEV_QR_PRIVATE_KEY_B64 =
+  "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1DNENBUUF3QlFZREsyVndCQ0lFSUZqdEJaUGhPdmk1ZkZZSkUzY2pRWU1YMU9ocjdoZGRLQUJ0ajg2YmZXcnYKLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLQo=";
+const DEV_QR_PUBLIC_KEY_B64 =
+  "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQVJXN3RVWHM3cEFJZVU1bGgvOW13UU5pRmNQOTV1bG84VjNjYUlUM2RvZ1k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=";
+
+// Trả về PEM từ base64; coi biến môi trường rỗng/thiếu là dùng default dev.
+const pemFromB64 = (value: string | undefined, fallback: string): string =>
+  Buffer.from(value && value.trim() !== "" ? value : fallback, "base64").toString(
+    "utf8",
+  );
 
 // `dotenv.config()` mặc định đọc `.env` theo process.cwd(). Khi chạy qua
 // `npm run dev -w <workspace>` thì cwd là thư mục con (vd apps/api-server) nên
@@ -127,8 +143,13 @@ export const env = {
   },
 
   qr: {
-    signingSecret:
-      process.env["QR_SIGNING_SECRET"] ??
-      "qr_signing_secret_dev_change_in_prod",
+    // Ký vé bằng private key (Ed25519) ở api-server; máy checker chỉ cần public
+    // key để verify nên không thể giả mạo vé (và verify được cả khi offline).
+    privateKey: createPrivateKey(
+      pemFromB64(process.env["QR_SIGNING_PRIVATE_KEY_B64"], DEV_QR_PRIVATE_KEY_B64),
+    ),
+    publicKey: createPublicKey(
+      pemFromB64(process.env["QR_SIGNING_PUBLIC_KEY_B64"], DEV_QR_PUBLIC_KEY_B64),
+    ),
   },
 };

@@ -29,6 +29,7 @@ type TicketDetailRow = {
   seatZoneId: string;
   seatZoneCode: string;
   seatZoneName: string;
+  gateId: string;
   status: string;
   issuedAt: Date;
   checkedInAt: Date | null;
@@ -87,6 +88,7 @@ export async function getTicketDetailForUser(ticketId: string, userId: string) {
       t.seat_zone_id     AS "seatZoneId",
       sz.code            AS "seatZoneCode",
       sz.name            AS "seatZoneName",
+      t.gate_id          AS "gateId",
       t.status::text     AS "status",
       t.issued_at        AS "issuedAt",
       t.checked_in_at    AS "checkedInAt",
@@ -127,7 +129,7 @@ export async function getTicketQrForUser(
   }
 
   // Backfill QR data if missing (tickets created before this module existed)
-  const payload = buildQrPayload(row.id, row.concertId, row.ticketTypeId, row.seatZoneId, row.issuedAt, row.qrTokenHash);
+  const payload = buildQrPayload(row.id, row.concertId, row.ticketTypeId, row.seatZoneId, row.gateId, row.issuedAt, row.qrTokenHash);
   const signature = signQrPayload(payload);
 
   await prisma.ticket.update({

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   prisma,
   Prisma,
@@ -267,6 +267,39 @@ export async function confirmOrderPayment(
       WHERE oi.order_id = ${orderId}::uuid
     `);
 
+      // Mỗi vé chỉ được vào đúng 1 cổng. Một khu ghế có thể được phục vụ bởi
+      // nhiều cổng (CheckinGateZone), nên ta chia tải giữa các cổng đó bằng cách
+      // gán NGẪU NHIÊN — không trạng thái, không đọc/ghi bộ đếm chung. Cách này
+      // tránh tranh chấp serializable dưới tải đặt vé cao (hàng nghìn req/s) mà
+      // vẫn cho phân bố xấp xỉ đều theo luật số lớn.
+      // Danh sách cổng active của mỗi zone là dữ liệu cấu hình gần như bất biến,
+      // chỉ đọc 1 lần cho mỗi zone (read-only, không xung đột với insert vé).
+      const zoneGates = new Map<string, string[]>();
+      for (const zoneId of new Set(items.map((i) => i.seatZoneId))) {
+        const gates = await tx.$queryRaw<Array<{ gateId: string }>>(Prisma.sql`
+        SELECT cg.id AS "gateId"
+        FROM checkin_gate_zones cgz
+        JOIN checkin_gates cg ON cg.id = cgz.gate_id AND cg.concert_id = cgz.concert_id
+        WHERE cgz.seat_zone_id = ${zoneId}::uuid
+          AND cg.is_active = true
+        ORDER BY cg.sort_order ASC, cg.id ASC
+      `);
+        if (gates.length === 0) {
+          // gateId là bắt buộc trên Ticket; không có cổng active thì không thể phát hành.
+          throw new Error(`Không có cổng active phục vụ khu ghế ${zoneId} để phát hành vé`);
+        }
+        zoneGates.set(
+          zoneId,
+          gates.map((g) => g.gateId),
+        );
+      }
+
+      // Chọn ngẫu nhiên một cổng active của zone cho mỗi vé.
+      const pickGateForZone = (zoneId: string): string => {
+        const gates = zoneGates.get(zoneId)!;
+        return gates[randomInt(gates.length)];
+      };
+
       // Lưu các ticket phát hành để tạo notification trước khi commit.
       // Danh sách này được dùng để tạo notification ngay trong transaction,
       // bảo đảm không có ticket phát hành mà thiếu bản ghi notification.
@@ -319,6 +352,7 @@ export async function confirmOrderPayment(
               concertId: item.concertId,
               ticketTypeId: item.ticketTypeId,
               seatZoneId: item.seatZoneId,
+              gateId: pickGateForZone(item.seatZoneId),
               qrTokenHash,
               status: TicketStatus.ISSUED,
               issuedAt: now,
