@@ -68,7 +68,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     slug: concert.id,
     title: concert.title,
     artistName: concert.artist_name,
-    description: "Event details will be available on the concert detail page.",
+    description: toDescriptionExcerpt(concert.description),
     artistBio: "",
     startsAt: concert.starts_at,
     endsAt: concert.ends_at,
@@ -209,4 +209,14 @@ function estimateSoldPercent(availableQuantity: number | null, status: TicketTyp
   if (availableQuantity < 20) return 82;
   if (availableQuantity < 100) return 62;
   return 28;
+}
+
+function toDescriptionExcerpt(description?: string) {
+  const text = description?.trim();
+  if (!text) return "Thông tin sự kiện đang được cập nhật.";
+
+  const firstSentence = text.match(/^.+?[.!?](?:\s|$)/u)?.[0]?.trim() ?? text;
+  if (firstSentence.length <= 150) return firstSentence;
+
+  return `${firstSentence.slice(0, 147).trimEnd()}...`;
 }

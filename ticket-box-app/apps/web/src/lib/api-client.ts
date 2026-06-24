@@ -31,6 +31,7 @@ export type ConcertSummary = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
   starts_at: string;
   ends_at: string;

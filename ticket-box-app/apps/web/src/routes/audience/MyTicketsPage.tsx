@@ -71,7 +71,7 @@ export function MyTicketsPage() {
           <Stat label="Đã check-in" value={counts.checkedIn} tone="#2DBE6C" />
         </div>
 
-        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-white/10">
+        <div className="mb-6 flex flex-wrap gap-1 border-b border-white/10">
           {tabs.map((tab) => (
             <button
               key={tab.value}
