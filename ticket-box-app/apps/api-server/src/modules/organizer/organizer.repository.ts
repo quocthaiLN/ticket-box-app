@@ -50,7 +50,9 @@ export type OrganizerConcertSummaryDto = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
+  artist_bio?: string;
   status: string;
   starts_at: string;
   ends_at: string;
@@ -61,6 +63,22 @@ export type OrganizerConcertSummaryDto = {
     name: string;
     city: string;
   };
+  ticket_types: Array<{
+    id: string;
+    name: string;
+    zone_code: string;
+    zone_name: string;
+    price: {
+      amount: number;
+      currency: "VND";
+    };
+    total_quantity: number;
+    held_quantity: number;
+    sold_quantity: number;
+    available_quantity: number;
+    max_per_user: number;
+    status: string;
+  }>;
 };
 
 export type OrganizerConcertUpdateDto = {
@@ -234,7 +252,7 @@ export class OrganizerRepository {
             }
           : {}),
       },
-      include: { venue: true },
+      include: { venue: true, ticketTypes: { include: { seatZone: true }, orderBy: { price: "asc" } } },
       orderBy: { startsAt: "desc" },
       take: query.limit + 1,
     });
@@ -539,13 +557,15 @@ function mapRequestDetail(
 }
 
 function mapConcertSummary(
-  concert: Prisma.ConcertGetPayload<{ include: { venue: true } }>,
+  concert: Prisma.ConcertGetPayload<{ include: { venue: true; ticketTypes: { include: { seatZone: true } } } }>,
 ): OrganizerConcertSummaryDto {
   return {
     id: concert.id,
     title: concert.title,
     slug: concert.slug,
+    description: concert.description ?? undefined,
     artist_name: concert.artistName,
+    artist_bio: concert.artistBio ?? undefined,
     status: concert.status,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
@@ -556,6 +576,27 @@ function mapConcertSummary(
       name: concert.venue.name,
       city: concert.venue.city,
     },
+    ticket_types: concert.ticketTypes.map((ticketType) => {
+      const total = ticketType.totalQuantity;
+      const held = ticketType.heldQuantity;
+      const sold = ticketType.soldQuantity;
+      return {
+        id: ticketType.id,
+        name: ticketType.name,
+        zone_code: ticketType.seatZone.code,
+        zone_name: ticketType.seatZone.name,
+        price: {
+          amount: Number(ticketType.price),
+          currency: "VND",
+        },
+        total_quantity: total,
+        held_quantity: held,
+        sold_quantity: sold,
+        available_quantity: Math.max(total - held - sold, 0),
+        max_per_user: ticketType.maxPerUser,
+        status: ticketType.status,
+      };
+    }),
   };
 }
 

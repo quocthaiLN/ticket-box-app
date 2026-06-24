@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Clock,
@@ -17,8 +18,10 @@ import {
   Search,
   ShieldCheck,
   Ticket,
+  TrendingUp,
   Trash2,
   UserCheck,
+  Users,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -212,12 +215,12 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
           ) : (
             <>
               {view === "dashboard" && (
-                <DashboardView
+                <OrganizerDashboardView
                   stats={stats}
                   requests={requests}
                   concerts={concerts}
+                  orders={orders}
                   analytics={analytics}
-                  checkers={checkers}
                 />
               )}
               {view === "requests" && (
@@ -236,6 +239,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
               )}
               {view === "concerts" && (
                 <ConcertsView
+                  venues={venues}
                   concerts={visibleConcerts}
                   analytics={analytics}
                   filter={concertFilter}
@@ -254,6 +258,153 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function OrganizerDashboardView({
+  stats,
+  requests,
+  concerts,
+  orders,
+  analytics,
+}: {
+  stats: { revenue: number; sold: number; drafts: number; pending: number };
+  requests: OrganizerRequestSummary[];
+  concerts: OrganizerConcert[];
+  orders: OrganizerOrder[];
+  analytics: Record<string, OrganizerAnalytics>;
+}) {
+  const performance = concerts.map((concert) => toOrganizerConcertPerformanceView(concert, analytics[concert.id]));
+  const topConcerts = [...performance].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  const myConcerts = performance.slice(0, 4);
+  const pendingRequests = requests.filter((request) => request.status === "PENDING").slice(0, 4);
+  const monthlyRevenue = buildMonthlyRevenue(orders);
+  const statCards = [
+    { label: "Tổng doanh thu", value: formatMoney(stats.revenue), icon: <TrendingUp className="h-5 w-5" />, tone: "#F5C842" },
+    { label: "Vé đã bán", value: stats.sold.toLocaleString("vi-VN"), icon: <Ticket className="h-5 w-5" />, tone: "#7B61FF" },
+    { label: "Sự kiện published", value: String(concerts.filter((concert) => concert.status === "PUBLISHED").length), icon: <CalendarDays className="h-5 w-5" />, tone: "#2DBE6C" },
+    { label: "Hồ sơ đang chờ", value: String(stats.pending), icon: <Clock className="h-5 w-5" />, tone: "#E8315B" },
+  ];
+
+  return (
+    <div>
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {statCards.map((item) => (
+          <StatCard key={item.label} {...item} />
+        ))}
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <DashboardPanel className="xl:col-span-2">
+          <h3 className="mb-4 text-sm font-semibold text-[#F0EDEB]">Doanh thu theo tháng (concert của tôi)</h3>
+          <RevenueAreaChart data={monthlyRevenue} />
+        </DashboardPanel>
+
+        <DashboardPanel>
+          <h3 className="mb-4 text-sm font-semibold text-[#F0EDEB]">Top concert doanh thu</h3>
+          <div className="space-y-3">
+            {topConcerts.map((concert, index) => (
+              <div key={concert.id}>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="truncate text-xs text-[#F0EDEB]">{concert.title}</span>
+                  <span className="shrink-0 text-xs text-[#F5C842]">{formatMoney(concert.revenue)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${concert.soldPercent}%`,
+                        background: ["#7B61FF", "#E8315B", "#F5C842", "#2DBE6C", "#26A7DE"][index] ?? "#7B61FF",
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-[#8585A0]">{concert.soldPercent}%</span>
+                </div>
+              </div>
+            ))}
+            {topConcerts.length === 0 && <EmptyState text="Chưa có concert nào." />}
+          </div>
+        </DashboardPanel>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {pendingRequests.length > 0 && (
+          <DashboardPanel>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#F0EDEB]">Hồ sơ đang chờ admin duyệt</h3>
+              <Link to="/organizer/requests" className="flex items-center gap-1 text-xs text-[#8585A0] hover:text-[#7B61FF]">
+                Tất cả
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {pendingRequests.map((request) => {
+                const view = toOrganizerRequestView(request);
+                return (
+                  <Link key={view.id} to="/organizer/requests" className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.05]">
+                    <Clock className="h-4 w-4 shrink-0 text-[#F5C842]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[#F0EDEB]">{view.title}</p>
+                      <p className="mt-1 text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-[#F5C842]/10 px-2 py-0.5 text-xs text-[#F5C842]">Chờ duyệt</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </DashboardPanel>
+        )}
+
+        <DashboardPanel>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#F0EDEB]">Sự kiện của tôi</h3>
+            <Link to="/organizer/concerts" className="flex items-center gap-1 text-xs text-[#8585A0] hover:text-[#7B61FF]">
+              Tất cả
+              <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {myConcerts.map((concert) => (
+              <div key={concert.id} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-white/[0.05]">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#1A1A24]">
+                  {concert.coverImageUrl ? (
+                    <img src={concert.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[#8585A0]">
+                      <CalendarDays className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[#F0EDEB]">{concert.title}</p>
+                  <p className="mt-1 text-xs text-[#8585A0]">
+                    {concert.ticketsSold.toLocaleString("vi-VN")}/{concert.ticketsTotal.toLocaleString("vi-VN")} vé bán
+                  </p>
+                </div>
+                <StatusBadge status={concert.status} />
+                <Link to={`/concerts/${concert.id}`} className="shrink-0 rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trang public">
+                  <Eye className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            ))}
+            {myConcerts.length === 0 && <EmptyState text="Chưa có sự kiện nào." />}
+          </div>
+        </DashboardPanel>
+
+        {pendingRequests.length === 0 && (
+          <DashboardPanel>
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-white/10 p-4">
+              <Clock className="h-5 w-5 text-[#F5C842]" />
+              <div>
+                <p className="text-sm font-medium text-[#F0EDEB]">Không có hồ sơ đang chờ</p>
+                <p className="mt-1 text-xs text-[#8585A0]">Các hồ sơ mới cần duyệt sẽ xuất hiện tại đây.</p>
+              </div>
+            </div>
+          </DashboardPanel>
+        )}
+      </div>
     </div>
   );
 }
@@ -409,22 +560,44 @@ function RequestsView({
   onCloseForm: () => void;
 }) {
   return (
-    <div className="grid gap-5">
+    <div>
       {showForm && <NewRequestForm venues={venues} onSubmit={onSubmit} onClose={onCloseForm} />}
 
-      <FilterTabs values={approvalStatuses} value={filter} onChange={onFilter} label={approvalStatusLabel} />
+      <div className="mb-5 flex flex-wrap gap-2">
+        {approvalStatuses.map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => onFilter(status)}
+            className="rounded-lg px-4 py-2 text-sm transition-all"
+            style={
+              filter === status
+                ? { background: "#7B61FF", color: "#fff", fontWeight: 600 }
+                : { background: "rgba(255,255,255,0.05)", color: "#8585A0", border: "1px solid rgba(255,255,255,0.07)" }
+            }
+          >
+            {approvalStatusLabel(status)}
+          </button>
+        ))}
+      </div>
 
-      <div className="grid gap-3">
+      <div className="space-y-3">
         {requests.map((request) => (
-          <RequestCard
+          <OrganizerRequestCard
             key={request.id}
             request={request}
+            venue={venues.find((venue) => venue.id === request.venue_id)}
             detail={details[request.id]}
             expanded={expandedId === request.id}
             onToggle={() => onToggle(request.id)}
           />
         ))}
-        {requests.length === 0 && <EmptyPanel icon={<FileText className="h-8 w-8" />} text="Không có hồ sơ phù hợp bộ lọc." />}
+        {requests.length === 0 && (
+          <div className="rounded-2xl border border-white/[0.07] bg-[#111118] py-12 text-center">
+            <FileText className="mx-auto mb-2 h-10 w-10 text-[#8585A0]" />
+            <p className="text-sm text-[#8585A0]">Chưa có hồ sơ nào</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -482,7 +655,7 @@ function NewRequestForm({
   }
 
   return (
-    <form className="overflow-hidden rounded-2xl border border-[#7B61FF]/30 bg-[#111118]" onSubmit={handleSubmit}>
+    <form className="mb-6 overflow-hidden rounded-2xl border border-[#7B61FF]/30 bg-[#111118]" onSubmit={handleSubmit}>
       <div className="border-b border-white/[0.07] px-5 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -535,6 +708,123 @@ function NewRequestForm({
       </div>
       </div>
     </form>
+  );
+}
+
+function OrganizerRequestCard({
+  request,
+  venue,
+  detail,
+  expanded,
+  onToggle,
+}: {
+  request: OrganizerRequestSummary;
+  venue?: Venue;
+  detail?: OrganizerRequestDetail;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const view = toOrganizerRequestView(request);
+  const detailView = normalizeOrganizerRequestDetail(detail);
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-4 px-5 py-4 text-left">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <ApprovalBadge status={view.status} />
+          </div>
+          <h2 className="text-sm font-semibold text-[#F0EDEB]">{view.title}</h2>
+          <p className="mt-0.5 truncate text-xs text-[#8585A0]">
+            {view.artistName} · {venue?.name ?? "Chưa rõ địa điểm"} · {formatDate(view.startsAt)}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="mb-1 text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</p>
+          {expanded ? <ChevronUp className="ml-auto h-4 w-4 text-[#8585A0]" /> : <ChevronDown className="ml-auto h-4 w-4 text-[#8585A0]" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-white/[0.07] px-5 pb-5">
+          {!detailView ? (
+            <p className="pt-4 text-sm text-[#8585A0]">Đang tải chi tiết...</p>
+          ) : (
+            <div>
+              <div className="mb-4 grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1 text-xs text-[#8585A0]">Mô tả</p>
+                  <p className="text-sm leading-relaxed text-[#B0B0C0]">{detailView.description}</p>
+                </div>
+                <div className="space-y-2">
+                  <InfoRow label="Địa điểm" value={venue?.name ?? detailView.venueId} />
+                  <InfoRow label="Số cổng" value={`${detailView.gateCount} cổng check-in`} />
+                  <InfoRow label="Số checker" value={`${detailView.checkerCount} nhân sự`} />
+                  <InfoRow label="Dự kiến publish" value={detailView.plannedPublishAt ? formatDate(detailView.plannedPublishAt) : "Chưa đặt"} />
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Loại vé đề xuất</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {normalizeTicketTypes(detailView.ticketTypes).map((ticket) => (
+                    <div key={`${ticket.zone_code}-${ticket.name}`} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+                      <p className="text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
+                      <p className="mt-0.5 text-sm font-bold text-[#7B61FF]">{formatMoney(ticket.price.amount)}</p>
+                      <p className="text-xs text-[#8585A0]">{ticket.total_quantity.toLocaleString("vi-VN")} vé · max {ticket.max_per_user}/người</p>
+                    </div>
+                  ))}
+                  {normalizeTicketTypes(detailView.ticketTypes).length === 0 && (
+                    <p className="rounded-xl border border-dashed border-white/10 p-3 text-xs text-[#8585A0]">Chưa có loại vé đề xuất.</p>
+                  )}
+                </div>
+              </div>
+
+              {detailView.reviewNote && (
+                <div
+                  className="mb-3 flex gap-3 rounded-xl p-3"
+                  style={{
+                    background: detailView.status === "REJECTED" ? "rgba(232,49,91,0.08)" : "rgba(45,190,108,0.08)",
+                    border: `1px solid ${detailView.status === "REJECTED" ? "rgba(232,49,91,0.2)" : "rgba(45,190,108,0.2)"}`,
+                  }}
+                >
+                  {detailView.status === "REJECTED" ? (
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#E8315B]" />
+                  ) : (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#2DBE6C]" />
+                  )}
+                  <div>
+                    <p className="mb-0.5 text-xs font-semibold" style={{ color: detailView.status === "REJECTED" ? "#E8315B" : "#2DBE6C" }}>
+                      Phản hồi từ Admin
+                    </p>
+                    <p className="text-xs text-[#B0B0C0]">{detailView.reviewNote}</p>
+                  </div>
+                </div>
+              )}
+
+              {detailView.status === "APPROVED" && detailView.concertId && (
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#2DBE6C]/20 bg-[#2DBE6C]/[0.08] p-3">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#2DBE6C]" />
+                  <div>
+                    <p className="text-xs font-semibold text-[#2DBE6C]">Hồ sơ đã được duyệt - Concert đã tạo</p>
+                    <p className="mt-1 text-xs text-[#8585A0]">Bạn có thể chỉnh sửa trong mục “Sự kiện của tôi”.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 text-xs">
+      <span className="text-[#8585A0]">{label}</span>
+      <span className="text-right text-[#F0EDEB]">{value}</span>
+    </div>
   );
 }
 
@@ -617,6 +907,7 @@ function RequestCard({
 }
 
 function ConcertsView({
+  venues,
   concerts,
   analytics,
   filter,
@@ -630,6 +921,7 @@ function ConcertsView({
   onUpdate,
   onDeletionRequest,
 }: {
+  venues: Venue[];
   concerts: OrganizerConcert[];
   analytics: Record<string, OrganizerAnalytics>;
   filter: (typeof concertStatuses)[number];
@@ -643,25 +935,49 @@ function ConcertsView({
   onUpdate: (concertId: string, input: Record<string, string>) => Promise<void>;
   onDeletionRequest: (concertId: string, reason: string) => Promise<void>;
 }) {
+  const editingConcert = editingId ? concerts.find((concert) => concert.id === editingId) : undefined;
+
+  if (editingConcert) {
+    return (
+      <OrganizerConcertEditor
+        concert={editingConcert}
+        venues={venues}
+        onBack={() => onEdit(null)}
+        onSave={(input) => onUpdate(editingConcert.id, input)}
+      />
+    );
+  }
+
   return (
-    <div className="grid gap-5">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111118] px-3">
+    <div>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111118] px-3 py-2.5">
           <Search className="h-4 w-4 text-[#8585A0]" />
           <input
             value={search}
             onChange={(event) => onSearch(event.target.value)}
-            placeholder="Tìm concert..."
-            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-[#F0EDEB] outline-none"
+            placeholder="Tìm kiếm sự kiện..."
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
             style={{ border: 0, background: "transparent" }}
           />
         </div>
-        <FilterTabs values={concertStatuses} value={filter} onChange={onFilter} label={vmConcertStatusLabel} />
+        <select
+          value={filter}
+          onChange={(event) => onFilter(event.target.value as (typeof concertStatuses)[number])}
+          className="rounded-xl px-3 py-2.5 text-sm outline-none"
+          style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.08)", color: "#F0EDEB" }}
+        >
+          {concertStatuses.map((status) => (
+            <option key={status} value={status}>
+              {vmConcertStatusLabel(status)}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="grid gap-4">
+      <div className="space-y-4">
         {concerts.map((concert) => (
-          <ConcertCard
+          <OrganizerConcertCard
             key={concert.id}
             concert={concert}
             analytics={analytics[concert.id]}
@@ -673,9 +989,425 @@ function ConcertsView({
             onDeletionRequest={(reason) => onDeletionRequest(concert.id, reason)}
           />
         ))}
-        {concerts.length === 0 && <EmptyPanel icon={<CalendarDays className="h-8 w-8" />} text="Không có concert phù hợp bộ lọc." />}
+        {concerts.length === 0 && (
+          <div className="rounded-2xl border border-white/[0.07] bg-[#111118] py-12 text-center">
+            <p className="text-sm text-[#8585A0]">Không tìm thấy sự kiện nào</p>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+type EditableTicketType = {
+  id: string;
+  name: string;
+  price: string;
+  totalQuantity: string;
+  soldQuantity: string;
+  availableQuantity: string;
+  isNew: boolean;
+};
+
+function OrganizerConcertEditor({
+  concert,
+  venues,
+  onBack,
+  onSave,
+}: {
+  concert: OrganizerConcert;
+  venues: Venue[];
+  onBack: () => void;
+  onSave: (input: Record<string, string>) => Promise<void>;
+}) {
+  const [activeSection, setActiveSection] = useState<"basic" | "tickets">("basic");
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    title: concert.title,
+    artistName: concert.artist_name,
+    genre: "",
+    description: concert.description ?? "",
+    startsAt: toDateTimeLocal(concert.starts_at),
+    endsAt: toDateTimeLocal(concert.ends_at),
+    venueId: concert.venue.id,
+    coverImageUrl: concert.cover_image_url ?? "",
+  });
+  const [tickets, setTickets] = useState<EditableTicketType[]>(
+    (concert.ticket_types ?? []).map((ticket) => ({
+      id: ticket.id,
+      name: ticket.name,
+      price: String(ticket.price.amount),
+      totalQuantity: String(ticket.total_quantity),
+      soldQuantity: String(ticket.sold_quantity),
+      availableQuantity: String(ticket.available_quantity),
+      isNew: false,
+    })),
+  );
+  const sections = [
+    { id: "basic" as const, label: "Thông tin cơ bản" },
+    { id: "tickets" as const, label: "Loại vé" },
+  ];
+
+  async function handleSave() {
+    setSubmitting(true);
+    try {
+      await onSave({
+        title: form.title,
+        artist_name: form.artistName,
+        description: form.description,
+        starts_at: dateTimeToIso(form.startsAt),
+        ends_at: dateTimeToIso(form.endsAt),
+        venue_id: form.venueId,
+        cover_image_url: form.coverImageUrl,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function addTicketType() {
+    setTickets((current) => [
+      ...current,
+      {
+        id: `new-${Date.now()}`,
+        name: "",
+        price: "0",
+        totalQuantity: "0",
+        soldQuantity: "0",
+        availableQuantity: "0",
+        isNew: true,
+      },
+    ]);
+  }
+
+  function updateTicketType(id: string, patch: Partial<EditableTicketType>) {
+    setTickets((current) => current.map((ticket) => (ticket.id === id ? { ...ticket, ...patch } : ticket)));
+  }
+
+  function removeTicketType(id: string) {
+    setTickets((current) => current.filter((ticket) => ticket.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button type="button" onClick={onBack} className="rounded-lg p-2 text-[#F0EDEB] transition-colors hover:bg-white/5">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <h2 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+            Chỉnh sửa: {concert.title}
+          </h2>
+        </div>
+      </div>
+
+      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-white/[0.08]">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setActiveSection(section.id)}
+            className="whitespace-nowrap px-4 py-2.5 text-sm transition-colors"
+            style={{
+              color: activeSection === section.id ? "#F5C842" : "#8585A0",
+              borderBottom: activeSection === section.id ? "2px solid #F5C842" : "2px solid transparent",
+              marginBottom: "-1px",
+              fontWeight: activeSection === section.id ? 600 : 400,
+            }}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-3xl space-y-6">
+        {activeSection === "basic" && (
+          <EditorCard title="Thông tin cơ bản">
+            <div className="space-y-4">
+              <EditorRow label="Tên sự kiện *">
+                <input className={editorInputClass} style={editorInputStyle} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+              </EditorRow>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <EditorRow label="Nghệ sĩ *">
+                  <input className={editorInputClass} style={editorInputStyle} value={form.artistName} onChange={(event) => setForm({ ...form, artistName: event.target.value })} />
+                </EditorRow>
+                <EditorRow label="Thể loại">
+                  <input className={editorInputClass} style={editorInputStyle} placeholder="VD: Indie/R&B" value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })} />
+                </EditorRow>
+              </div>
+              <EditorRow label="Mô tả">
+                <textarea
+                  className={`${editorInputClass} min-h-24 resize-y`}
+                  style={editorInputStyle}
+                  placeholder="Mô tả ngắn về sự kiện..."
+                  value={form.description}
+                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                />
+              </EditorRow>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <EditorRow label="Thời gian bắt đầu *">
+                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
+                </EditorRow>
+                <EditorRow label="Thời gian kết thúc *">
+                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
+                </EditorRow>
+              </div>
+              <EditorRow label="Địa điểm">
+                <select className={editorInputClass} style={editorInputStyle} value={form.venueId} onChange={(event) => setForm({ ...form, venueId: event.target.value })}>
+                  <option value="">Chọn địa điểm</option>
+                  {venues.map((venue) => (
+                    <option key={venue.id} value={venue.id}>{venue.name} - {venue.city}</option>
+                  ))}
+                </select>
+              </EditorRow>
+              <EditorRow label="Ảnh bìa (URL)">
+                <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
+                {form.coverImageUrl && (
+                  <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
+                    <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                  </div>
+                )}
+              </EditorRow>
+              <div className="flex gap-3">
+                <button type="button" disabled={submitting} onClick={handleSave} className="rounded-xl bg-[#7B61FF] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
+                </button>
+                <button type="button" onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </EditorCard>
+        )}
+
+        {activeSection === "tickets" && (
+          <EditorCard title="Cấu hình loại vé">
+            {tickets.length === 0 ? (
+              <div className="py-8 text-center">
+                <Ticket className="mx-auto mb-2 h-8 w-8 text-[#8585A0]" />
+                <p className="mb-4 text-sm text-[#8585A0]">Chưa có loại vé nào</p>
+                <button type="button" onClick={addTicketType} className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842]">
+                  <Plus className="h-4 w-4" />
+                  Thêm loại vé
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tickets.map((ticket, index) => (
+                  ticket.isNew ? (
+                    <div key={ticket.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-[#F5C842]">Loại vé mới</span>
+                        <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <TicketTextField label="Tên loại vé" value={ticket.name} onChange={(value) => updateTicketType(ticket.id, { name: value })} />
+                        <TicketNumberField label="Giá" value={ticket.price} onChange={(value) => updateTicketType(ticket.id, { price: value })} />
+                        <TicketNumberField label="Tổng số lượng" value={ticket.totalQuantity} onChange={(value) => updateTicketType(ticket.id, { totalQuantity: value })} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={ticket.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: ticketDotColor(index) }} />
+                          <span className="truncate text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
+                        </div>
+                        <div className="flex shrink-0 gap-2 text-[#8585A0]">
+                          <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 transition-colors hover:bg-red-500/10 hover:text-[#E8315B]" title="Xóa loại vé">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <TicketStat label="Giá" value={formatMoney(Number(ticket.price || 0))} />
+                        <TicketStat label="Tổng" value={Number(ticket.totalQuantity || 0).toLocaleString("vi-VN")} />
+                        <TicketStat label="Đã bán" value={Number(ticket.soldQuantity || 0).toLocaleString("vi-VN")} />
+                        <TicketStat label="Còn lại" value={Number(ticket.availableQuantity || 0).toLocaleString("vi-VN")} />
+                      </div>
+                    </div>
+                  )
+                ))}
+                <button type="button" onClick={addTicketType} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
+                  <Plus className="h-4 w-4" />
+                  Thêm loại vé
+                </button>
+              </div>
+            )}
+          </EditorCard>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrganizerConcertCard({
+  concert,
+  analytics,
+  editing,
+  deleting,
+  onEdit,
+  onDelete,
+  onUpdate,
+  onDeletionRequest,
+}: {
+  concert: OrganizerConcert;
+  analytics?: OrganizerAnalytics;
+  editing: boolean;
+  deleting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUpdate: (input: Record<string, string>) => Promise<void>;
+  onDeletionRequest: (reason: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const view = toOrganizerConcertPerformanceView(concert, analytics);
+  const canEdit = concert.status === "DRAFT";
+  const canDelete = concert.status !== "CANCELLED";
+  const ticketTypeLabel = `${(concert.ticket_types ?? []).length.toLocaleString("vi-VN")} loại vé`;
+
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setSubmitting(true);
+    try {
+      await onUpdate({
+        title: text(data, "title"),
+        artist_name: text(data, "artist_name"),
+        starts_at: optionalDateTimeToIso(text(data, "starts_at")) ?? "",
+        ends_at: optionalDateTimeToIso(text(data, "ends_at")) ?? "",
+        planned_publish_at: optionalDateTimeToIso(text(data, "planned_publish_at")) ?? "",
+        cover_image_url: text(data, "cover_image_url"),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeletionRequest() {
+    setSubmitting(true);
+    try {
+      await onDeletionRequest(reason);
+      setReason("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
+      <div className="flex items-start gap-4 p-5">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#1A1A24]">
+          {view.coverImageUrl ? (
+            <img src={view.coverImageUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[#8585A0]">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={view.status} />
+              {deleting && (
+                <span className="rounded-full bg-[#E8315B]/10 px-2 py-0.5 text-xs text-[#E8315B]">Đang xin hủy</span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link to={`/concerts/${concert.id}`} className="rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem public">
+                <Eye className="h-4 w-4" />
+              </Link>
+              {canEdit && (
+                <button type="button" onClick={onEdit} className="rounded-lg p-1.5 text-[#7B61FF] transition-colors hover:bg-white/10" title="Chỉnh sửa DRAFT">
+                  <Edit2 className="h-4 w-4" />
+                </button>
+              )}
+              {canDelete && (
+                <button type="button" onClick={onDelete} className="rounded-lg p-1.5 text-[#E8315B] transition-colors hover:bg-white/10" title="Xin hủy concert">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-sm font-semibold text-[#F0EDEB]">{view.title}</p>
+          <p className="mb-2 mt-0.5 text-xs text-[#8585A0]">
+            {view.artistName} · {formatDate(view.startsAt)} · {view.venueName}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <InlineMetric icon={<Ticket className="h-3.5 w-3.5" />} label={`${view.ticketsSold.toLocaleString("vi-VN")}/${view.ticketsTotal.toLocaleString("vi-VN")} vé (${view.soldPercent}%)`} tone="#7B61FF" />
+            <InlineMetric icon={<TrendingUp className="h-3.5 w-3.5" />} label={formatMoney(view.revenue)} tone="#2DBE6C" />
+            <InlineMetric icon={<Users className="h-3.5 w-3.5" />} label={ticketTypeLabel} tone="#F5C842" />
+          </div>
+
+          {view.ticketsTotal > 0 && (
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${view.soldPercent}%`,
+                  background: view.soldPercent > 85 ? "#E8315B" : view.soldPercent > 60 ? "#F5C842" : "#2DBE6C",
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {editing && (
+        <form className="grid gap-3 border-t border-white/10 bg-white/[0.02] p-5 md:grid-cols-2" onSubmit={handleUpdate}>
+          <Field name="title" label="Tên concert" defaultValue={concert.title} required />
+          <Field name="artist_name" label="Nghệ sĩ" defaultValue={concert.artist_name} required />
+          <Field name="starts_at" label="Thời gian bắt đầu" type="datetime-local" />
+          <Field name="ends_at" label="Thời gian kết thúc" type="datetime-local" />
+          <Field name="planned_publish_at" label="Dự kiến publish" type="datetime-local" />
+          <Field name="cover_image_url" label="URL ảnh bìa" defaultValue={concert.cover_image_url} />
+          <button type="submit" disabled={submitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2.5 text-sm font-semibold text-[#0D0D14] md:col-span-2">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            Lưu bản nháp
+          </button>
+        </form>
+      )}
+
+      {deleting && (
+        <div className="border-t border-[#E8315B]/20 bg-[#E8315B]/[0.03] px-5 pb-5">
+          <div className="pt-4">
+            <p className="mb-2 text-xs font-semibold text-[#E8315B]">Xin hủy concert - lý do</p>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Nhập lý do xin hủy concert này..."
+              rows={2}
+              className="mb-3 w-full resize-none rounded-lg px-3 py-2 text-sm outline-none placeholder:text-[#8585A0]"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#F0EDEB" }}
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={submitting || !reason.trim()}
+                onClick={handleDeletionRequest}
+                className="rounded-lg px-4 py-2 text-xs font-medium transition-transform hover:scale-105 disabled:opacity-40"
+                style={{ background: "rgba(232,49,91,0.15)", color: "#E8315B", border: "1px solid rgba(232,49,91,0.3)" }}
+              >
+                {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
+              </button>
+              <button type="button" onClick={onDelete} className="rounded-lg px-3 py-2 text-xs text-[#8585A0] transition-colors hover:bg-white/5">
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -818,6 +1550,8 @@ function Header({ view, onNewRequest }: { view: OrganizerView; onNewRequest: () 
     requests: ["Hồ sơ của tôi", "Nộp hồ sơ tổ chức concert và theo dõi trạng thái duyệt."],
     concerts: ["Sự kiện của tôi", "Chỉnh sửa concert nháp, xem phân tích và gửi yêu cầu hủy."],
   }[view];
+  const isDashboard = view === "dashboard";
+  const isRequests = view === "requests";
 
   return (
     <div className="mb-6 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -826,12 +1560,21 @@ function Header({ view, onNewRequest }: { view: OrganizerView; onNewRequest: () 
           <ShieldCheck className="h-4 w-4" />
           Không gian đối tác sự kiện
         </div>
-        <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{content[0]}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-[#8585A0]">{content[1]}</p>
+        <h1 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+          {isDashboard ? "Organizer Dashboard" : isRequests ? "Hồ sơ của tôi" : content[0]}
+        </h1>
+        <p className="mt-0.5 max-w-2xl text-sm text-[#8585A0]">
+          {isDashboard ? "Quản lý sự kiện và hồ sơ BTC của bạn" : isRequests ? "Danh sách hồ sơ xin tổ chức concert bạn đã nộp" : content[1]}
+        </p>
       </div>
-      <button type="button" onClick={onNewRequest} className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#E8315B] px-4 py-2.5 text-sm font-semibold text-white">
-        <Plus className="h-4 w-4" />
-        Hồ sơ mới
+      <button
+        type="button"
+        onClick={onNewRequest}
+        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#7B61FF]/30 transition-transform hover:scale-105"
+        style={{ background: isDashboard || isRequests ? "linear-gradient(135deg, #7B61FF, #5B41CF)" : "#E8315B" }}
+      >
+        {isDashboard ? <FileText className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+        {isDashboard ? "Tạo hồ sơ mới" : isRequests ? "Nộp hồ sơ mới" : "Hồ sơ mới"}
       </button>
     </div>
   );
@@ -871,6 +1614,129 @@ function SideLink({ to, active, icon, label, badge }: { to: string; active: bool
       {badge ? <span className="rounded-full bg-[#E8315B]/20 px-1.5 py-0.5 text-xs text-[#E8315B]">{badge}</span> : null}
     </Link>
   );
+}
+
+function DashboardPanel({ className = "", children }: { className?: string; children: ReactNode }) {
+  return (
+    <section className={`rounded-2xl border border-white/[0.07] bg-[#111118] p-5 ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+type MonthlyRevenuePoint = {
+  month: string;
+  revenue: number;
+};
+
+function RevenueAreaChart({ data }: { data: MonthlyRevenuePoint[] }) {
+  const width = 640;
+  const height = 220;
+  const padding = { top: 12, right: 16, bottom: 36, left: 54 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maxRevenue = Math.max(...data.map((item) => item.revenue), 1);
+  const points = data.map((item, index) => {
+    const x = padding.left + (data.length <= 1 ? chartWidth : (index / (data.length - 1)) * chartWidth);
+    const y = padding.top + chartHeight - (item.revenue / maxRevenue) * chartHeight;
+    return { ...item, x, y };
+  });
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L ${padding.left + chartWidth} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`;
+  const gridRows = [0, 0.5, 1];
+
+  return (
+    <div className="h-[220px] w-full overflow-hidden">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Doanh thu theo tháng">
+        <defs>
+          <linearGradient id="organizerRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#7B61FF" stopOpacity="0.35" />
+            <stop offset="95%" stopColor="#7B61FF" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {gridRows.map((row) => {
+          const y = padding.top + row * chartHeight;
+          return (
+            <line
+              key={row}
+              x1={padding.left}
+              x2={padding.left + chartWidth}
+              y1={y}
+              y2={y}
+              stroke="rgba(255,255,255,0.06)"
+              strokeDasharray="3 3"
+            />
+          );
+        })}
+        <text x={padding.left - 8} y={padding.top + 4} textAnchor="end" fill="#8585A0" fontSize="10">
+          {compactMoney(maxRevenue)}
+        </text>
+        <text x={padding.left - 8} y={padding.top + chartHeight} textAnchor="end" fill="#8585A0" fontSize="10">
+          0
+        </text>
+        <path d={areaPath} fill="url(#organizerRevenueGradient)" />
+        <path d={linePath} fill="none" stroke="#7B61FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((point) => (
+          <g key={point.month}>
+            <circle cx={point.x} cy={point.y} r="3.5" fill="#7B61FF" stroke="#111118" strokeWidth="2" />
+            <text x={point.x} y={height - 12} textAnchor="middle" fill="#8585A0" fontSize="11">
+              {point.month}
+            </text>
+            <title>{`${point.month}: ${formatMoney(point.revenue)}`}</title>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function EditorCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+      <h3 className="mb-4 text-sm font-semibold text-[#F0EDEB]">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function EditorRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs text-[#8585A0]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function TicketNumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <span className="mb-1 block text-xs text-[#8585A0]">{label}</span>
+      <input type="number" min="0" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function TicketTextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <span className="mb-1 block text-xs text-[#8585A0]">{label}</span>
+      <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function TicketStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-xs text-[#8585A0]">{label}</p>
+      <p className="text-sm font-semibold text-[#F0EDEB]">{value}</p>
+    </div>
+  );
+}
+
+function ticketDotColor(index: number) {
+  return ["#F5C842", "#E8315B", "#A020F0", "#6B8CFF", "#2DBE6C", "#26A7DE"][index % 6];
 }
 
 function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
@@ -1064,6 +1930,44 @@ function optionalDateTimeToIso(value: string) {
   return value ? dateTimeToIso(value) : undefined;
 }
 
+function toDateTimeLocal(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function buildMonthlyRevenue(orders: OrganizerOrder[]): MonthlyRevenuePoint[] {
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return {
+      key,
+      month: `T${date.getMonth() + 1}`,
+      revenue: 0,
+    };
+  });
+  const monthByKey = new Map(months.map((month) => [month.key, month]));
+
+  for (const order of orders) {
+    if (order.status !== "CONFIRMED") continue;
+    const date = new Date(order.confirmed_at ?? order.created_at);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const point = monthByKey.get(key);
+    if (point) point.revenue += Number(order.total_amount.amount || 0);
+  }
+
+  return months.map(({ month, revenue }) => ({ month, revenue }));
+}
+
+function compactMoney(value: number) {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `${Math.round(value / 1_000_000)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return String(value);
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(value));
 }
@@ -1073,6 +1977,14 @@ function formatMoney(value: number) {
 }
 
 const inputClass = "min-h-11 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]";
+
+const editorInputClass = "w-full rounded-xl border border-white/[0.08] bg-[#0A0A12] px-3 py-2.5 text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]";
+
+const editorInputStyle = {
+  background: "#0A0A12",
+  borderColor: "rgba(255,255,255,0.08)",
+  color: "#F0EDEB",
+};
 
 const inputStyle = {
   background: "rgba(255,255,255,0.05)",

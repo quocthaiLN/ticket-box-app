@@ -51,13 +51,28 @@ export type OrganizerConcert = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
+  artist_bio?: string;
   status: OrganizerConcertStatus;
   starts_at: string;
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
+  ticket_types: Array<{
+    id: string;
+    name: string;
+    zone_code: string;
+    zone_name: string;
+    price: Money;
+    total_quantity: number;
+    held_quantity: number;
+    sold_quantity: number;
+    available_quantity: number;
+    max_per_user: number;
+    status: string;
+  }>;
 };
 
 export type OrganizerAnalytics = {
