@@ -5,6 +5,8 @@ import { Errors } from "../../shared/http/problem-details.js";
 import { catalogCacheKeys } from "../catalog/catalog.cache.js";
 import {
   parseCreateDeletionRequestBody,
+  parseCreateOrganizerSeatZoneBody,
+  parseCreateOrganizerTicketTypeBody,
   parseCreateOrganizerRequestBody,
   parseListQuery,
   parseUpdateOrganizerConcertBody,
@@ -45,6 +47,25 @@ export class OrganizerController {
     }
   };
 
+  uploadCoverImage = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const upload = await this.service.uploadCoverImage(
+        currentUserId(res),
+        Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        {
+          contentType: req.headers["content-type"],
+          fileName: typeof req.headers["x-file-name"] === "string"
+            ? req.headers["x-file-name"]
+            : undefined,
+        },
+      );
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res.status(201).json(ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
   getRequest = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = await this.service.getRequest(
@@ -76,6 +97,36 @@ export class OrganizerController {
       );
       void invalidateConcertCache(concertId);
       res.json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  createSeatZone = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const concertId = req.params.concert_id;
+      const data = await this.service.createSeatZone(
+        currentUserId(res),
+        concertId,
+        parseCreateOrganizerSeatZoneBody(req.body),
+      );
+      void invalidateConcertCache(concertId);
+      res.status(201).json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  createTicketType = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const concertId = req.params.concert_id;
+      const data = await this.service.createTicketType(
+        currentUserId(res),
+        concertId,
+        parseCreateOrganizerTicketTypeBody(req.body),
+      );
+      void invalidateConcertCache(concertId);
+      res.status(201).json(ok(data, req.requestId));
     } catch (err) {
       next(err);
     }

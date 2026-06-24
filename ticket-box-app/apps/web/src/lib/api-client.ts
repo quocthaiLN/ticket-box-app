@@ -136,6 +136,20 @@ export async function apiPatch<TData>(
   return apiRequest<TData>(path, jsonInit("PATCH", body, init));
 }
 
+export async function apiUploadFile<TData>(
+  path: string,
+  file: File,
+): Promise<TData> {
+  return apiRequest<TData>(path, {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+  });
+}
+
 export async function listConcerts(params: Record<string, string> = {}) {
   const response = await apiGet<ApiCollectionResponse<ConcertSummary>>(
     `/concerts${queryString(params)}`,

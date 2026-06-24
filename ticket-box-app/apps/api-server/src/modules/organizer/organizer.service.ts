@@ -1,4 +1,8 @@
 import { ConcertStatus } from "@ticketbox/database";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
 import {
   OrganizerRepository,
@@ -8,6 +12,8 @@ import type {
   ApprovalStatusValue,
   ConcertStatusValue,
   CreateDeletionRequestInput,
+  CreateOrganizerSeatZoneInput,
+  CreateOrganizerTicketTypeInput,
   CreateOrganizerRequestInput,
   GuestStatusValue,
   ListQuery,
@@ -38,6 +44,43 @@ export class OrganizerService {
     }
 
     return this.repository.createRequest(organizerId, input);
+  }
+
+  async uploadCoverImage(
+    organizerId: string,
+    file: Buffer,
+    input: { contentType?: string; fileName?: string },
+  ) {
+    if (!organizerId) {
+      throw Errors.unauthorized();
+    }
+
+    const extension = extensionForImageType(input.contentType);
+    if (!extension) {
+      throw Errors.fieldValidationError(
+        "file",
+        "Only JPEG, PNG, WebP, or GIF images are supported.",
+      );
+    }
+
+    if (!file.length) {
+      throw Errors.fieldValidationError("file", "Image file is required.");
+    }
+
+    const uploadDir = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../public/uploads/covers",
+    );
+    await mkdir(uploadDir, { recursive: true });
+
+    const safeBaseName = safeFileBaseName(input.fileName ?? "cover");
+    const objectKey = `uploads/covers/${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
+    await writeFile(path.resolve(uploadDir, path.basename(objectKey)), file);
+
+    return {
+      object_key: objectKey,
+      url_path: `/${objectKey}`,
+    };
   }
 
   async getRequest(organizerId: string, requestId: string) {
@@ -81,6 +124,56 @@ export class OrganizerService {
     }
 
     return this.repository.updateDraftConcert(concertId, toConcertUpdateData(input));
+  }
+
+  async createSeatZone(
+    organizerId: string,
+    concertId: string,
+    input: CreateOrganizerSeatZoneInput,
+  ) {
+    const concert = await this.repository.getOwnedConcertForUpdate(organizerId, concertId);
+    if (!concert) {
+      throw Errors.concertNotFound(concertId);
+    }
+
+    if (concert.status !== ConcertStatus.DRAFT) {
+      throw Errors.concertNotEditable(concertId);
+    }
+
+    return this.repository.createSeatZone(concertId, input);
+  }
+
+  async createTicketType(
+    organizerId: string,
+    concertId: string,
+    input: CreateOrganizerTicketTypeInput,
+  ) {
+    const concert = await this.repository.getOwnedConcertForUpdate(organizerId, concertId);
+    if (!concert) {
+      throw Errors.concertNotFound(concertId);
+    }
+
+    if (concert.status !== ConcertStatus.DRAFT) {
+      throw Errors.concertNotEditable(concertId);
+    }
+
+    this.assertTimeRange(input.sale_start_at, input.sale_end_at);
+
+    const usage = await this.repository.getSeatZoneCapacityUsage(
+      organizerId,
+      concertId,
+      input.seat_zone_id,
+    );
+
+    if (!usage) {
+      throw Errors.seatZoneNotFound(input.seat_zone_id);
+    }
+
+    if (usage.configured_quantity + input.total_quantity > usage.capacity) {
+      throw Errors.zoneCapacityExceeded();
+    }
+
+    return this.repository.createTicketType(concertId, input);
   }
 
   async createDeletionRequest(
@@ -196,4 +289,24 @@ function invalidQueryStatus(detail: string) {
     code: "BAD_REQUEST",
     detail,
   });
+}
+
+function extensionForImageType(contentType?: string) {
+  const normalized = contentType?.split(";")[0]?.trim().toLowerCase();
+  const extensions: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+  return normalized ? extensions[normalized] : undefined;
+}
+
+function safeFileBaseName(fileName: string) {
+  const parsed = path.parse(fileName);
+  const base = (parsed.name || "cover")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "cover";
 }

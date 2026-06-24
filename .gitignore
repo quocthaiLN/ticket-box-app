@@ -5,4 +5,5 @@ dist/
 .env.local
 *.log
 ticket-box-app/packages/database/src/generated/prisma/
+ticket-box-app/apps/api-server/public/uploads/
 z-doc-cua-thai

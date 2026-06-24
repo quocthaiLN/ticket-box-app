@@ -20,17 +20,20 @@ import {
   Ticket,
   TrendingUp,
   Trash2,
+  Upload,
   UserCheck,
   Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import type { Venue } from "../../lib/api-client";
 import {
   createOrganizerDeletionRequest,
   createOrganizerRequest,
+  createOrganizerSeatZone,
+  createOrganizerTicketType,
   getOrganizerAnalytics,
   getOrganizerRequest,
   listOrganizerCheckerAccounts,
@@ -40,14 +43,18 @@ import {
   listOrganizerVenues,
   normalizeTicketTypes,
   updateOrganizerConcert,
+  uploadOrganizerCoverImage,
   type ApprovalStatus,
   type CreateOrganizerRequestInput,
+  type CreateOrganizerSeatZoneInput,
+  type CreateOrganizerTicketTypeInput,
   type OrganizerAnalytics,
   type OrganizerCheckerAccount,
   type OrganizerConcert,
   type OrganizerOrder,
   type OrganizerRequestDetail,
   type OrganizerRequestSummary,
+  type OrganizerSeatZone,
 } from "../../services/organizer.service";
 import {
   approvalStatusLabel,
@@ -153,6 +160,32 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
     await reload();
   }
 
+  async function submitSeatZoneCreate(concertId: string, input: CreateOrganizerSeatZoneInput) {
+    setMessage("");
+    try {
+      const zone = await createOrganizerSeatZone(concertId, input);
+      setMessage("Đã lưu zone mới.");
+      await reload();
+      return zone;
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Không thể lưu zone mới.");
+      throw err;
+    }
+  }
+
+  async function submitTicketTypeCreate(concertId: string, input: CreateOrganizerTicketTypeInput) {
+    setMessage("");
+    try {
+      const ticketType = await createOrganizerTicketType(concertId, input);
+      setMessage("Đã lưu loại vé mới.");
+      await reload();
+      return ticketType;
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Không thể lưu loại vé mới.");
+      throw err;
+    }
+  }
+
   async function submitDeletionRequest(concertId: string, reason: string) {
     setMessage("");
     await createOrganizerDeletionRequest(concertId, reason);
@@ -251,6 +284,8 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
                   onEdit={setEditingConcertId}
                   onDelete={setDeletingConcertId}
                   onUpdate={submitConcertUpdate}
+                  onCreateSeatZone={submitSeatZoneCreate}
+                  onCreateTicketType={submitTicketTypeCreate}
                   onDeletionRequest={submitDeletionRequest}
                 />
               )}
@@ -612,6 +647,8 @@ function NewRequestForm({
   onSubmit: (input: CreateOrganizerRequestInput) => Promise<void>;
   onClose: () => void;
 }) {
+  return <TabbedNewRequestForm venues={venues} onSubmit={onSubmit} onClose={onClose} />;
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -706,6 +743,342 @@ function NewRequestForm({
           Hủy
         </button>
       </div>
+      </div>
+    </form>
+  );
+}
+
+function TabbedNewRequestForm({
+  venues,
+  onSubmit,
+  onClose,
+}: {
+  venues: Venue[];
+  onSubmit: (input: CreateOrganizerRequestInput) => Promise<void>;
+  onClose: () => void;
+}) {
+  type DraftRequestZone = {
+    id: string;
+    code: string;
+    name: string;
+    capacity: string;
+  };
+
+  type DraftRequestTicket = {
+    id: string;
+    zoneId: string;
+    name: string;
+    price: string;
+    totalQuantity: string;
+    maxPerUser: string;
+    saleStartAt: string;
+    saleEndAt: string;
+  };
+
+  const nowLocal = toDateTimeLocal(new Date().toISOString());
+  const defaultSaleEnd = toDateTimeLocal(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [activeSection, setActiveSection] = useState<"concert" | "zones" | "tickets">("concert");
+  const [form, setForm] = useState({
+    title: "",
+    artistName: "",
+    venueId: "",
+    pressKitUrl: "",
+    startsAt: "",
+    endsAt: "",
+    plannedPublishAt: "",
+    gateCount: "2",
+    checkerCount: "2",
+    description: "",
+  });
+  const [zones, setZones] = useState<DraftRequestZone[]>([
+    { id: "zone-1", code: "GA", name: "General Admission", capacity: "1000" },
+  ]);
+  const [tickets, setTickets] = useState<DraftRequestTicket[]>([
+    {
+      id: "ticket-1",
+      zoneId: "zone-1",
+      name: "Standard",
+      price: "500000",
+      totalQuantity: "1000",
+      maxPerUser: "4",
+      saleStartAt: nowLocal,
+      saleEndAt: defaultSaleEnd,
+    },
+  ]);
+  const sections = [
+    { id: "concert" as const, label: "Thông tin concert" },
+    { id: "zones" as const, label: "Zone" },
+    { id: "tickets" as const, label: "Loại vé" },
+  ];
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+
+    try {
+      if (!form.title.trim() || !form.artistName.trim() || !form.venueId || !form.startsAt || !form.endsAt) {
+        throw new Error("Vui lòng điền đầy đủ thông tin concert bắt buộc.");
+      }
+      if (zones.length === 0) {
+        throw new Error("Hồ sơ cần ít nhất một zone.");
+      }
+      if (tickets.length === 0) {
+        throw new Error("Hồ sơ cần ít nhất một loại vé.");
+      }
+
+      const ticketTypes = tickets.map((ticket) => {
+        const zone = zones.find((item) => item.id === ticket.zoneId);
+        if (!zone) {
+          throw new Error("Mỗi loại vé cần chọn một zone hợp lệ.");
+        }
+        if (!zone.code.trim() || !zone.name.trim()) {
+          throw new Error("Mỗi zone cần có mã và tên zone.");
+        }
+        if (!ticket.name.trim() || !ticket.saleStartAt || !ticket.saleEndAt) {
+          throw new Error("Mỗi loại vé cần có tên vé, thời gian mở bán và kết thúc bán.");
+        }
+
+        return {
+          zone_code: zone.code.trim().toUpperCase(),
+          zone_name: zone.name.trim(),
+          zone_capacity: Number(zone.capacity),
+          name: ticket.name.trim(),
+          price: { amount: Number(ticket.price), currency: "VND" as const },
+          total_quantity: Number(ticket.totalQuantity),
+          max_per_user: Number(ticket.maxPerUser),
+          sale_start_at: dateTimeToIso(ticket.saleStartAt),
+          sale_end_at: dateTimeToIso(ticket.saleEndAt),
+        };
+      });
+
+      await onSubmit({
+        venue_id: form.venueId,
+        title: form.title.trim(),
+        artist_name: form.artistName.trim(),
+        description: form.description.trim() || undefined,
+        starts_at: dateTimeToIso(form.startsAt),
+        ends_at: dateTimeToIso(form.endsAt),
+        planned_publish_at: optionalDateTimeToIso(form.plannedPublishAt),
+        gate_count: Number(form.gateCount),
+        checker_count: Number(form.checkerCount),
+        press_kit_url: form.pressKitUrl.trim() || undefined,
+        ticket_types: ticketTypes,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể nộp hồ sơ.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function addZone() {
+    const index = zones.length + 1;
+    setZones((current) => [
+      ...current,
+      { id: `zone-${Date.now()}`, code: `ZONE${index}`, name: "", capacity: "100" },
+    ]);
+  }
+
+  function updateZone(id: string, patch: Partial<DraftRequestZone>) {
+    setZones((current) => current.map((zone) => (zone.id === id ? { ...zone, ...patch } : zone)));
+  }
+
+  function removeZone(id: string) {
+    setZones((current) => current.filter((zone) => zone.id !== id));
+    setTickets((current) => current.filter((ticket) => ticket.zoneId !== id));
+  }
+
+  function addTicket() {
+    setTickets((current) => [
+      ...current,
+      {
+        id: `ticket-${Date.now()}`,
+        zoneId: zones[0]?.id ?? "",
+        name: "",
+        price: "0",
+        totalQuantity: "1",
+        maxPerUser: "4",
+        saleStartAt: nowLocal,
+        saleEndAt: form.startsAt || defaultSaleEnd,
+      },
+    ]);
+  }
+
+  function updateTicket(id: string, patch: Partial<DraftRequestTicket>) {
+    setTickets((current) => current.map((ticket) => (ticket.id === id ? { ...ticket, ...patch } : ticket)));
+  }
+
+  function removeTicket(id: string) {
+    setTickets((current) => current.filter((ticket) => ticket.id !== id));
+  }
+
+  return (
+    <form className="mb-6 space-y-5" onSubmit={handleSubmit}>
+      <div className="rounded-2xl border border-[#7B61FF]/30 bg-[#111118] px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold">Nộp hồ sơ tổ chức mới</h2>
+            <p className="mt-1 text-sm text-[#8585A0]">
+              Sau khi duyệt, hệ thống sẽ tạo concert nháp, zone, loại vé, cổng và tài khoản soát vé.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10" aria-label="Đóng biểu mẫu">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {error && <Message text={error} error />}
+
+      <div className="flex flex-wrap gap-1 border-b border-white/[0.08]">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setActiveSection(section.id)}
+            className="whitespace-nowrap px-4 py-2.5 text-sm transition-colors"
+            style={{
+              color: activeSection === section.id ? "#F5C842" : "#8585A0",
+              borderBottom: activeSection === section.id ? "2px solid #F5C842" : "2px solid transparent",
+              marginBottom: "-1px",
+              fontWeight: activeSection === section.id ? 600 : 400,
+            }}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-5xl space-y-5">
+        {activeSection === "concert" && (
+          <EditorCard title="Thông tin concert">
+            <div className="space-y-4">
+              <EditorRow label="Tên concert *">
+                <input className={editorInputClass} style={editorInputStyle} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
+              </EditorRow>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <EditorRow label="Nghệ sĩ / lineup *">
+                  <input className={editorInputClass} style={editorInputStyle} value={form.artistName} onChange={(event) => setForm({ ...form, artistName: event.target.value })} required />
+                </EditorRow>
+                <EditorRow label="Địa điểm *">
+                  <select className={editorInputClass} style={editorInputStyle} value={form.venueId} onChange={(event) => setForm({ ...form, venueId: event.target.value })} required>
+                    <option value="">Chọn địa điểm</option>
+                    {venues.map((venue) => (
+                      <option key={venue.id} value={venue.id}>{venue.name} - {venue.city}</option>
+                    ))}
+                  </select>
+                </EditorRow>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <EditorRow label="Thời gian bắt đầu *">
+                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} required />
+                </EditorRow>
+                <EditorRow label="Thời gian kết thúc *">
+                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} required />
+                </EditorRow>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <EditorRow label="Dự kiến publish">
+                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.plannedPublishAt} onChange={(event) => setForm({ ...form, plannedPublishAt: event.target.value })} />
+                </EditorRow>
+                <EditorRow label="Số cổng check-in *">
+                  <input type="number" min="1" className={editorInputClass} style={editorInputStyle} value={form.gateCount} onChange={(event) => setForm({ ...form, gateCount: event.target.value })} required />
+                </EditorRow>
+                <EditorRow label="Tài khoản soát vé *">
+                  <input type="number" min="1" className={editorInputClass} style={editorInputStyle} value={form.checkerCount} onChange={(event) => setForm({ ...form, checkerCount: event.target.value })} required />
+                </EditorRow>
+              </div>
+              <EditorRow label="URL bộ tư liệu">
+                <input className={editorInputClass} style={editorInputStyle} value={form.pressKitUrl} onChange={(event) => setForm({ ...form, pressKitUrl: event.target.value })} />
+              </EditorRow>
+              <EditorRow label="Mô tả">
+                <textarea className={`${editorInputClass} min-h-24 resize-y`} style={editorInputStyle} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+              </EditorRow>
+            </div>
+          </EditorCard>
+        )}
+
+        {activeSection === "zones" && (
+          <EditorCard title="Cấu hình zone">
+            <div className="space-y-3">
+              {zones.map((zone) => (
+                <div key={zone.id} className="rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[#F5C842]">Zone</span>
+                    <button type="button" onClick={() => removeZone(zone.id)} disabled={zones.length === 1} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B] disabled:cursor-not-allowed disabled:opacity-40">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <TicketTextField label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
+                    <TicketTextField label="Tên zone" value={zone.name} onChange={(value) => updateZone(zone.id, { name: value })} />
+                    <TicketNumberField label="Sức chứa" value={zone.capacity} onChange={(value) => updateZone(zone.id, { capacity: value })} />
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={addZone} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
+                <Plus className="h-4 w-4" />
+                Thêm zone
+              </button>
+            </div>
+          </EditorCard>
+        )}
+
+        {activeSection === "tickets" && (
+          <EditorCard title="Cấu hình loại vé">
+            <div className="space-y-3">
+              {tickets.map((ticket) => (
+                <div key={ticket.id} className="rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[#F5C842]">Loại vé</span>
+                    <button type="button" onClick={() => removeTicket(ticket.id)} disabled={tickets.length === 1} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B] disabled:cursor-not-allowed disabled:opacity-40">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-4">
+                    <label>
+                      <span className="mb-1 block text-xs text-[#8585A0]">Zone</span>
+                      <select className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.zoneId} onChange={(event) => updateTicket(ticket.id, { zoneId: event.target.value })}>
+                        {zones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>{zone.name || zone.code} ({zone.code})</option>
+                        ))}
+                      </select>
+                    </label>
+                    <TicketTextField label="Tên vé" value={ticket.name} onChange={(value) => updateTicket(ticket.id, { name: value })} />
+                    <TicketNumberField label="Giá vé VND" value={ticket.price} onChange={(value) => updateTicket(ticket.id, { price: value })} />
+                    <TicketNumberField label="Số lượng" value={ticket.totalQuantity} onChange={(value) => updateTicket(ticket.id, { totalQuantity: value })} />
+                    <TicketNumberField label="Tối đa mỗi người" value={ticket.maxPerUser} onChange={(value) => updateTicket(ticket.id, { maxPerUser: value })} />
+                    <label>
+                      <span className="mb-1 block text-xs text-[#8585A0]">Mở bán</span>
+                      <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleStartAt} onChange={(event) => updateTicket(ticket.id, { saleStartAt: event.target.value })} />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-xs text-[#8585A0]">Kết thúc bán</span>
+                      <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleEndAt} onChange={(event) => updateTicket(ticket.id, { saleEndAt: event.target.value })} />
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={addTicket} disabled={zones.length === 0} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50">
+                <Plus className="h-4 w-4" />
+                Thêm loại vé
+              </button>
+            </div>
+          </EditorCard>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-[#7B61FF] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(123,97,255,0.3)] disabled:opacity-60">
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Nộp hồ sơ
+        </button>
+        <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
+          Hủy
+        </button>
       </div>
     </form>
   );
@@ -919,6 +1292,8 @@ function ConcertsView({
   onEdit,
   onDelete,
   onUpdate,
+  onCreateSeatZone,
+  onCreateTicketType,
   onDeletionRequest,
 }: {
   venues: Venue[];
@@ -933,6 +1308,8 @@ function ConcertsView({
   onEdit: (value: string | null) => void;
   onDelete: (value: string | null) => void;
   onUpdate: (concertId: string, input: Record<string, string>) => Promise<void>;
+  onCreateSeatZone: (concertId: string, input: CreateOrganizerSeatZoneInput) => Promise<OrganizerSeatZone>;
+  onCreateTicketType: (concertId: string, input: CreateOrganizerTicketTypeInput) => Promise<OrganizerConcert["ticket_types"][number]>;
   onDeletionRequest: (concertId: string, reason: string) => Promise<void>;
 }) {
   const editingConcert = editingId ? concerts.find((concert) => concert.id === editingId) : undefined;
@@ -944,6 +1321,8 @@ function ConcertsView({
         venues={venues}
         onBack={() => onEdit(null)}
         onSave={(input) => onUpdate(editingConcert.id, input)}
+        onCreateSeatZone={(input) => onCreateSeatZone(editingConcert.id, input)}
+        onCreateTicketType={(input) => onCreateTicketType(editingConcert.id, input)}
       />
     );
   }
@@ -1001,12 +1380,29 @@ function ConcertsView({
 
 type EditableTicketType = {
   id: string;
+  seatZoneId: string;
   name: string;
+  description: string;
   price: string;
   totalQuantity: string;
+  maxPerUser: string;
+  saleStartAt: string;
+  saleEndAt: string;
   soldQuantity: string;
   availableQuantity: string;
   isNew: boolean;
+  saving?: boolean;
+};
+
+type EditableZone = {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  capacity: string;
+  sortOrder: string;
+  isNew: boolean;
+  saving?: boolean;
 };
 
 function OrganizerConcertEditor({
@@ -1014,14 +1410,22 @@ function OrganizerConcertEditor({
   venues,
   onBack,
   onSave,
+  onCreateSeatZone,
+  onCreateTicketType,
 }: {
   concert: OrganizerConcert;
   venues: Venue[];
   onBack: () => void;
   onSave: (input: Record<string, string>) => Promise<void>;
+  onCreateSeatZone: (input: CreateOrganizerSeatZoneInput) => Promise<OrganizerSeatZone>;
+  onCreateTicketType: (input: CreateOrganizerTicketTypeInput) => Promise<OrganizerConcert["ticket_types"][number]>;
 }) {
-  const [activeSection, setActiveSection] = useState<"basic" | "tickets">("basic");
+  const [activeSection, setActiveSection] = useState<"basic" | "zones" | "tickets">("basic");
   const [submitting, setSubmitting] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverUploadError, setCoverUploadError] = useState("");
+  const [zoneError, setZoneError] = useState("");
+  const [ticketError, setTicketError] = useState("");
   const [form, setForm] = useState({
     title: concert.title,
     artistName: concert.artist_name,
@@ -1035,16 +1439,41 @@ function OrganizerConcertEditor({
   const [tickets, setTickets] = useState<EditableTicketType[]>(
     (concert.ticket_types ?? []).map((ticket) => ({
       id: ticket.id,
+      seatZoneId: ticket.seat_zone_id,
       name: ticket.name,
+      description: ticket.description ?? "",
       price: String(ticket.price.amount),
       totalQuantity: String(ticket.total_quantity),
+      maxPerUser: String(ticket.max_per_user),
+      saleStartAt: toDateTimeLocal(ticket.sale_start_at),
+      saleEndAt: toDateTimeLocal(ticket.sale_end_at),
       soldQuantity: String(ticket.sold_quantity),
       availableQuantity: String(ticket.available_quantity),
       isNew: false,
     })),
   );
+  const [zones, setZones] = useState<EditableZone[]>(
+    (concert.seat_zones ?? []).map((zone) => ({
+      id: zone.id,
+      code: zone.code,
+      name: zone.name,
+      description: zone.description ?? "",
+      capacity: String(zone.capacity),
+      sortOrder: String(zone.sort_order),
+      isNew: false,
+    })),
+  );
+  const seatZoneOptions = useMemo(() => {
+    return zones
+      .filter((zone) => !zone.isNew)
+      .map((zone) => ({
+        id: zone.id,
+        label: `${zone.name} (${zone.code})`,
+      }));
+  }, [zones]);
   const sections = [
     { id: "basic" as const, label: "Thông tin cơ bản" },
+    { id: "zones" as const, label: "Zone" },
     { id: "tickets" as const, label: "Loại vé" },
   ];
 
@@ -1065,14 +1494,94 @@ function OrganizerConcertEditor({
     }
   }
 
+  async function handleCoverUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setCoverUploadError("");
+    setCoverUploading(true);
+    try {
+      const upload = await uploadOrganizerCoverImage(file);
+      setForm((current) => ({ ...current, coverImageUrl: upload.url }));
+    } catch (err) {
+      setCoverUploadError(err instanceof Error ? err.message : "Không thể upload ảnh bìa.");
+    } finally {
+      setCoverUploading(false);
+    }
+  }
+
+  function addZone() {
+    const nextIndex = zones.length + 1;
+    setZones((current) => [
+      ...current,
+      {
+        id: `new-zone-${Date.now()}`,
+        code: `ZONE${nextIndex}`,
+        name: "",
+        description: "",
+        capacity: "100",
+        sortOrder: String(nextIndex),
+        isNew: true,
+      },
+    ]);
+  }
+
+  function updateZone(id: string, patch: Partial<EditableZone>) {
+    setZones((current) => current.map((zone) => (zone.id === id ? { ...zone, ...patch } : zone)));
+  }
+
+  async function saveZone(zone: EditableZone) {
+    setZoneError("");
+    updateZone(zone.id, { saving: true });
+    try {
+      const saved = await onCreateSeatZone({
+        code: zone.code,
+        name: zone.name,
+        description: zone.description || undefined,
+        capacity: Number(zone.capacity),
+        sort_order: Number(zone.sortOrder || 0),
+      });
+      setZones((current) =>
+        current.map((item) =>
+          item.id === zone.id
+            ? {
+                id: saved.id,
+                code: saved.code,
+                name: saved.name,
+                description: saved.description ?? "",
+                capacity: String(saved.capacity),
+                sortOrder: String(saved.sort_order),
+                isNew: false,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setZoneError(err instanceof Error ? err.message : "Không thể lưu zone mới.");
+    } finally {
+      updateZone(zone.id, { saving: false });
+    }
+  }
+
+  function removeZone(id: string) {
+    setZones((current) => current.filter((zone) => zone.id !== id));
+  }
+
   function addTicketType() {
+    const defaultZoneId = seatZoneOptions[0]?.id ?? "";
     setTickets((current) => [
       ...current,
       {
         id: `new-${Date.now()}`,
+        seatZoneId: defaultZoneId,
         name: "",
+        description: "",
         price: "0",
         totalQuantity: "0",
+        maxPerUser: "4",
+        saleStartAt: toDateTimeLocal(new Date().toISOString()),
+        saleEndAt: form.startsAt,
         soldQuantity: "0",
         availableQuantity: "0",
         isNew: true,
@@ -1082,6 +1591,47 @@ function OrganizerConcertEditor({
 
   function updateTicketType(id: string, patch: Partial<EditableTicketType>) {
     setTickets((current) => current.map((ticket) => (ticket.id === id ? { ...ticket, ...patch } : ticket)));
+  }
+
+  async function saveTicketType(ticket: EditableTicketType) {
+    setTicketError("");
+    updateTicketType(ticket.id, { saving: true });
+    try {
+      const saved = await onCreateTicketType({
+        seat_zone_id: ticket.seatZoneId,
+        name: ticket.name,
+        description: ticket.description || undefined,
+        price: { amount: Number(ticket.price), currency: "VND" },
+        total_quantity: Number(ticket.totalQuantity),
+        max_per_user: Number(ticket.maxPerUser),
+        sale_start_at: dateTimeToIso(ticket.saleStartAt),
+        sale_end_at: dateTimeToIso(ticket.saleEndAt),
+      });
+      setTickets((current) =>
+        current.map((item) =>
+          item.id === ticket.id
+            ? {
+                id: saved.id,
+                seatZoneId: saved.seat_zone_id,
+                name: saved.name,
+                description: saved.description ?? "",
+                price: String(saved.price.amount),
+                totalQuantity: String(saved.total_quantity),
+                maxPerUser: String(saved.max_per_user),
+                saleStartAt: toDateTimeLocal(saved.sale_start_at),
+                saleEndAt: toDateTimeLocal(saved.sale_end_at),
+                soldQuantity: String(saved.sold_quantity),
+                availableQuantity: String(saved.available_quantity),
+                isNew: false,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setTicketError(err instanceof Error ? err.message : "Không thể lưu loại vé mới.");
+    } finally {
+      updateTicketType(ticket.id, { saving: false });
+    }
   }
 
   function removeTicketType(id: string) {
@@ -1101,7 +1651,7 @@ function OrganizerConcertEditor({
         </div>
       </div>
 
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-white/[0.08]">
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-white/[0.08]">
         {sections.map((section) => (
           <button
             key={section.id}
@@ -1120,7 +1670,7 @@ function OrganizerConcertEditor({
         ))}
       </div>
 
-      <div className="max-w-3xl space-y-6">
+      <div className="max-w-5xl space-y-6">
         {activeSection === "basic" && (
           <EditorCard title="Thông tin cơ bản">
             <div className="space-y-4">
@@ -1161,7 +1711,26 @@ function OrganizerConcertEditor({
                 </select>
               </EditorRow>
               <EditorRow label="Ảnh bìa (URL)">
-                <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
+                  <label
+                    className="inline-flex min-h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#7B61FF]/25 bg-[#7B61FF]/10 text-[#B8AAFF] transition-colors hover:bg-[#7B61FF]/15"
+                    title={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
+                    aria-label={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
+                  >
+                    {coverUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      disabled={coverUploading}
+                      onChange={(event) => void handleCoverUpload(event)}
+                    />
+                  </label>
+                </div>
+                {coverUploadError && (
+                  <p className="mt-2 text-xs text-[#E8315B]">{coverUploadError}</p>
+                )}
                 {form.coverImageUrl && (
                   <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
                     <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
@@ -1180,13 +1749,104 @@ function OrganizerConcertEditor({
           </EditorCard>
         )}
 
+        {activeSection === "zones" && (
+          <EditorCard title="Cấu hình zone">
+            {zoneError && (
+              <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
+                {zoneError}
+              </div>
+            )}
+            <div className="space-y-3">
+              {zones.length === 0 && (
+                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
+                  <p className="mb-4 text-sm text-[#8585A0]">Chưa có zone nào</p>
+                  <button type="button" onClick={addZone} className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842]">
+                    <Plus className="h-4 w-4" />
+                    Thêm zone
+                  </button>
+                </div>
+              )}
+
+              {zones.map((zone) => (
+                zone.isNew ? (
+                  <div key={zone.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-[#F5C842]">Zone mới</span>
+                      <button type="button" onClick={() => removeZone(zone.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-4">
+                      <TicketTextField label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
+                      <TicketTextField label="Tên zone" value={zone.name} onChange={(value) => updateZone(zone.id, { name: value })} />
+                      <TicketNumberField label="Sức chứa" value={zone.capacity} onChange={(value) => updateZone(zone.id, { capacity: value })} />
+                      <TicketNumberField label="Thứ tự" value={zone.sortOrder} onChange={(value) => updateZone(zone.id, { sortOrder: value })} />
+                      <label className="lg:col-span-4">
+                        <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
+                        <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={zone.description} onChange={(event) => updateZone(zone.id, { description: event.target.value })} />
+                      </label>
+                      <div className="flex justify-end lg:col-span-4">
+                        <button
+                          type="button"
+                          disabled={zone.saving}
+                          onClick={() => void saveZone(zone)}
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2 text-sm font-semibold text-[#0D0D14] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {zone.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          Lưu zone
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={zone.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
+                          <h4 className="truncate text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
+                        </div>
+                        {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
+                      </div>
+                      <div className="grid min-w-[220px] grid-cols-2 gap-3">
+                        <TicketStat label="Sức chứa" value={Number(zone.capacity || 0).toLocaleString("vi-VN")} />
+                        <TicketStat label="Thứ tự" value={String(zone.sortOrder || 0)} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              ))}
+
+              {zones.length > 0 && (
+                <button type="button" onClick={addZone} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
+                  <Plus className="h-4 w-4" />
+                  Thêm zone
+                </button>
+              )}
+            </div>
+          </EditorCard>
+        )}
+
         {activeSection === "tickets" && (
           <EditorCard title="Cấu hình loại vé">
+            {ticketError && (
+              <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
+                {ticketError}
+              </div>
+            )}
             {tickets.length === 0 ? (
               <div className="py-8 text-center">
                 <Ticket className="mx-auto mb-2 h-8 w-8 text-[#8585A0]" />
                 <p className="mb-4 text-sm text-[#8585A0]">Chưa có loại vé nào</p>
-                <button type="button" onClick={addTicketType} className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842]">
+                {seatZoneOptions.length === 0 && (
+                  <p className="mx-auto mb-4 max-w-md text-xs text-[#8585A0]">Tạo ít nhất một zone trước khi thêm loại vé.</p>
+                )}
+                <button
+                  type="button"
+                  disabled={seatZoneOptions.length === 0}
+                  onClick={addTicketType}
+                  className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <Plus className="h-4 w-4" />
                   Thêm loại vé
                 </button>
@@ -1202,10 +1862,47 @@ function OrganizerConcertEditor({
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid gap-3 lg:grid-cols-4">
+                        <label>
+                          <span className="mb-1 block text-xs text-[#8585A0]">Khu vực</span>
+                          <select
+                            className={`${editorInputClass} min-h-9`}
+                            style={editorInputStyle}
+                            value={ticket.seatZoneId}
+                            onChange={(event) => updateTicketType(ticket.id, { seatZoneId: event.target.value })}
+                          >
+                            {seatZoneOptions.map((zone) => (
+                              <option key={zone.id} value={zone.id}>{zone.label}</option>
+                            ))}
+                          </select>
+                        </label>
                         <TicketTextField label="Tên loại vé" value={ticket.name} onChange={(value) => updateTicketType(ticket.id, { name: value })} />
                         <TicketNumberField label="Giá" value={ticket.price} onChange={(value) => updateTicketType(ticket.id, { price: value })} />
                         <TicketNumberField label="Tổng số lượng" value={ticket.totalQuantity} onChange={(value) => updateTicketType(ticket.id, { totalQuantity: value })} />
+                        <TicketNumberField label="Tối đa / người" value={ticket.maxPerUser} onChange={(value) => updateTicketType(ticket.id, { maxPerUser: value })} />
+                        <label>
+                          <span className="mb-1 block text-xs text-[#8585A0]">Mở bán</span>
+                          <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleStartAt} onChange={(event) => updateTicketType(ticket.id, { saleStartAt: event.target.value })} />
+                        </label>
+                        <label>
+                          <span className="mb-1 block text-xs text-[#8585A0]">Đóng bán</span>
+                          <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleEndAt} onChange={(event) => updateTicketType(ticket.id, { saleEndAt: event.target.value })} />
+                        </label>
+                        <label className="lg:col-span-4">
+                          <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
+                          <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.description} onChange={(event) => updateTicketType(ticket.id, { description: event.target.value })} />
+                        </label>
+                        <div className="flex justify-end lg:col-span-4">
+                          <button
+                            type="button"
+                            disabled={ticket.saving || !ticket.seatZoneId}
+                            onClick={() => void saveTicketType(ticket)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2 text-sm font-semibold text-[#0D0D14] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {ticket.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            Lưu loại vé
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1233,7 +1930,12 @@ function OrganizerConcertEditor({
                     </div>
                   )
                 ))}
-                <button type="button" onClick={addTicketType} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
+                <button
+                  type="button"
+                  disabled={seatZoneOptions.length === 0}
+                  onClick={addTicketType}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <Plus className="h-4 w-4" />
                   Thêm loại vé
                 </button>
@@ -1567,15 +2269,26 @@ function Header({ view, onNewRequest }: { view: OrganizerView; onNewRequest: () 
           {isDashboard ? "Quản lý sự kiện và hồ sơ BTC của bạn" : isRequests ? "Danh sách hồ sơ xin tổ chức concert bạn đã nộp" : content[1]}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onNewRequest}
-        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#7B61FF]/30 transition-transform hover:scale-105"
-        style={{ background: isDashboard || isRequests ? "linear-gradient(135deg, #7B61FF, #5B41CF)" : "#E8315B" }}
-      >
-        {isDashboard ? <FileText className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-        {isDashboard ? "Tạo hồ sơ mới" : isRequests ? "Nộp hồ sơ mới" : "Hồ sơ mới"}
-      </button>
+      {isRequests ? (
+        <button
+          type="button"
+          onClick={onNewRequest}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#7B61FF]/30 transition-transform hover:scale-105"
+          style={{ background: "linear-gradient(135deg, #7B61FF, #5B41CF)" }}
+        >
+          <Plus className="h-4 w-4" />
+          Nộp hồ sơ mới
+        </button>
+      ) : (
+        <Link
+          to="/organizer/requests/new"
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#7B61FF]/30 transition-transform hover:scale-105"
+          style={{ background: "linear-gradient(135deg, #7B61FF, #5B41CF)" }}
+        >
+          <Plus className="h-4 w-4" />
+          Nộp hồ sơ mới
+        </Link>
+      )}
     </div>
   );
 }

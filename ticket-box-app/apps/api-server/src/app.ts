@@ -1,6 +1,8 @@
 import cors from "cors";
 import express from "express";
 import cookieParser from "cookie-parser";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { authRouter } from "./modules/auth/auth.router.js";
 import { catalogRouter } from "./modules/catalog/catalog.router.js";
 import { checkinRouter } from "./modules/checkin/checkin.router.js";
@@ -24,6 +26,7 @@ import helmet from "helmet";
 
 export function createApp() {
   const app = express();
+  const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 
   app.use(
     cors({
@@ -37,6 +40,7 @@ export function createApp() {
       },
     }),
   );
+  app.use("/uploads", express.static(path.join(publicDir, "uploads")));
   app.use(express.json());
   app.use(cookieParser());
   app.use(requestIdMiddleware);
