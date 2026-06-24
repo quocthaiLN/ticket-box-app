@@ -243,6 +243,46 @@ export function AudienceHomePage() {
           </div>
         </div>
       </section>
+
+      <section
+        className="relative overflow-hidden py-16"
+        style={{ background: "linear-gradient(135deg, #1A0A14 0%, #0A0A1A 100%)" }}
+      >
+        <div
+          className="absolute inset-0 opacity-20"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 50%, rgba(232,49,91,0.5) 0%, transparent 60%), radial-gradient(circle at 70% 50%, rgba(123,97,255,0.4) 0%, transparent 60%)",
+          }}
+        />
+        <AnimatedSection direction="none">
+          <div className="relative z-10 mx-auto max-w-2xl px-4 text-center">
+            <h2
+              className="mb-3 text-[#F0EDEB]"
+              style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", fontWeight: 700 }}
+            >
+              Đừng bỏ lỡ sự kiện yêu thích
+            </h2>
+            <p className="mb-6 text-sm text-[#8585A0]">
+              Đăng ký ngay để nhận thông báo mở bán vé sớm nhất và những ưu đãi độc quyền từ TicketBox.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link
+                to="/register"
+                className="rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/30 transition-transform hover:scale-105"
+              >
+                Tạo tài khoản miễn phí
+              </Link>
+              <Link
+                to="/events"
+                className="rounded-xl border border-white/15 bg-white/[0.07] px-6 py-3 text-sm font-medium text-[#F0EDEB] transition-colors hover:bg-white/10"
+              >
+                Khám phá sự kiện
+              </Link>
+            </div>
+          </div>
+        </AnimatedSection>
+      </section>
     </div>
   );
 }
