@@ -25,6 +25,9 @@ type SetupScreenProps = {
   onConfigChange: (newConfig: any) => void;
   forceOffline: boolean;
   onForceOfflineChange: (val: boolean) => void;
+  checkerInfo: { email: string; fullName: string } | null;
+  onLogout: () => void;
+  onProceed: () => void;
 };
 
 export function SetupScreen({
@@ -32,6 +35,9 @@ export function SetupScreen({
   onConfigChange,
   forceOffline,
   onForceOfflineChange,
+  checkerInfo,
+  onLogout,
+  onProceed,
 }: SetupScreenProps) {
   const [loading, setLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -144,6 +150,14 @@ export function SetupScreen({
     }
   }
 
+  function handleProceed() {
+    if (!config.concertId || !config.gateId || !config.deviceId) {
+      Alert.alert('Cảnh báo', 'Vui lòng thiết lập Concert ID, Gate ID và Device ID trước khi bắt đầu soát vé.');
+      return;
+    }
+    onProceed();
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.kicker}>
@@ -153,6 +167,18 @@ export function SetupScreen({
       <Text style={styles.subtitle}>
         Nhập cấu hình thiết bị và tải trước dữ liệu soát vé offline.
       </Text>
+
+      {checkerInfo && (
+        <View style={styles.checkerCard}>
+          <View style={styles.checkerInfoCol}>
+            <Text style={styles.checkerName}>👤 {checkerInfo.fullName}</Text>
+            <Text style={styles.checkerEmail}>✉️ {checkerInfo.email}</Text>
+          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+            <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.form}>
         <View style={styles.field}>
@@ -171,14 +197,12 @@ export function SetupScreen({
         <View style={styles.field}>
           <Text style={styles.label}>Bearer Token</Text>
           <TextInput
-            style={styles.input}
-            value={config.token}
-            onChangeText={(text) => updateField('token', text)}
-            placeholder="Nhập mã đăng nhập Checker"
+            style={[styles.input, styles.inputDisabled]}
+            value={config.token ? '••••••••••••••••' : ''}
+            editable={false}
+            placeholder="Chưa đăng nhập"
             placeholderTextColor="#8585a0"
             secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
           />
         </View>
 
@@ -263,6 +287,14 @@ export function SetupScreen({
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Proceed to check-in screen button */}
+        <TouchableOpacity
+          style={styles.proceedButton}
+          onPress={handleProceed}
+        >
+          <Text style={styles.proceedButtonText}>⚡ Bắt đầu soát vé</Text>
+        </TouchableOpacity>
       </View>
 
       {stats && (
@@ -381,6 +413,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
+  proceedButton: {
+    backgroundColor: '#6045e2',
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    shadowColor: '#6045e2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  proceedButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   statsCard: {
     marginTop: 24,
     padding: 16,
@@ -408,5 +458,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#2f80ed',
+  },
+  checkerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#17191f',
+    borderWidth: 1,
+    borderColor: '#343a46',
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  checkerInfoCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  checkerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#f7f7f2',
+  },
+  checkerEmail: {
+    fontSize: 12,
+    color: '#8585a0',
+    marginTop: 2,
+  },
+  logoutButton: {
+    backgroundColor: '#2b191a',
+    borderWidth: 1,
+    borderColor: '#d64545',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  logoutButtonText: {
+    color: '#d64545',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inputDisabled: {
+    backgroundColor: '#121317',
+    color: '#8585a0',
+    borderColor: '#22252d',
   },
 });

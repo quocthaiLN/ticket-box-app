@@ -1,4 +1,9 @@
-export const DEFAULT_API_BASE_URL = 'http://10.0.2.2:3000/v1'; // Default for Android emulator. Use computer IP for real device.
+import { Platform } from 'react-native';
+
+export const DEFAULT_API_BASE_URL =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:3000/v1'
+    : 'http://localhost:3000/v1'; // Default for iOS and Web (browser)
 
 export type PreloadResponse = {
   snapshot_id: string;

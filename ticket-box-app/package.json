@@ -13,6 +13,7 @@
     "build": "npm run build:redis && npm run build:database && npm run build:queue && npm run build:storage && npm run build:api && npm run build:web && npm run build:worker",
     "dev:api": "npm run dev -w @ticketbox/api-server",
     "dev:web": "npm run dev -w @ticketbox/web",
+    "dev:mobile": "npm run start -w mobile-checker",
     "dev:worker": "npm run dev -w @ticketbox/worker-server",
     "build:api": "npm run build -w @ticketbox/api-server",
     "build:web": "npm run build -w @ticketbox/web",
@@ -31,6 +32,13 @@
     "@types/node": "^25.9.1"
   },
   "dependencies": {
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "expo": "54.0.35",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

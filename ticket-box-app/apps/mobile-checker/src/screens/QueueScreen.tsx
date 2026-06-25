@@ -3,13 +3,13 @@ import {
   StyleSheet,
   Text,
   View,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { getDatabase } from '../db/database';
-import { getQueueItems, clearQueue, clearSyncedItems } from '../db/queries';
+import { getQueueItems } from '../db/queries';
 import { executeQueueSync, SyncConfig } from '../services/sync';
 
 type QueueScreenProps = {
@@ -35,10 +35,10 @@ export function QueueScreen({ config }: QueueScreenProps) {
   }
 
   const metrics = React.useMemo(() => {
-    const pending = items.filter((i) => i.status === 'pending' || i.status === 'failed' || i.status === 'SUCCESS').length;
+    const pending = items.filter((i) => i.status === 'pending' || i.status === 'failed' || i.status === 'SUCCESS' || i.status === 'syncing').length;
     const synced = items.filter((i) => i.status === 'synced').length;
-    const conflicts = items.filter((i) => i.status === 'conflict').length;
-    return { pending, synced, conflicts };
+    const total = items.length;
+    return { pending, synced, total };
   }, [items]);
 
   async function handleSync() {
@@ -60,282 +60,213 @@ export function QueueScreen({ config }: QueueScreenProps) {
     }
   }
 
-  async function handleClearSynced() {
-    Alert.alert(
-      'Xác nhận',
-      'Bạn có muốn xóa toàn bộ các vé đã đồng bộ thành công khỏi danh sách?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: async () => {
-            const db = await getDatabase();
-            await clearSyncedItems(db);
-            await loadQueue();
-          },
-        },
-      ]
-    );
-  }
-
-  async function handleClearAll() {
-    Alert.alert(
-      'Cảnh báo',
-      'Hành động này sẽ XÓA TOÀN BỘ lịch sử quét trong hàng đợi (kể cả chưa đồng bộ). Bạn có chắc chắn?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa Sạch',
-          style: 'destructive',
-          onPress: async () => {
-            const db = await getDatabase();
-            await clearQueue(db);
-            await loadQueue();
-          },
-        },
-      ]
-    );
-  }
-
-  function getStatusLabel(status: string) {
-    if (status === 'SUCCESS' || status === 'pending') return 'Chờ Sync';
-    if (status === 'synced') return 'Đồng bộ';
-    if (status === 'conflict') return 'Trùng/Lỗi Cổng';
-    return 'Thất bại';
-  }
-
-  function getStatusColor(status: string) {
-    if (status === 'SUCCESS' || status === 'pending') return '#fef0c7';
-    if (status === 'synced') return '#d1fadf';
-    if (status === 'conflict') return '#fdecc8';
-    return '#fee4e2';
-  }
-
-  function getStatusTextColor(status: string) {
-    if (status === 'SUCCESS' || status === 'pending') return '#93370d';
-    if (status === 'synced') return '#067647';
-    if (status === 'conflict') return '#92400e';
-    return '#b42318';
-  }
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Hàng đợi Offline</Text>
-      
-      {/* Metrics Banner */}
-      <View style={styles.metricsContainer}>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{metrics.pending}</Text>
-          <Text style={styles.metricLabel}>Chờ sync</Text>
+    <ScrollView contentContainerStyle={styles.scrollContainer} style={styles.container}>
+      {/* Sync Status Card */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Trạng thái đồng bộ</Text>
+          <View style={styles.onlineBadge}>
+            <Text style={styles.onlineBadgeText}>📶 Online</Text>
+          </View>
         </View>
-        <View style={styles.metricBox}>
-          <Text style={[styles.metricValue, { color: '#2dbe6c' }]}>{metrics.synced}</Text>
-          <Text style={styles.metricLabel}>Đã sync</Text>
-        </View>
-        <View style={styles.metricBox}>
-          <Text style={[styles.metricValue, { color: '#f5c842' }]}>{metrics.conflicts}</Text>
-          <Text style={styles.metricLabel}>Xung đột</Text>
-        </View>
-      </View>
 
-      {/* Action buttons */}
-      <View style={styles.actionRow}>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: '#1f9d55' }]}>{metrics.synced}</Text>
+            <Text style={styles.statLabel}>Đã sync</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: '#d98b00' }]}>{metrics.pending}</Text>
+            <Text style={styles.statLabel}>Chờ sync</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: '#6045e2' }]}>{metrics.total}</Text>
+            <Text style={styles.statLabel}>Tổng scan</Text>
+          </View>
+        </View>
+
+        {/* Sync Button */}
         <TouchableOpacity
-          style={[styles.btn, styles.btnPrimary, loading && styles.btnDisabled]}
+          style={[styles.syncBtn, loading && styles.syncBtnDisabled]}
           onPress={handleSync}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#0d0d15" size="small" />
+            <ActivityIndicator color="#ffffff" size="small" />
           ) : (
-            <Text style={styles.btnTextPrimary}>Đồng bộ ngay</Text>
+            <Text style={styles.syncBtnText}>☁️   Đồng bộ ngay</Text>
           )}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={handleClearSynced} disabled={loading}>
-          <Text style={styles.btnText}>Dọn sạch</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={handleClearAll} disabled={loading}>
-          <Text style={[styles.btnText, { color: '#e8315b' }]}>Xóa hết</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Queue List */}
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.client_item_id}
-        renderItem={({ item }) => (
-          <View style={styles.itemCard}>
-            <View style={styles.itemRow}>
-              <View>
-                <Text style={styles.itemType}>{item.type}</Text>
-                <Text style={styles.itemToken} numberOfLines={1} ellipsizeMode="middle">
-                  {item.qr_token || `Guest: ${item.guest_id || item.phone}`}
-                </Text>
-                <Text style={styles.itemTime}>{new Date(item.scanned_at).toLocaleString('vi-VN')}</Text>
-              </View>
-              <View
-                style={[
-                  styles.statusChip,
-                  { backgroundColor: getStatusColor(item.status) },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: getStatusTextColor(item.status) },
-                  ]}
-                >
-                  {getStatusLabel(item.status)}
-                </Text>
-              </View>
+      {/* Sync Guide Card */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>ℹ️   Quy trình offline sync</Text>
+        </View>
+
+        {/* Workflow steps */}
+        <View style={styles.workflowContainer}>
+          <View style={styles.workflowStep}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>1</Text>
             </View>
-            {item.message && <Text style={styles.itemMsg}>{item.message}</Text>}
+            <Text style={styles.stepText}>
+              Khi offline, scan được lưu vào SQLite local
+            </Text>
           </View>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Hàng đợi rỗng. Không có lượt quét offline.</Text>
+
+          <View style={styles.workflowStep}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>2</Text>
+            </View>
+            <Text style={styles.stepText}>
+              Khi có mạng, tạo batch token idempotent
+            </Text>
           </View>
-        }
-        contentContainerStyle={styles.listContainer}
-        refreshing={loading}
-        onRefresh={loadQueue}
-      />
-    </View>
+
+          <View style={styles.workflowStep}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>3</Text>
+            </View>
+            <Text style={styles.stepText}>
+              Server validate từng item: zone, gate, conflict
+            </Text>
+          </View>
+
+          <View style={styles.workflowStep}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>4</Text>
+            </View>
+            <Text style={styles.stepText}>
+              Kết quả trả về: accepted / conflict count
+            </Text>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#101114',
-    padding: 24,
-    paddingBottom: 0,
+    backgroundColor: '#0a0b0d',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#f7f7f2',
-    marginBottom: 16,
+  scrollContainer: {
+    padding: 20,
+    gap: 20,
+    paddingBottom: 40,
   },
-  metricsContainer: {
-    flexDirection: 'row',
+  card: {
+    backgroundColor: '#16181d',
     borderWidth: 1,
-    borderColor: '#343a46',
-    borderRadius: 8,
-    backgroundColor: '#191b20',
-    marginBottom: 16,
-    paddingVertical: 12,
+    borderColor: '#2c2f3a',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  metricBox: {
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  onlineBadge: {
+    backgroundColor: '#0f2e22',
+    borderWidth: 1,
+    borderColor: '#1f9d55',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  onlineBadgeText: {
+    color: '#1f9d55',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#2c2f3a',
+    borderRadius: 12,
+    backgroundColor: '#111318',
+    paddingVertical: 16,
+    marginBottom: 20,
+  },
+  statBox: {
     flex: 1,
     alignItems: 'center',
   },
-  metricValue: {
-    fontSize: 20,
+  statValue: {
+    fontSize: 24,
     fontWeight: '800',
-    color: '#f7f7f2',
   },
-  metricLabel: {
+  statLabel: {
     fontSize: 12,
-    color: '#aeb7c7',
+    color: '#828599',
     marginTop: 4,
+    fontWeight: '600',
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  btn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
+  syncBtn: {
+    backgroundColor: '#1c1e24',
     borderWidth: 1,
-    borderColor: '#3c4350',
-    backgroundColor: '#22252d',
+    borderColor: '#2c2f3a',
+    borderRadius: 10,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  syncBtnDisabled: {
+    opacity: 0.6,
+  },
+  syncBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  workflowContainer: {
+    gap: 16,
+  },
+  workflowStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#35258c',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnPrimary: {
-    flex: 2,
-    backgroundColor: '#2f80ed',
-    borderColor: '#2f80ed',
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  btnTextPrimary: {
-    color: '#0d0d15',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  btnText: {
-    color: '#f7f7f2',
-    fontWeight: '800',
+  stepBadgeText: {
+    color: '#a59eff',
     fontSize: 13,
-  },
-  listContainer: {
-    paddingBottom: 24,
-  },
-  itemCard: {
-    borderWidth: 1,
-    borderColor: '#303642',
-    borderRadius: 8,
-    backgroundColor: '#111318',
-    padding: 12,
-    marginBottom: 8,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemType: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#8ed1fc',
-    textTransform: 'uppercase',
-  },
-  itemToken: {
-    fontSize: 14,
-    color: '#f7f7f2',
-    marginTop: 4,
-    maxWidth: 180,
-  },
-  itemTime: {
-    fontSize: 11,
-    color: '#aeb7c7',
-    marginTop: 4,
-  },
-  statusChip: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  statusText: {
-    fontSize: 11,
     fontWeight: '800',
   },
-  itemMsg: {
-    fontSize: 12,
+  stepText: {
+    flex: 1,
     color: '#aeb7c7',
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#242a34',
-    paddingTop: 8,
-  },
-  emptyContainer: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#3c4350',
-    borderRadius: 8,
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#aeb7c7',
-    fontSize: 14,
-    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });
