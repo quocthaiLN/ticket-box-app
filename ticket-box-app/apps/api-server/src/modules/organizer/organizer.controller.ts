@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import { createPressKitUploadUrl } from "@ticketbox/storage";
 import { collection, ok } from "../../shared/http/response.js";
 import { Errors } from "../../shared/http/problem-details.js";
 import { catalogCacheKeys } from "../catalog/catalog.cache.js";
@@ -40,6 +42,17 @@ export class OrganizerController {
         parseCreateOrganizerRequestBody(req.body),
       );
       res.status(201).json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  // Cấp signed upload URL để BTC đẩy file PDF press kit thẳng lên Supabase.
+  createPressKitUpload = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      currentUserId(res); // chỉ cần đảm bảo đã đăng nhập; guard ORGANIZER ở router
+      const data = await createPressKitUploadUrl(`${randomUUID()}.pdf`);
+      res.json(ok(data, req.requestId));
     } catch (err) {
       next(err);
     }

@@ -12,6 +12,7 @@ organizerRouter.use("/organizer", ...organizerOnly);
 
 organizerRouter.get("/organizer/venues", controller.listVenues);
 organizerRouter.get("/organizer/requests", controller.listRequests);
+organizerRouter.post("/organizer/press-kits/upload-url", controller.createPressKitUpload);
 organizerRouter.post("/organizer/requests", controller.createRequest);
 organizerRouter.get("/organizer/requests/:request_id", controller.getRequest);
 

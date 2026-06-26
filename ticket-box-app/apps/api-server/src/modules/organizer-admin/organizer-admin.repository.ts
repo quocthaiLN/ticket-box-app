@@ -37,6 +37,8 @@ export type AdminRequestDetailDto = AdminRequestSummaryDto & {
   description?: string;
   planned_publish_at?: string;
   press_kit_url?: string;
+  artist_bio?: string | null;
+  bio_status?: string | null;
   ticket_types: unknown;
   review_note?: string;
   reviewed_by?: string | null;
@@ -150,12 +152,19 @@ export class OrganizerAdminRepository {
           slug: input.slug,
           description: request.description ?? undefined,
           artistName: request.artistName,
+          artistBio: request.artistBio ?? undefined, // mang bio AI (sinh từ press kit) vào concert
           startsAt: request.startsAt,
           endsAt: request.endsAt,
           plannedPublishAt: request.plannedPublishAt ?? undefined,
           status: ConcertStatus.DRAFT,
         },
         select: { id: true, title: true, slug: true, status: true },
+      });
+
+      // Liên kết các bio job của hồ sơ sang concert vừa tạo (giữ vết xử lý/audit).
+      await tx.artistBioJob.updateMany({
+        where: { organizerRequestId: request.id },
+        data: { concertId: concert.id },
       });
 
       const zoneIdByCode = new Map<string, string>();
@@ -470,6 +479,8 @@ function mapRequestDetail(
     description: request.description ?? undefined,
     planned_publish_at: request.plannedPublishAt?.toISOString(),
     press_kit_url: request.pressKitUrl ?? undefined,
+    artist_bio: request.artistBio ?? null,
+    bio_status: request.bioStatus ?? null,
     ticket_types: request.ticketTypes,
     review_note: request.reviewNote ?? undefined,
     reviewed_by: request.reviewedById,

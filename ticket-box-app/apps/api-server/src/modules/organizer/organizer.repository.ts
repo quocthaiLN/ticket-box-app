@@ -1,4 +1,5 @@
 import { ApprovalStatus, ConcertStatus, GuestStatus, OrderStatus, Prisma, prisma } from "@ticketbox/database";
+import { enqueueAiBio } from "@ticketbox/queue";
 import type {
   CreateOrganizerRequestInput,
   ListQuery,
@@ -209,7 +210,42 @@ export class OrganizerRepository {
       },
     });
 
+    // Có press kit → tự động kích hoạt sinh Artist Bio bằng AI (không chặn việc nộp hồ sơ).
+    if (input.press_kit_url) {
+      await this.kickoffArtistBio(request.id, organizerId, input.press_kit_url, input.artist_name);
+    }
+
     return mapRequestSummary(request);
+  }
+
+  // Tạo bio job PENDING + enqueue. Lỗi enqueue chỉ đánh dấu FAILED, KHÔNG ném ra ngoài.
+  private async kickoffArtistBio(requestId: string, organizerId: string, pressKitUrl: string, artistName: string) {
+    const bioJob = await prisma.artistBioJob.create({
+      data: {
+        organizerRequestId: requestId,
+        requestedById: organizerId,
+        sourceFileUrl: pressKitUrl,
+        status: "PENDING",
+      },
+    });
+    await prisma.organizerRequest.update({
+      where: { id: requestId },
+      data: { bioStatus: "PENDING" },
+    });
+
+    try {
+      await enqueueAiBio({ job_id: bioJob.id, organizer_request_id: requestId, artist_name: artistName });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.artistBioJob.update({
+        where: { id: bioJob.id },
+        data: { status: "FAILED", errorMessage: `Enqueue failed: ${message}` },
+      });
+      await prisma.organizerRequest.update({
+        where: { id: requestId },
+        data: { bioStatus: "FAILED" },
+      });
+    }
   }
 
   async getRequest(organizerId: string, requestId: string): Promise<OrganizerRequestDetailDto | null> {

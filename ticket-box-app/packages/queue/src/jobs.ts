@@ -40,9 +40,11 @@ export type NotificationJobData = {
 export type AiBioJobData = {
   /** ID row trong bảng artist_bio_jobs */
   job_id: string;
-  concert_id: string;
+  /** Một trong hai: concert_id (luồng cũ) HOẶC organizer_request_id (luồng nộp hồ sơ) */
+  concert_id?: string;
+  organizer_request_id?: string;
   artist_name: string;
-  /** Raw text/bio để AI tóm tắt (optional, có thể null nếu chỉ dùng artist_name) */
+  /** Raw text/bio để AI tóm tắt (optional; nếu có thì bỏ qua bước tải/parse file) */
   source_text?: string;
 };
 
