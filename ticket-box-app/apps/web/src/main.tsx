@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
-import { AdminCatalogPage } from "./routes/admin/AdminCatalogPage";
+import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
 import { AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
@@ -60,16 +60,16 @@ const router = createBrowserRouter([
         element: <AdminHomePage />
       },
       {
-        path: "admin/catalog",
-        element: <AdminCatalogPage />
-      },
-      {
         path: "admin/organizer-requests",
         element: <AdminOrganizerRequestsPage />
       },
       {
         path: "admin/deletion-requests",
         element: <AdminDeletionRequestsPage />
+      },
+      {
+        path: "admin/accounts",
+        element: <AdminAccountsPage />
       },
       {
         path: "organizer",

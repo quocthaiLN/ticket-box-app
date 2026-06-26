@@ -21,9 +21,19 @@ export type Page<T> = {
 export type AdminRequestSummaryDto = {
   id: string;
   organizer_id: string;
+  organizer?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
   title: string;
   artist_name: string;
   venue_id: string;
+  venue?: {
+    id: string;
+    name: string;
+    city: string;
+  };
   starts_at: string;
   ends_at: string;
   gate_count: number;
@@ -47,7 +57,17 @@ export type AdminRequestDetailDto = AdminRequestSummaryDto & {
 export type AdminDeletionRequestDto = {
   id: string;
   concert_id: string;
+  concert?: {
+    id: string;
+    title: string;
+    cover_image_url?: string;
+  };
   organizer_id: string;
+  organizer?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
   reason?: string;
   status: string;
   review_note?: string;
@@ -104,6 +124,10 @@ export class OrganizerAdminRepository {
   async listRequests(query: AdminListQuery): Promise<Page<AdminRequestSummaryDto>> {
     const requests = await prisma.organizerRequest.findMany({
       where: query.status ? { status: query.status as ApprovalStatus } : {},
+      include: {
+        venue: { select: { id: true, name: true, city: true } },
+        organizer: { select: { id: true, fullName: true, email: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: query.limit + 1,
     });
@@ -114,6 +138,10 @@ export class OrganizerAdminRepository {
   async getRequestDetail(requestId: string): Promise<AdminRequestDetailDto | null> {
     const request = await prisma.organizerRequest.findUnique({
       where: { id: requestId },
+      include: {
+        venue: { select: { id: true, name: true, city: true } },
+        organizer: { select: { id: true, fullName: true, email: true } },
+      },
     });
 
     return request ? mapRequestDetail(request) : null;
@@ -307,6 +335,10 @@ export class OrganizerAdminRepository {
         ...(query.status ? { status: query.status as ApprovalStatus } : {}),
         ...(query.concert_id ? { concertId: query.concert_id } : {}),
       },
+      include: {
+        concert: { select: { id: true, title: true, coverImageUrl: true } },
+        organizer: { select: { id: true, fullName: true, email: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: query.limit + 1,
     });
@@ -444,14 +476,31 @@ function page<T extends { id: string }>(items: T[], limit: number): Page<T> {
 }
 
 function mapRequestSummary(
-  request: Prisma.OrganizerRequestGetPayload<Record<string, never>>,
+  request: Prisma.OrganizerRequestGetPayload<Record<string, never>> & {
+    venue?: { id: string; name: string; city: string };
+    organizer?: { id: string; fullName: string; email: string };
+  },
 ): AdminRequestSummaryDto {
   return {
     id: request.id,
     organizer_id: request.organizerId,
+    organizer: request.organizer
+      ? {
+          id: request.organizer.id,
+          full_name: request.organizer.fullName,
+          email: request.organizer.email,
+        }
+      : undefined,
     title: request.title,
     artist_name: request.artistName,
     venue_id: request.venueId,
+    venue: "venue" in request && request.venue
+      ? {
+          id: request.venue.id,
+          name: request.venue.name,
+          city: request.venue.city,
+        }
+      : undefined,
     starts_at: request.startsAt.toISOString(),
     ends_at: request.endsAt.toISOString(),
     gate_count: request.gateCount,
@@ -463,7 +512,10 @@ function mapRequestSummary(
 }
 
 function mapRequestDetail(
-  request: Prisma.OrganizerRequestGetPayload<Record<string, never>>,
+  request: Prisma.OrganizerRequestGetPayload<Record<string, never>> & {
+    venue?: { id: string; name: string; city: string };
+    organizer?: { id: string; fullName: string; email: string };
+  },
 ): AdminRequestDetailDto {
   return {
     ...mapRequestSummary(request),
@@ -479,12 +531,29 @@ function mapRequestDetail(
 }
 
 function mapDeletionRequest(
-  request: Prisma.ConcertDeletionRequestGetPayload<Record<string, never>>,
+  request: Prisma.ConcertDeletionRequestGetPayload<Record<string, never>> & {
+    concert?: { id: string; title: string; coverImageUrl: string | null };
+    organizer?: { id: string; fullName: string; email: string };
+  },
 ): AdminDeletionRequestDto {
   return {
     id: request.id,
     concert_id: request.concertId,
+    concert: request.concert
+      ? {
+          id: request.concert.id,
+          title: request.concert.title,
+          cover_image_url: request.concert.coverImageUrl ?? undefined,
+        }
+      : undefined,
     organizer_id: request.organizerId,
+    organizer: request.organizer
+      ? {
+          id: request.organizer.id,
+          full_name: request.organizer.fullName,
+          email: request.organizer.email,
+        }
+      : undefined,
     reason: request.reason ?? undefined,
     status: request.status,
     review_note: request.reviewNote ?? undefined,

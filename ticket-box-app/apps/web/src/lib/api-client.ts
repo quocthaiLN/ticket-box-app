@@ -136,6 +136,13 @@ export async function apiPatch<TData>(
   return apiRequest<TData>(path, jsonInit("PATCH", body, init));
 }
 
+export async function apiDelete<TData>(
+  path: string,
+  init?: RequestInit,
+): Promise<TData> {
+  return apiRequest<TData>(path, { method: "DELETE", ...init });
+}
+
 export async function apiUploadFile<TData>(
   path: string,
   file: File,

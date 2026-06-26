@@ -11,6 +11,7 @@ import {
   handleAdminUpdateRole,
   handleAdminUpdateRoleByEmail,
   handleAdminUpdateStatus,
+  handleAdminDeleteUser,
 } from "./auth.controller.js";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import { requireRole } from "../../shared/guards/role.guard.js";
@@ -54,4 +55,10 @@ authRouter.patch(
   requireAuth,
   requireRole("ADMIN"),
   handleAdminUpdateStatus,
+);
+authRouter.delete(
+  "/admin/users/:user_id",
+  requireAuth,
+  requireRole("ADMIN"),
+  handleAdminDeleteUser,
 );
