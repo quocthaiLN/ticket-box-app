@@ -12,7 +12,19 @@ import type {
 
 export type AdminOrganizerRequestSummary = OrganizerRequestSummary & {
   organizer_id?: string;
+  organizer?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  venue?: {
+    id: string;
+    name: string;
+    city: string;
+  };
 };
+
+export type AdminOrganizerRequestDetail = OrganizerRequestDetail & AdminOrganizerRequestSummary;
 
 export type ApproveOrganizerRequestResult = {
   concert: {
@@ -34,7 +46,17 @@ export type ApproveOrganizerRequestResult = {
 export type AdminConcertDeletionRequest = {
   id: string;
   concert_id: string;
+  concert?: {
+    id: string;
+    title: string;
+    cover_image_url?: string;
+  };
   organizer_id: string;
+  organizer?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
   reason?: string;
   status: ApprovalStatus;
   review_note?: string;
@@ -69,7 +91,7 @@ export async function listAdminOrganizerRequests(status?: ApprovalStatus | "all"
 }
 
 export async function getAdminOrganizerRequest(requestId: string) {
-  const response = await apiGet<ApiResponse<OrganizerRequestDetail>>(
+  const response = await apiGet<ApiResponse<AdminOrganizerRequestDetail>>(
     `/admin/organizer-requests/${requestId}`,
   );
   return response.data;

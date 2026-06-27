@@ -476,6 +476,7 @@ function mapConcertSummary(concert: ConcertWithVenueAndPrices): ConcertSummaryDt
     id: concert.id,
     title: concert.title,
     slug: concert.slug,
+    description: concert.description ?? undefined,
     artist_name: concert.artistName,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),

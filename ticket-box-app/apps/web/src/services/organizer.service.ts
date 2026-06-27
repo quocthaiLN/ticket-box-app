@@ -1,6 +1,7 @@
 import {
   apiGet,
   apiPost,
+  apiUploadFile,
   type ApiCollectionResponse,
   type ApiResponse,
   type Venue,
@@ -51,13 +52,43 @@ export type OrganizerConcert = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
+  artist_bio?: string;
   status: OrganizerConcertStatus;
   starts_at: string;
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
+  seat_zones: OrganizerSeatZone[];
+  ticket_types: Array<{
+    id: string;
+    seat_zone_id: string;
+    name: string;
+    description?: string;
+    zone_code: string;
+    zone_name: string;
+    price: Money;
+    total_quantity: number;
+    held_quantity: number;
+    sold_quantity: number;
+    available_quantity: number;
+    max_per_user: number;
+    sale_start_at: string;
+    sale_end_at: string;
+    status: string;
+  }>;
+};
+
+export type OrganizerSeatZone = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  capacity: number;
+  svg_path?: string;
+  sort_order: number;
 };
 
 export type OrganizerAnalytics = {
@@ -117,6 +148,32 @@ export type UpdateOrganizerConcertInput = Partial<{
   seat_map_url: string;
 }>;
 
+export type CreateOrganizerTicketTypeInput = {
+  seat_zone_id: string;
+  name: string;
+  description?: string;
+  price: Money;
+  total_quantity: number;
+  max_per_user: number;
+  sale_start_at: string;
+  sale_end_at: string;
+};
+
+export type CreateOrganizerSeatZoneInput = {
+  code: string;
+  name: string;
+  description?: string;
+  capacity: number;
+  svg_path?: string;
+  sort_order?: number;
+};
+
+export type OrganizerCoverUpload = {
+  object_key: string;
+  url_path: string;
+  url: string;
+};
+
 export async function listOrganizerVenues() {
   const response = await apiGet<ApiCollectionResponse<Venue>>("/organizer/venues?limit=100");
   return response.data;
@@ -145,6 +202,14 @@ export async function createOrganizerRequest(input: CreateOrganizerRequestInput)
   return response.data;
 }
 
+export async function uploadOrganizerCoverImage(file: File) {
+  const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
+    "/organizer/uploads/cover-image",
+    file,
+  );
+  return response.data;
+}
+
 export async function listOrganizerConcerts(params: { q?: string; status?: string } = {}) {
   const search = new URLSearchParams({ limit: "100" });
   if (params.q) search.set("q", params.q);
@@ -161,6 +226,28 @@ export async function updateOrganizerConcert(
 ) {
   const response = await apiPost<ApiResponse<{ id: string; status: string; updated_at: string }>>(
     `/organizer/concerts/${concertId}`,
+    input,
+  );
+  return response.data;
+}
+
+export async function createOrganizerSeatZone(
+  concertId: string,
+  input: CreateOrganizerSeatZoneInput,
+) {
+  const response = await apiPost<ApiResponse<OrganizerSeatZone>>(
+    `/organizer/concerts/${concertId}/seat-zones`,
+    input,
+  );
+  return response.data;
+}
+
+export async function createOrganizerTicketType(
+  concertId: string,
+  input: CreateOrganizerTicketTypeInput,
+) {
+  const response = await apiPost<ApiResponse<OrganizerConcert["ticket_types"][number]>>(
+    `/organizer/concerts/${concertId}/ticket-types`,
     input,
   );
   return response.data;

@@ -31,6 +31,7 @@ export type ConcertSummary = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
   starts_at: string;
   ends_at: string;
@@ -133,6 +134,27 @@ export async function apiPatch<TData>(
   init?: RequestInit,
 ): Promise<TData> {
   return apiRequest<TData>(path, jsonInit("PATCH", body, init));
+}
+
+export async function apiDelete<TData>(
+  path: string,
+  init?: RequestInit,
+): Promise<TData> {
+  return apiRequest<TData>(path, { method: "DELETE", ...init });
+}
+
+export async function apiUploadFile<TData>(
+  path: string,
+  file: File,
+): Promise<TData> {
+  return apiRequest<TData>(path, {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+  });
 }
 
 export async function listConcerts(params: Record<string, string> = {}) {

@@ -7,6 +7,8 @@ import { Errors } from "../../shared/http/problem-details.js";
 import { catalogCacheKeys } from "../catalog/catalog.cache.js";
 import {
   parseCreateDeletionRequestBody,
+  parseCreateOrganizerSeatZoneBody,
+  parseCreateOrganizerTicketTypeBody,
   parseCreateOrganizerRequestBody,
   parseListQuery,
   parseUpdateOrganizerConcertBody,
@@ -28,7 +30,10 @@ export class OrganizerController {
 
   listRequests = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = await this.service.listRequests(currentUserId(res), parseListQuery(req.query));
+      const page = await this.service.listRequests(
+        currentUserId(res),
+        parseListQuery(req.query),
+      );
       res.json(toCollection(page, req.requestId));
     } catch (err) {
       next(err);
@@ -48,11 +53,43 @@ export class OrganizerController {
   };
 
   // Cấp signed upload URL để BTC đẩy file PDF press kit thẳng lên Supabase.
-  createPressKitUpload = async (req: Request, res: Response, next: NextFunction) => {
+  createPressKitUpload = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
       currentUserId(res); // chỉ cần đảm bảo đã đăng nhập; guard ORGANIZER ở router
       const data = await createPressKitUploadUrl(`${randomUUID()}.pdf`);
       res.json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  uploadCoverImage = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const upload = await this.service.uploadCoverImage(
+        currentUserId(res),
+        Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        {
+          contentType: req.headers["content-type"],
+          fileName:
+            typeof req.headers["x-file-name"] === "string"
+              ? req.headers["x-file-name"]
+              : undefined,
+        },
+      );
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res
+        .status(201)
+        .json(
+          ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId),
+        );
     } catch (err) {
       next(err);
     }
@@ -72,14 +109,21 @@ export class OrganizerController {
 
   listConcerts = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = await this.service.listConcerts(currentUserId(res), parseListQuery(req.query));
+      const page = await this.service.listConcerts(
+        currentUserId(res),
+        parseListQuery(req.query),
+      );
       res.json(toCollection(page, req.requestId));
     } catch (err) {
       next(err);
     }
   };
 
-  updateDraftConcert = async (req: Request, res: Response, next: NextFunction) => {
+  updateDraftConcert = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
       const concertId = req.params.concert_id;
       const data = await this.service.updateDraftConcert(
@@ -94,7 +138,45 @@ export class OrganizerController {
     }
   };
 
-  createDeletionRequest = async (req: Request, res: Response, next: NextFunction) => {
+  createSeatZone = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const concertId = req.params.concert_id;
+      const data = await this.service.createSeatZone(
+        currentUserId(res),
+        concertId,
+        parseCreateOrganizerSeatZoneBody(req.body),
+      );
+      void invalidateConcertCache(concertId);
+      res.status(201).json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  createTicketType = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const concertId = req.params.concert_id;
+      const data = await this.service.createTicketType(
+        currentUserId(res),
+        concertId,
+        parseCreateOrganizerTicketTypeBody(req.body),
+      );
+      void invalidateConcertCache(concertId);
+      res.status(201).json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  createDeletionRequest = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
       const data = await this.service.createDeletionRequest(
         currentUserId(res),
@@ -121,14 +203,21 @@ export class OrganizerController {
 
   listOrders = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = await this.service.listOrders(currentUserId(res), parseListQuery(req.query));
+      const page = await this.service.listOrders(
+        currentUserId(res),
+        parseListQuery(req.query),
+      );
       res.json(toCollection(page, req.requestId));
     } catch (err) {
       next(err);
     }
   };
 
-  getTicketTypeInventory = async (req: Request, res: Response, next: NextFunction) => {
+  getTicketTypeInventory = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
       const data = await this.service.getTicketTypeInventory(
         currentUserId(res),
@@ -141,9 +230,16 @@ export class OrganizerController {
     }
   };
 
-  listCheckerAccounts = async (req: Request, res: Response, next: NextFunction) => {
+  listCheckerAccounts = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
-      const page = await this.service.listCheckerAccounts(currentUserId(res), parseListQuery(req.query));
+      const page = await this.service.listCheckerAccounts(
+        currentUserId(res),
+        parseListQuery(req.query),
+      );
       res.json(toCollection(page, req.requestId));
     } catch (err) {
       next(err);
@@ -173,7 +269,12 @@ function currentUserId(res: Response) {
 }
 
 function toCollection<T extends { id: string }>(
-  page: { items: T[]; nextCursor: string | null; hasMore: boolean; limit: number },
+  page: {
+    items: T[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    limit: number;
+  },
   requestId: string,
 ) {
   return collection(page.items, requestId, {

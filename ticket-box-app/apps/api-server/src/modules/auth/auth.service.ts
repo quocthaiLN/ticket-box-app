@@ -168,6 +168,12 @@ export const authService = {
     if (!target) {
       throw Errors.notFound(`User ${targetUserId}`);
     }
+    if (target.deletedAt) {
+      throw Errors.notFound(`User ${targetUserId}`);
+    }
+    if (target.role !== "AUDIENCE" || role !== "ORGANIZER") {
+      throw Errors.badRequest("Only AUDIENCE accounts can be upgraded to ORGANIZER.");
+    }
 
     const updated = await authRepository.updateRole(targetUserId, role);
     await authRepository.createAuditLog({
@@ -189,6 +195,12 @@ export const authService = {
     const target = await authRepository.findByEmail(email);
     if (!target) {
       throw Errors.userNotFoundByEmail(email);
+    }
+    if (target.deletedAt) {
+      throw Errors.userNotFoundByEmail(email);
+    }
+    if (target.role !== "AUDIENCE" || role !== "ORGANIZER") {
+      throw Errors.badRequest("Only AUDIENCE accounts can be upgraded to ORGANIZER.");
     }
 
     const updated = await authRepository.updateRole(target.id, role);
@@ -245,6 +257,9 @@ export const authService = {
     if (!target) {
       throw Errors.notFound(`User ${targetUserId}`);
     }
+    if (target.deletedAt) {
+      throw Errors.notFound(`User ${targetUserId}`);
+    }
 
     const updated = await authRepository.updateStatus(targetUserId, status);
     await authRepository.createAuditLog({
@@ -256,6 +271,28 @@ export const authService = {
     });
 
     return toAuthUser(updated);
+  },
+
+  async deleteUser(actorId: string, targetUserId: string): Promise<AuthUser> {
+    if (actorId === targetUserId) {
+      throw Errors.badRequest("Admin cannot delete their own account.");
+    }
+
+    const target = await authRepository.findById(targetUserId);
+    if (!target || target.deletedAt) {
+      throw Errors.notFound(`User ${targetUserId}`);
+    }
+
+    const deleted = await authRepository.deleteUser(targetUserId);
+    await authRepository.createAuditLog({
+      actorUserId: actorId,
+      action: "DELETE_USER",
+      entityType: "user",
+      entityId: targetUserId,
+      metadata: { email: target.email, role: target.role, soft_delete: true },
+    });
+
+    return toAuthUser(deleted);
   },
 
   async verifyAccessToken(
