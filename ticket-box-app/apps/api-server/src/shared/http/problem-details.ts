@@ -592,6 +592,16 @@ export const Errors = {
       detail,
     }),
 
+  guestImportJobNotFound: (id?: string) =>
+    new ApiError({
+      title: "Guest import job not found",
+      status: 404,
+      code: "GUEST_IMPORT_JOB_NOT_FOUND",
+      detail: id
+        ? `Guest import job ${id} was not found.`
+        : "Guest import job was not found.",
+    }),
+
   // Organizer / Admin approval
   organizerRequestNotFound: (id?: string) =>
     new ApiError({

@@ -248,6 +248,7 @@ export class CatalogRepository {
     endsAt: Date;
     coverImageUrl?: string;
     seatMapUrl?: string;
+    guestDriveFolderId?: string;
   }): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.create({
       data: input,
@@ -270,6 +271,7 @@ export class CatalogRepository {
       endsAt: Date;
       coverImageUrl: string | null;
       seatMapUrl: string | null;
+      guestDriveFolderId: string | null;
     }>
   ): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.update({

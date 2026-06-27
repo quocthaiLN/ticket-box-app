@@ -245,7 +245,8 @@ BTC **sửa trực tiếp** concert `DRAFT` của mình (không cần duyệt). 
   "artist_name": "The Cassette",
   "starts_at": "2026-09-20T13:00:00Z",
   "ends_at": "2026-09-20T16:30:00Z",
-  "cover_image_url": "https://cdn.ticketbox.vn/concerts/indie-night.webp"
+  "cover_image_url": "https://cdn.ticketbox.vn/concerts/indie-night.webp",
+  "guest_drive_folder_id": "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz"
 }
 ```
 
@@ -267,6 +268,7 @@ BTC **sửa trực tiếp** concert `DRAFT` của mình (không cần duyệt). 
 - Concert không thuộc sở hữu → `403 CONCERT_NOT_OWNED_BY_ORGANIZER` (hoặc `404`).
 - Concert không ở `DRAFT` → `409 CONCERT_NOT_EDITABLE`.
 - Không sửa `id`, `organizer_id`, `status`, `slug`.
+- `guest_drive_folder_id` (optional): thư mục Drive chứa CSV khách mời, nhận full URL `https://drive.google.com/drive/folders/<ID>` hoặc ID thuần; server parse ra ID rồi lưu `Concert.guestDriveFolderId`. Input không hợp lệ → `422 VALIDATION_ERROR`.
 - Tái dùng `CatalogService.updateConcert` + invalidate cache catalog liên quan.
 
 ---

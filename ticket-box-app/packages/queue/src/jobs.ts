@@ -56,9 +56,18 @@ export type GuestImportJobData = {
   /** ID row trong bảng guest_import_jobs */
   job_id: string;
   concert_id: string;
-  /** Object key trên MinIO của file CSV đã upload */
+  /** Google Drive file id của file CSV cần import */
   csv_object_key: string;
   uploaded_by_user_id: string;
+};
+
+/**
+ * Job quét thư mục Google Drive để sinh ra các guest-import job.
+ * Scheduler 0h enqueue không kèm concert_id (quét mọi concert diễn ra hôm đó);
+ * trigger thủ công của admin enqueue kèm concert_id (chỉ quét 1 concert).
+ */
+export type GuestImportScanData = {
+  concert_id?: string;
 };
 
 // ---------------------------------------------------------------------------

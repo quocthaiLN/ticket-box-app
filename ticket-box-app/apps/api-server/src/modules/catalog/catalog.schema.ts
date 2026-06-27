@@ -1,4 +1,5 @@
 import { Errors } from "../../shared/http/problem-details.js";
+import { extractDriveFolderId } from "../../shared/utils/drive.js";
 
 export type ListConcertsQuery = {
   q?: string;
@@ -39,6 +40,7 @@ export type CreateConcertInput = {
   cover_image_object_key?: string;
   seat_map_url?: string;
   seat_map_object_key?: string;
+  guest_drive_folder_id?: string;
 };
 
 export type UpdateConcertInput = Partial<
@@ -147,6 +149,7 @@ export function parseCreateConcertBody(body: unknown): CreateConcertInput {
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
     seat_map_object_key: asOptionalString(value.seat_map_object_key),
+    guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   };
 }
 
@@ -165,6 +168,7 @@ export function parseUpdateConcertBody(body: unknown): UpdateConcertInput {
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
     seat_map_object_key: asOptionalString(value.seat_map_object_key),
+    guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }
 
@@ -229,6 +233,20 @@ function asOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0
     ? value
     : undefined;
+}
+
+function parseGuestDriveFolderId(value: unknown): string | undefined {
+  const raw = asOptionalString(value);
+  if (raw === undefined) return undefined;
+
+  const folderId = extractDriveFolderId(raw);
+  if (!folderId) {
+    throw validationError(
+      "guest_drive_folder_id",
+      "guest_drive_folder_id must be a Google Drive folder link or folder ID.",
+    );
+  }
+  return folderId;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

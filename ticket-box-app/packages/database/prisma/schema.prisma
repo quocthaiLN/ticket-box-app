@@ -255,6 +255,8 @@ model Concert {
   status           ConcertStatus @default(DRAFT)
   coverImageUrl    String?       @map("cover_image_url")
   seatMapUrl       String?       @map("seat_map_url")
+  // Thư mục Google Drive chứa CSV khách mời VIP của concert (BTC tự quản lý file).
+  guestDriveFolderId String?     @map("guest_drive_folder_id")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
 
@@ -735,8 +737,10 @@ model GuestList {
   seatZoneId    String?     @map("seat_zone_id") @db.Uuid
   importJobId   String?     @map("import_job_id") @db.Uuid
   fullName      String      @map("full_name") @db.VarChar(255)
-  phone         String      @db.VarChar(20)
-  email         String?     @db.VarChar(255)
+  // Email = danh tính khử trùng khách mời trong 1 concert (bắt buộc).
+  email         String      @db.VarChar(255)
+  // Phone tùy chọn — chỉ phục vụ tra cứu/đối chiếu tại cổng.
+  phone         String?     @db.VarChar(20)
   code          String?     @db.VarChar(100)
   status        GuestStatus @default(INVITED)
   checkedInAt   DateTime?   @map("checked_in_at")
@@ -752,7 +756,7 @@ model GuestList {
   checkinLogs  CheckinLog[]
   offlineItems OfflineCheckinItem[]
 
-  @@unique([concertId, phone])
+  @@unique([concertId, email])
   @@unique([concertId, code])
   @@index([concertId, status])
   @@index([phone])

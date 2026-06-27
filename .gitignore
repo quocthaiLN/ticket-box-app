@@ -6,3 +6,4 @@ dist/
 *.log
 ticket-box-app/packages/database/src/generated/prisma/
 z-doc-cua-thai
+scripts/

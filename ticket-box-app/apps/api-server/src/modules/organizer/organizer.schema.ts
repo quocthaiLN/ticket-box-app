@@ -1,4 +1,5 @@
 import { Errors } from "../../shared/http/problem-details.js";
+import { extractDriveFolderId } from "../../shared/utils/drive.js";
 
 export type ApprovalStatusValue = "PENDING" | "APPROVED" | "REJECTED";
 export type ConcertStatusValue = "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED";
@@ -55,6 +56,7 @@ export type UpdateOrganizerConcertInput = {
   planned_publish_at?: string;
   cover_image_url?: string;
   seat_map_url?: string;
+  guest_drive_folder_id?: string;
 };
 
 export type CreateDeletionRequestInput = {
@@ -111,6 +113,7 @@ export function parseUpdateOrganizerConcertBody(body: unknown): UpdateOrganizerC
     planned_publish_at: optionalDateString(value.planned_publish_at, "planned_publish_at"),
     cover_image_url: asOptionalString(value.cover_image_url),
     seat_map_url: asOptionalString(value.seat_map_url),
+    guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }
 
@@ -193,6 +196,20 @@ function asOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+function parseGuestDriveFolderId(value: unknown): string | undefined {
+  const raw = asOptionalString(value);
+  if (raw === undefined) return undefined;
+
+  const folderId = extractDriveFolderId(raw);
+  if (!folderId) {
+    throw validationError(
+      "guest_drive_folder_id",
+      "guest_drive_folder_id must be a Google Drive folder link or folder ID.",
+    );
+  }
+  return folderId;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -1,16 +1,40 @@
 import type { NextFunction, Request, Response } from "express";
 import { collection, ok } from "../../shared/http/response.js";
-import { parseGuestImportBody, parseGuestScanBody, parseGuestSearchQuery } from "./guest-list.schema.js";
+import { parseImportErrorsQuery, parseGuestScanBody, parseGuestSearchQuery } from "./guest-list.schema.js";
 import { GuestListService } from "./guest-list.service.js";
 
 const service = new GuestListService();
 
-// Nhận request tạo job import guest từ admin/organizer.
-export async function importGuests(req: Request, res: Response, next: NextFunction) {
+// Admin chạy nhập thủ công cho 1 concert (enqueue job quét Drive ngoài lịch 0h).
+export async function triggerGuestImport(req: Request, res: Response, next: NextFunction) {
   try {
-    const body = parseGuestImportBody(withRouteConcertId(req.body, req.params.concert_id));
-    body.uploaded_by_user_id = res.locals.auth?.user_id;
-    res.status(202).json(ok(await service.importGuests(body), req.requestId));
+    res.status(202).json(ok(await service.triggerImport(req.params.concert_id), req.requestId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Xem trạng thái 1 job import (số dòng thành công/lỗi).
+export async function getGuestImportJob(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(ok(await service.getImportJob(req.params.job_id), req.requestId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Xem lỗi từng dòng của 1 job (phân trang cursor).
+export async function getGuestImportJobErrors(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { limit, cursor } = parseImportErrorsQuery(req.query as Record<string, unknown>);
+    const page = await service.listImportErrors(req.params.job_id, limit, cursor);
+    res.json(
+      collection(page.items, req.requestId, {
+        next_cursor: page.next_cursor,
+        has_more: page.has_more,
+        limit,
+      }),
+    );
   } catch (err) {
     next(err);
   }

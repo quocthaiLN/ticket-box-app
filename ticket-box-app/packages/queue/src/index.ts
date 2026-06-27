@@ -18,6 +18,7 @@ export type {
   NotificationJobData,
   AiBioJobData,
   GuestImportJobData,
+  GuestImportScanData,
   EmailJobData,
 } from "./jobs.js";
 export {
@@ -25,5 +26,6 @@ export {
   enqueueExpireHolds,
   enqueueAiBio,
   enqueueGuestImport,
+  enqueueGuestImportScan,
   enqueueEmail,
 } from "./enqueue.js";

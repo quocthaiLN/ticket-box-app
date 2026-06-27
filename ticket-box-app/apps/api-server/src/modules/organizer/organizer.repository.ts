@@ -146,6 +146,7 @@ type UpdateConcertData = Partial<{
   plannedPublishAt: Date | null;
   coverImageUrl: string | null;
   seatMapUrl: string | null;
+  guestDriveFolderId: string | null;
 }>;
 
 export class OrganizerRepository {
@@ -505,7 +506,7 @@ export class OrganizerRepository {
         concert_id: guest.concertId,
         seat_zone_id: guest.seatZoneId,
         full_name: guest.fullName,
-        phone: guest.phone,
+        phone: guest.phone ?? "",
         email: guest.email,
         code: guest.code,
         status: guest.status,
@@ -607,6 +608,7 @@ export function toConcertUpdateData(input: UpdateOrganizerConcertInput): UpdateC
     plannedPublishAt: input.planned_publish_at ? new Date(input.planned_publish_at) : undefined,
     coverImageUrl: nullable(input.cover_image_url),
     seatMapUrl: nullable(input.seat_map_url),
+    guestDriveFolderId: nullable(input.guest_drive_folder_id),
   };
 }
 

@@ -1,6 +1,7 @@
 import { env } from "@ticketbox/config";
 import {
   getExpireHoldsQueue,
+  getGuestImportQueue,
   getNotificationsQueue,
   QUEUE_NAMES,
 } from "@ticketbox/queue";
@@ -11,6 +12,7 @@ import { createExpireHoldsWorker } from "./workers/expire-holds.worker.js";
 import { createGuestImportWorker } from "./workers/guest-import.worker.js";
 import { createNotificationWorker } from "./workers/notification.worker.js";
 import { startReminderScheduler } from "./schedulers/reminder.scheduler.js";
+import { registerNightlyGuestImportSchedule } from "./schedulers/nightly-guest-import.scheduler.js";
 
 // ---------------------------------------------------------------------------
 // Unhandled rejection safety net — worker errors must not crash the process
@@ -52,6 +54,11 @@ const notificationQueue = getNotificationsQueue();
 const expireHoldsQueue = getExpireHoldsQueue();
 
 const reminderTimer = startReminderScheduler(notificationQueue);
+
+// Lịch quét Google Drive nhập khách mời VIP — chạy đúng 0h (giờ Việt Nam).
+void registerNightlyGuestImportSchedule(getGuestImportQueue()).catch((err) =>
+  console.error("[worker-server] Failed to register nightly guest import schedule:", err),
+);
 
 const { expireHoldsIntervalMs, expireHoldsBatchSize, expireHoldsDryRun } =
   env.worker;
