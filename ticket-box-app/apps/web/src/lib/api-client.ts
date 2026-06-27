@@ -48,6 +48,7 @@ export type ConcertSummary = {
 export type ConcertDetail = ConcertSummary & {
   description?: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
   seat_map_url?: string;
   venue: Venue;
 };
@@ -107,6 +108,7 @@ export type ConcertMetadata = {
     fallback_image_url?: string;
   };
   artist_bio?: string;
+  artist_bio_image_url?: string;
 };
 
 const apiBaseUrl =

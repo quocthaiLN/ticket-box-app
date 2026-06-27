@@ -45,6 +45,7 @@ export type UiConcert = {
   artistName: string;
   description: string;
   artistBio: string;
+  artistBioImageUrl: string;
   startsAt: string;
   endsAt: string;
   status: ConcertSummary["status"];
@@ -70,6 +71,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     artistName: concert.artist_name,
     description: toDescriptionExcerpt(concert.description),
     artistBio: "",
+    artistBioImageUrl: "",
     startsAt: concert.starts_at,
     endsAt: concert.ends_at,
     status: concert.status,
@@ -141,6 +143,7 @@ export function mapDetailConcert(
     artistName: concert.artist_name,
     description: concert.description ?? "Concert details are being updated.",
     artistBio: metadata.artist_bio ?? concert.artist_bio ?? "",
+    artistBioImageUrl: concert.artist_bio_image_url ?? metadata.artist_bio_image_url ?? "",
     startsAt: concert.starts_at,
     endsAt: concert.ends_at,
     status: concert.status,

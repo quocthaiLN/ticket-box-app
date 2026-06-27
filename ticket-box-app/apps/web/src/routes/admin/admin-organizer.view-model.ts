@@ -24,6 +24,9 @@ export type AdminOrganizerRequestDetailView = AdminOrganizerRequestView & {
   venueId: string;
   plannedPublishAt?: string;
   pressKitLabel: string;
+  bioStatus: string | null;
+  artistBio: string | null;
+  artistBioImageUrl: string | null;
   reviewNote: string;
   ticketTypes: AdminOrganizerRequestDetail["ticket_types"];
 };
@@ -50,6 +53,9 @@ export function toAdminOrganizerRequestDetailView(detail: AdminOrganizerRequestD
     venueId: detail.venue_id,
     plannedPublishAt: detail.planned_publish_at,
     pressKitLabel: detail.press_kit_url || "Chưa cung cấp",
+    bioStatus: detail.bio_status ?? null,
+    artistBio: detail.artist_bio ?? null,
+    artistBioImageUrl: detail.artist_bio_image_url ?? null,
     reviewNote: detail.review_note || "Chưa có ghi chú",
     ticketTypes: detail.ticket_types,
   };

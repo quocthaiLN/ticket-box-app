@@ -44,6 +44,8 @@ import {
   normalizeTicketTypes,
   updateOrganizerConcert,
   uploadOrganizerCoverImage,
+  uploadOrganizerPressKit,
+  uploadOrganizerArtistImage,
   type ApprovalStatus,
   type CreateOrganizerRequestInput,
   type CreateOrganizerSeatZoneInput,
@@ -784,7 +786,6 @@ function TabbedNewRequestForm({
     title: "",
     artistName: "",
     venueId: "",
-    pressKitUrl: "",
     startsAt: "",
     endsAt: "",
     plannedPublishAt: "",
@@ -812,6 +813,21 @@ function TabbedNewRequestForm({
     { id: "zones" as const, label: "Zone" },
     { id: "tickets" as const, label: "Loại vé" },
   ];
+
+  // Giữ File đã chọn; CHỈ upload lên Supabase khi bấm "Nộp hồ sơ" (tránh tạo file rác).
+  const [pressKitFile, setPressKitFile] = useState<File | null>(null);
+  const [artistImageFile, setArtistImageFile] = useState<File | null>(null);
+  const [artistImagePreview, setArtistImagePreview] = useState("");
+
+  function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
+    setPressKitFile(event.target.files?.[0] ?? null);
+  }
+
+  function handleArtistImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setArtistImageFile(file);
+    setArtistImagePreview(file ? URL.createObjectURL(file) : "");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -854,6 +870,16 @@ function TabbedNewRequestForm({
         };
       });
 
+      // Upload file MỘT LẦN tại đây (sau khi form đã hợp lệ) → mỗi lần nộp đúng 1 file.
+      let pressKitUrl: string | undefined;
+      let artistBioImageUrl: string | undefined;
+      if (pressKitFile) {
+        pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
+      }
+      if (artistImageFile) {
+        artistBioImageUrl = (await uploadOrganizerArtistImage(artistImageFile)).url;
+      }
+
       await onSubmit({
         venue_id: form.venueId,
         title: form.title.trim(),
@@ -864,7 +890,8 @@ function TabbedNewRequestForm({
         planned_publish_at: optionalDateTimeToIso(form.plannedPublishAt),
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
-        press_kit_url: form.pressKitUrl.trim() || undefined,
+        press_kit_url: pressKitUrl,
+        artist_bio_image_url: artistBioImageUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -991,8 +1018,33 @@ function TabbedNewRequestForm({
                   <input type="number" min="1" className={editorInputClass} style={editorInputStyle} value={form.checkerCount} onChange={(event) => setForm({ ...form, checkerCount: event.target.value })} required />
                 </EditorRow>
               </div>
-              <EditorRow label="URL bộ tư liệu">
-                <input className={editorInputClass} style={editorInputStyle} value={form.pressKitUrl} onChange={(event) => setForm({ ...form, pressKitUrl: event.target.value })} />
+              <EditorRow label="Hồ sơ nghệ sĩ / Press kit (PDF)">
+                <div className="space-y-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                    <Upload className="h-4 w-4" />
+                    {pressKitFile ? "Đổi file PDF" : "Chọn file PDF"}
+                    <input type="file" accept="application/pdf" className="hidden" onChange={handlePressKitChange} />
+                  </label>
+                  {pressKitFile ? (
+                    <p className="text-xs text-[#2DBE6C]">✓ {pressKitFile.name} — sẽ tải lên khi nộp; AI tự sinh bio từ file này.</p>
+                  ) : (
+                    <p className="text-xs text-[#8585A0]">Tải PDF hồ sơ/press kit để hệ thống tự sinh bio nghệ sĩ (không bắt buộc).</p>
+                  )}
+                </div>
+              </EditorRow>
+              <EditorRow label="Ảnh nghệ sĩ (hiển thị cùng bio)">
+                <div className="flex items-center gap-3">
+                  {artistImagePreview ? (
+                    <img src={artistImagePreview} alt="Ảnh nghệ sĩ" className="h-16 w-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-white/15 text-xs text-[#8585A0]">Ảnh</div>
+                  )}
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                    <Upload className="h-4 w-4" />
+                    {artistImageFile ? "Đổi ảnh" : "Chọn ảnh"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleArtistImageChange} />
+                  </label>
+                </div>
               </EditorRow>
               <EditorRow label="Mô tả">
                 <textarea className={`${editorInputClass} min-h-24 resize-y`} style={editorInputStyle} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />

@@ -249,6 +249,7 @@ model Concert {
   description      String?
   artistName       String        @map("artist_name") @db.VarChar(255)
   artistBio        String?       @map("artist_bio")
+  artistBioImageUrl String?      @map("artist_bio_image_url")
   startsAt         DateTime      @map("starts_at")
   endsAt           DateTime      @map("ends_at")
   plannedPublishAt DateTime?     @map("planned_publish_at")
@@ -300,6 +301,8 @@ model OrganizerRequest {
   // Bio do AI sinh từ press kit (denormalize để admin xem trước & copy sang concert lúc approve).
   artistBio        String?            @map("artist_bio")
   bioStatus        ArtistBioJobStatus? @map("bio_status")
+  // Ảnh nghệ sĩ BTC upload kèm hồ sơ (gắn ngay, độc lập với bio); copy sang concert khi approve.
+  artistBioImageUrl String?           @map("artist_bio_image_url")
   ticketTypes      Json           @map("ticket_types") @db.JsonB
   status           ApprovalStatus @default(PENDING)
   reviewedById     String?        @map("reviewed_by") @db.Uuid

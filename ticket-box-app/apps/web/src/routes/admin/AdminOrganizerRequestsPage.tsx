@@ -262,6 +262,21 @@ function RequestReviewCard({
               </section>
 
               <section>
+                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Giới thiệu nghệ sĩ (AI)</p>
+                <div className="flex flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 sm:flex-row">
+                  {detailView.artistBioImageUrl && (
+                    <img src={detailView.artistBioImageUrl} alt="Ảnh nghệ sĩ" className="h-24 w-24 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <BioStatusBadge status={detailView.bioStatus} />
+                    <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[#B0B0C0]">
+                      {detailView.artistBio || bioStatusHint(detailView.bioStatus)}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
                 <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Loại vé đề xuất</p>
                 <div className="space-y-2">
                 {normalizeTicketTypes(detailView.ticketTypes).map((ticket) => (
@@ -405,6 +420,30 @@ function DetailItem({ label, value }: { label: string; value: string }) {
       <span className="min-w-0 break-words text-right text-xs font-medium text-[#F0EDEB]">{value}</span>
     </div>
   );
+}
+
+function BioStatusBadge({ status }: { status: string | null }) {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    PENDING: { label: "Đang chờ AI", color: "#F5C842", bg: "rgba(245,200,66,0.12)" },
+    PROCESSING: { label: "AI đang xử lý", color: "#26A7DE", bg: "rgba(38,167,222,0.12)" },
+    DONE: { label: "Đã sinh bio", color: "#2DBE6C", bg: "rgba(45,190,108,0.12)" },
+    FAILED: { label: "Lỗi sinh bio", color: "#E8315B", bg: "rgba(232,49,91,0.12)" },
+  };
+  const style = status ? map[status] : undefined;
+  if (!style) {
+    return <span className="text-xs text-[#8585A0]">Không có press kit / chưa tạo bio</span>;
+  }
+  return (
+    <span className="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: style.bg, color: style.color }}>
+      {style.label}
+    </span>
+  );
+}
+
+function bioStatusHint(status: string | null) {
+  if (status === "FAILED") return "AI không sinh được bio (PDF lỗi hoặc API lỗi). Có thể nhập bio tay sau khi duyệt.";
+  if (status === "PENDING" || status === "PROCESSING") return "Đang chờ AI sinh giới thiệu từ press kit...";
+  return "Chưa có nội dung giới thiệu.";
 }
 
 function ApprovalBadge({ status }: { status: ApprovalStatus }) {

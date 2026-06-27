@@ -41,6 +41,9 @@ export type OrganizerRequestSummary = {
 export type OrganizerRequestDetail = OrganizerRequestSummary & {
   description?: string;
   press_kit_url?: string;
+  artist_bio?: string | null;
+  bio_status?: string | null;
+  artist_bio_image_url?: string | null;
   ticket_types: OrganizerRequestTicketType[] | unknown;
   reviewed_by?: string | null;
   reviewed_at?: string;
@@ -55,6 +58,7 @@ export type OrganizerConcert = {
   description?: string;
   artist_name: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
   status: OrganizerConcertStatus;
   starts_at: string;
   ends_at: string;
@@ -132,6 +136,7 @@ export type CreateOrganizerRequestInput = {
   gate_count: number;
   checker_count: number;
   press_kit_url?: string;
+  artist_bio_image_url?: string;
   ticket_types: OrganizerRequestTicketType[];
 };
 
@@ -141,6 +146,7 @@ export type UpdateOrganizerConcertInput = Partial<{
   description: string;
   artist_name: string;
   artist_bio: string;
+  artist_bio_image_url: string;
   starts_at: string;
   ends_at: string;
   planned_publish_at: string;
@@ -205,6 +211,24 @@ export async function createOrganizerRequest(input: CreateOrganizerRequestInput)
 export async function uploadOrganizerCoverImage(file: File) {
   const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
     "/organizer/uploads/cover-image",
+    file,
+  );
+  return response.data;
+}
+
+// Upload PDF press kit lên Supabase (private) → object_key để gắn vào hồ sơ.
+export async function uploadOrganizerPressKit(file: File) {
+  const response = await apiUploadFile<ApiResponse<{ object_key: string }>>(
+    "/organizer/uploads/press-kit",
+    file,
+  );
+  return response.data;
+}
+
+// Upload ảnh nghệ sĩ lên Supabase (public) → url để hiển thị + lưu vào hồ sơ.
+export async function uploadOrganizerArtistImage(file: File) {
+  const response = await apiUploadFile<ApiResponse<{ object_key: string; url: string }>>(
+    "/organizer/uploads/artist-image",
     file,
   );
   return response.data;

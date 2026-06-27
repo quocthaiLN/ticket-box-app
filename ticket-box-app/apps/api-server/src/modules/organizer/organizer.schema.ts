@@ -65,6 +65,7 @@ export type CreateOrganizerRequestInput = {
   gate_count: number;
   checker_count: number;
   press_kit_url?: string;
+  artist_bio_image_url?: string;
   ticket_types: OrganizerRequestTicketTypeInput[];
 };
 
@@ -74,6 +75,7 @@ export type UpdateOrganizerConcertInput = {
   description?: string;
   artist_name?: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
   starts_at?: string;
   ends_at?: string;
   planned_publish_at?: string;
@@ -118,6 +120,7 @@ export function parseCreateOrganizerRequestBody(body: unknown): CreateOrganizerR
     gate_count: requiredPositiveInt(value.gate_count, "gate_count"),
     checker_count: requiredPositiveInt(value.checker_count, "checker_count"),
     press_kit_url: asOptionalString(value.press_kit_url),
+    artist_bio_image_url: asOptionalString(value.artist_bio_image_url),
     ticket_types: ticketTypes,
   };
 }
@@ -165,6 +168,7 @@ export function parseUpdateOrganizerConcertBody(body: unknown): UpdateOrganizerC
     description: asOptionalString(value.description),
     artist_name: asOptionalString(value.artist_name),
     artist_bio: asOptionalString(value.artist_bio),
+    artist_bio_image_url: asOptionalString(value.artist_bio_image_url),
     starts_at: optionalDateString(value.starts_at, "starts_at"),
     ends_at: optionalDateString(value.ends_at, "ends_at"),
     planned_publish_at: optionalDateString(value.planned_publish_at, "planned_publish_at"),

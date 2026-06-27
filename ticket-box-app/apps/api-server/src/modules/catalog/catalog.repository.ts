@@ -506,6 +506,7 @@ function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
     description: concert.description ?? undefined,
     artist_name: concert.artistName,
     artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
     status: concert.status,
@@ -536,7 +537,8 @@ function mapConcertMetadata(concert: ConcertMetadataRecord): ConcertMetadataDto 
     seat_map: {
       svg_url: concert.seatMapUrl ?? undefined
     },
-    artist_bio: concert.artistBio ?? undefined
+    artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined
   };
 }
 

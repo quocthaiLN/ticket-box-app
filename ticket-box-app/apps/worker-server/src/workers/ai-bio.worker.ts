@@ -171,8 +171,15 @@ async function readSource(source: string): Promise<string | undefined> {
     ? Buffer.from(await (await fetch(ref)).arrayBuffer())
     : await downloadPressKit(ref);
 
-  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
-  return (await pdfParse(buffer)).text;
+  // pdf-parse v2: dùng class PDFParse (Buffer tự convert sang Uint8Array).
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const { text } = await parser.getText();
+    return text;
+  } finally {
+    await parser.destroy();
+  }
 }
 
 // Làm sạch văn bản trích từ PDF: nối từ ngắt dòng, bỏ số trang, gom khoảng trắng.

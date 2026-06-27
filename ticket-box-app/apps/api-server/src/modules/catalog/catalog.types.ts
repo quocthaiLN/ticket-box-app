@@ -39,6 +39,7 @@ export type ConcertDetailDto = Omit<ConcertSummaryDto, "venue" | "ticket_price_r
   description?: string;
   venue: VenueDto;
   artist_bio?: string;
+  artist_bio_image_url?: string;
   seat_map_url?: string;
 };
 
@@ -67,7 +68,7 @@ export type TicketTypeDto = {
 };
 
 export type ConcertMetadataDto = {
-  concert: Omit<ConcertDetailDto, "venue" | "artist_bio">;
+  concert: Omit<ConcertDetailDto, "venue" | "artist_bio" | "artist_bio_image_url">;
   venue: VenueDto;
   seat_zones: SeatZoneDto[];
   ticket_types: TicketTypeDto[];
@@ -76,6 +77,7 @@ export type ConcertMetadataDto = {
     fallback_image_url?: string;
   };
   artist_bio?: string;
+  artist_bio_image_url?: string;
 };
 
 export type SeatMapDto = {

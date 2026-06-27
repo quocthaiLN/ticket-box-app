@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
-import { createPressKitUploadUrl } from "@ticketbox/storage";
+import {
+  uploadPressKit as storePressKit,
+  uploadArtistImage as storeArtistImage,
+} from "@ticketbox/storage";
 import { collection, ok } from "../../shared/http/response.js";
 import { Errors } from "../../shared/http/problem-details.js";
 import { catalogCacheKeys } from "../catalog/catalog.cache.js";
@@ -52,16 +55,38 @@ export class OrganizerController {
     }
   };
 
-  // Cấp signed upload URL để BTC đẩy file PDF press kit thẳng lên Supabase.
-  createPressKitUpload = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ) => {
+  // Upload PDF press kit (server-side) lên Supabase, trả object key để gắn vào hồ sơ.
+  uploadPressKit = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      currentUserId(res); // chỉ cần đảm bảo đã đăng nhập; guard ORGANIZER ở router
-      const data = await createPressKitUploadUrl(`${randomUUID()}.pdf`);
-      res.json(ok(data, req.requestId));
+      const organizerId = currentUserId(res); // guard ORGANIZER ở router
+      const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (buffer.length === 0) {
+        throw Errors.fieldValidationError("file", "Empty PDF upload.");
+      }
+      // Gom file theo organizer (concert chưa tồn tại lúc upload); UUID đảm bảo không trùng.
+      const objectKey = await storePressKit(`${organizerId}/${randomUUID()}.pdf`, buffer);
+      res.status(201).json(ok({ object_key: objectKey }, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  // Upload ảnh nghệ sĩ (server-side) lên Supabase public, trả object key + URL hiển thị.
+  uploadArtistImage = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizerId = currentUserId(res);
+      const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (buffer.length === 0) {
+        throw Errors.fieldValidationError("file", "Empty image upload.");
+      }
+      const contentType = req.headers["content-type"] ?? "image/jpeg";
+      // Gom ảnh theo organizer; UUID đảm bảo không trùng.
+      const data = await storeArtistImage(
+        `${organizerId}/${randomUUID()}.${imageExtension(contentType)}`,
+        buffer,
+        contentType,
+      );
+      res.status(201).json(ok(data, req.requestId));
     } catch (err) {
       next(err);
     }
@@ -266,6 +291,12 @@ function currentUserId(res: Response) {
     throw Errors.unauthorized();
   }
   return userId;
+}
+
+function imageExtension(contentType: string) {
+  // Lấy subtype từ content-type: image/png→png, image/jpeg→jpg, image/svg+xml→svg...
+  const sub = contentType.split("/")[1]?.split(/[;+]/)[0]?.trim();
+  return !sub || sub === "jpeg" ? "jpg" : sub;
 }
 
 function toCollection<T extends { id: string }>(

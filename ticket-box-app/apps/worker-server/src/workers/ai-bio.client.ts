@@ -1,14 +1,19 @@
 /**
- * ai-bio.client.ts — Sinh bản giới thiệu nghệ sĩ NGẮN GỌN bằng Google Gemini.
+ * ai-bio.client.ts — Sinh phần giới thiệu nghệ sĩ qua API AI (OpenAI-compatible).
+ *
+ * Mặc định dùng Groq (free, không cần thẻ). Đổi nhà cung cấp chỉ bằng env
+ * AI_BASE_URL / AI_API_KEY / AI_MODEL (Groq, OpenRouter, Cerebras, Ollama local, ...).
  *
  * Pipeline: làm sạch + ưu tiên thông tin quan trọng + giới hạn token (prioritizeText)
- * → prompt cụ thể (buildPrompt) → gọi Gemini REST (callGemini).
+ * → prompt cụ thể (buildPrompt) → gọi chat/completions (callChatCompletion).
  */
 
-const MODEL = process.env.AI_MODEL ?? "gemini-2.0-flash";
-// Giới hạn token cho "bản giới thiệu ngắn gọn": tiếng Việt ~1 token ≈ 2.5–3.5 ký tự.
-const MAX_SOURCE_CHARS = Number(process.env.AI_MAX_SOURCE_CHARS ?? 9000); // input ~3.000 token
-const MAX_OUTPUT_TOKENS = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 300); // output ~90–130 từ
+// Endpoint OpenAI-compatible. Groq: https://api.groq.com/openai/v1
+const BASE_URL = (process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1").replace(/\/+$/, "");
+const MODEL = process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
+// Ngân sách token: tiếng Việt ~1 token ≈ 2.5–3.5 ký tự. Giữ vừa phải để hợp free tier.
+const MAX_SOURCE_CHARS = Number(process.env.AI_MAX_SOURCE_CHARS ?? 8000); // input ~2.5–3k token
+const MAX_OUTPUT_TOKENS = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 800); // output ~250–350 từ
 
 export type GenerateBioInput = {
   artistName: string;
@@ -20,15 +25,15 @@ export async function generateArtistBio(
   input: GenerateBioInput,
 ): Promise<{ bio: string; model: string }> {
   const prioritized = prioritizeText(input.sourceText, MAX_SOURCE_CHARS);
-  return callGemini(buildPrompt({ ...input, sourceText: prioritized }));
+  return callChatCompletion(buildPrompt({ ...input, sourceText: prioritized }));
 }
 
-// ── Prompt: đoạn giới thiệu ngắn gọn cho trang chi tiết concert ──────────────
+// ── Prompt: phần giới thiệu nghệ sĩ cho trang chi tiết concert ──────────────
 function buildPrompt({ artistName, eventTitle, sourceText }: GenerateBioInput) {
-  return `Bạn là biên tập viên giới thiệu nghệ sĩ cho một nền tảng bán vé concert. Dựa CHỈ trên nội dung HỒ SƠ/PRESS KIT dưới đây, viết một đoạn GIỚI THIỆU NGẮN GỌN bằng tiếng Việt để hiển thị trên TRANG CHI TIẾT CONCERT.
+  return `Bạn là biên tập viên giới thiệu nghệ sĩ cho một nền tảng bán vé concert. Dựa CHỈ trên nội dung HỒ SƠ/PRESS KIT dưới đây, viết phần GIỚI THIỆU nghệ sĩ bằng tiếng Việt để hiển thị trên TRANG CHI TIẾT CONCERT.
 
 YÊU CẦU:
-- Độ dài 3–5 câu (khoảng 60–120 từ), MỘT đoạn duy nhất.
+- Độ dài khoảng 150–250 từ, 1–2 đoạn.
 - Giọng văn trang trọng, cuốn hút, hướng tới khán giả đang cân nhắc mua vé.
 - ƯU TIÊN (nếu hồ sơ có): nghệ danh/tên, dòng nhạc – phong cách, 1–2 thành tựu nổi bật (giải thưởng, ca khúc/album đình đám, dấu mốc sự nghiệp), điểm khiến khán giả nên xem trực tiếp.
 - TUYỆT ĐỐI KHÔNG bịa thông tin, số liệu hay giải thưởng không có trong hồ sơ. Thiếu dữ liệu thì viết tổng quát và ngắn hơn.
@@ -85,30 +90,29 @@ export function prioritizeText(raw: string, budget: number): string {
   return ordered.join("\n\n");
 }
 
-// ── Gọi Gemini REST (free tier) ─────────────────────────────────────────────
-async function callGemini(prompt: string): Promise<{ bio: string; model: string }> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY chưa được cấu hình.");
+// ── Gọi API AI qua chuẩn OpenAI chat/completions (Groq mặc định) ─────────────
+async function callChatCompletion(prompt: string): Promise<{ bio: string; model: string }> {
+  const key = process.env.AI_API_KEY;
+  if (!key) throw new Error("AI_API_KEY chưa được cấu hình.");
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.6, maxOutputTokens: MAX_OUTPUT_TOKENS },
-      }),
-    },
-  );
+  const res = await fetch(`${BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.6,
+      max_tokens: MAX_OUTPUT_TOKENS,
+    }),
+  });
   if (!res.ok) {
-    throw new Error(`Gemini API error ${res.status}: ${await res.text()}`);
+    throw new Error(`AI API error ${res.status}: ${await res.text()}`);
   }
 
   const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    choices?: { message?: { content?: string } }[];
   };
-  const bio = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!bio) throw new Error("Gemini trả về bio rỗng.");
+  const bio = data.choices?.[0]?.message?.content?.trim();
+  if (!bio) throw new Error("AI trả về bio rỗng.");
   return { bio, model: MODEL };
 }
