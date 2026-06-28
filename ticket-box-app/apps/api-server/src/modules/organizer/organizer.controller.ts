@@ -163,6 +163,28 @@ export class OrganizerController {
     }
   };
 
+  setGuestDriveFolder = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const concertId = req.params.concert_id;
+      const body = (req.body ?? {}) as { guest_drive_folder_id?: unknown };
+      const folder =
+        typeof body.guest_drive_folder_id === "string" ? body.guest_drive_folder_id : "";
+      const data = await this.service.setGuestDriveFolder(
+        currentUserId(res),
+        concertId,
+        folder,
+      );
+      void invalidateConcertCache(concertId);
+      res.json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
   createSeatZone = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const concertId = req.params.concert_id;

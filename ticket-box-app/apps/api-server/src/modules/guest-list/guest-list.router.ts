@@ -4,6 +4,7 @@ import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import {
   getGuestImportJob,
   getGuestImportJobErrors,
+  listGuestImportJobs,
   scanGuest,
   searchGuests,
   triggerGuestImport,
@@ -18,6 +19,7 @@ const checkerOnly = [requireAuth, requireRole("CHECKER", "ADMIN")];
 // Nhập khách mời VIP chạy tự động lúc 0h (giờ VN) từ Google Drive.
 // Endpoint dưới để admin chạy nhập thủ công cho 1 concert (test / chạy lại ngoài lịch).
 guestListRouter.post("/admin/concerts/:concert_id/guest-import-jobs", ...adminOnly, triggerGuestImport);
+guestListRouter.get("/admin/concerts/:concert_id/guest-import-jobs", ...adminOnly, listGuestImportJobs);
 guestListRouter.get("/admin/guest-import-jobs/:job_id", ...adminOnly, getGuestImportJob);
 guestListRouter.get("/admin/guest-import-jobs/:job_id/errors", ...adminOnly, getGuestImportJobErrors);
 

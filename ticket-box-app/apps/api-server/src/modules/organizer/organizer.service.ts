@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
+import { extractDriveFolderId } from "../../shared/utils/drive.js";
 import {
   OrganizerRepository,
   toConcertUpdateData,
@@ -20,6 +21,14 @@ import type {
   OrderStatusValue,
   UpdateOrganizerConcertInput,
 } from "./organizer.schema.js";
+
+// 0h (giờ VN) của ngày diễn = thời điểm cron import chạy. BTC chỉ sửa folder trước mốc này.
+function guestFolderEditCutoff(startsAt: Date): Date {
+  const ICT_OFFSET = 7 * 60 * 60 * 1000;
+  const wall = startsAt.getTime() + ICT_OFFSET;
+  const dayStartWall = Math.floor(wall / 86_400_000) * 86_400_000;
+  return new Date(dayStartWall - ICT_OFFSET);
+}
 
 export class OrganizerService {
   constructor(private readonly repository = new OrganizerRepository()) {}
@@ -124,6 +133,38 @@ export class OrganizerService {
     }
 
     return this.repository.updateDraftConcert(concertId, toConcertUpdateData(input));
+  }
+
+  // Gán/sửa thư mục Drive khách mời. Cho phép mọi trạng thái concert, nhưng chỉ
+  // trước 0h (giờ VN) ngày diễn — sau mốc đó cron import đã chạy nên khoá lại.
+  async setGuestDriveFolder(
+    organizerId: string,
+    concertId: string,
+    folderInput: string,
+  ) {
+    const concert = await this.repository.getOwnedConcertForUpdate(organizerId, concertId);
+    if (!concert) {
+      throw Errors.concertNotFound(concertId);
+    }
+    // Chỉ khoá khi concert đã PUBLISHED (sẽ được cron nhập) và quá 0h ngày diễn.
+    // Concert DRAFT chưa được nhập nên luôn cho sửa.
+    if (
+      concert.status === ConcertStatus.PUBLISHED &&
+      Date.now() >= guestFolderEditCutoff(concert.startsAt).getTime()
+    ) {
+      throw Errors.guestFolderLocked();
+    }
+
+    const trimmed = folderInput.trim();
+    const folderId = trimmed ? extractDriveFolderId(trimmed) : null;
+    if (trimmed && !folderId) {
+      throw Errors.fieldValidationError(
+        "guest_drive_folder_id",
+        "guest_drive_folder_id must be a Google Drive folder link or folder ID.",
+      );
+    }
+
+    return this.repository.setGuestDriveFolder(concertId, folderId);
   }
 
   async createSeatZone(

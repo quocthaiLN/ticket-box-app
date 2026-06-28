@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
 import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
+import { AdminGuestListPage } from "./routes/admin/AdminGuestListPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
 import { AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
 import { AuthPage } from "./routes/auth/AuthPage";
@@ -70,6 +71,10 @@ const router = createBrowserRouter([
       {
         path: "admin/accounts",
         element: <AdminAccountsPage />
+      },
+      {
+        path: "admin/guest-list",
+        element: <AdminGuestListPage />
       },
       {
         path: "organizer",

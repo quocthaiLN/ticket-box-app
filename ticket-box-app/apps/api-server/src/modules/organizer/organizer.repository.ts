@@ -72,6 +72,7 @@ export type OrganizerConcertSummaryDto = {
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
+  guest_drive_folder_id?: string;
   venue: {
     id: string;
     name: string;
@@ -384,6 +385,19 @@ export class OrganizerRepository {
       status: concert.status,
       updated_at: concert.updatedAt.toISOString(),
     };
+  }
+
+  // Gán/xoá thư mục Drive khách mời cho concert (không phụ thuộc trạng thái concert).
+  async setGuestDriveFolder(
+    concertId: string,
+    folderId: string | null,
+  ): Promise<{ id: string; guest_drive_folder_id: string | null }> {
+    const concert = await prisma.concert.update({
+      where: { id: concertId },
+      data: { guestDriveFolderId: folderId },
+      select: { id: true, guestDriveFolderId: true },
+    });
+    return { id: concert.id, guest_drive_folder_id: concert.guestDriveFolderId };
   }
 
   async createSeatZone(
@@ -762,6 +776,7 @@ function mapConcertSummary(
     ends_at: concert.endsAt.toISOString(),
     planned_publish_at: concert.plannedPublishAt?.toISOString(),
     cover_image_url: concert.coverImageUrl ?? undefined,
+    guest_drive_folder_id: concert.guestDriveFolderId ?? undefined,
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,

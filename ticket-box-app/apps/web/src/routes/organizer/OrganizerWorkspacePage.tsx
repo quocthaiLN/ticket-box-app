@@ -38,7 +38,9 @@ import {
   getOrganizerRequest,
   listOrganizerCheckerAccounts,
   listOrganizerConcerts,
+  listOrganizerConcertGuests,
   listOrganizerOrders,
+  setOrganizerConcertDriveFolder,
   listOrganizerRequests,
   listOrganizerVenues,
   normalizeTicketTypes,
@@ -53,6 +55,7 @@ import {
   type OrganizerAnalytics,
   type OrganizerCheckerAccount,
   type OrganizerConcert,
+  type OrganizerGuest,
   type OrganizerOrder,
   type OrganizerRequestDetail,
   type OrganizerRequestSummary,
@@ -1472,7 +1475,9 @@ function OrganizerConcertEditor({
   onCreateSeatZone: (input: CreateOrganizerSeatZoneInput) => Promise<OrganizerSeatZone>;
   onCreateTicketType: (input: CreateOrganizerTicketTypeInput) => Promise<OrganizerConcert["ticket_types"][number]>;
 }) {
-  const [activeSection, setActiveSection] = useState<"basic" | "zones" | "tickets">("basic");
+  const [activeSection, setActiveSection] = useState<"basic" | "zones" | "tickets" | "guests">(
+    concert.status === "PUBLISHED" ? "guests" : "basic",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverUploadError, setCoverUploadError] = useState("");
@@ -1527,7 +1532,11 @@ function OrganizerConcertEditor({
     { id: "basic" as const, label: "Thông tin cơ bản" },
     { id: "zones" as const, label: "Zone" },
     { id: "tickets" as const, label: "Loại vé" },
+    { id: "guests" as const, label: "Khách mời" },
   ];
+
+  // Concert đã PUBLISHED: thông tin/zone/vé khoá (chỉ đọc), chỉ sửa được khu Khách mời.
+  const readOnly = concert.status === "PUBLISHED";
 
   async function handleSave() {
     setSubmitting(true);
@@ -1722,7 +1731,19 @@ function OrganizerConcertEditor({
         ))}
       </div>
 
+      {readOnly && (
+        <div className="mb-4 max-w-5xl rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 px-4 py-2.5 text-xs text-[#F5C842]">
+          Concert đã publish — thông tin sự kiện đã khoá, chỉ chỉnh sửa được khu <b>Khách mời</b>.
+        </div>
+      )}
+
       <div className="max-w-5xl space-y-6">
+        {activeSection === "guests" && (
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
+            <GuestSection concert={concert} />
+          </div>
+        )}
+        <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-6 border-0 p-0">
         {activeSection === "basic" && (
           <EditorCard title="Thông tin cơ bản">
             <div className="space-y-4">
@@ -1995,6 +2016,7 @@ function OrganizerConcertEditor({
             )}
           </EditorCard>
         )}
+        </fieldset>
       </div>
     </div>
   );
@@ -2022,7 +2044,7 @@ function OrganizerConcertCard({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const view = toOrganizerConcertPerformanceView(concert, analytics);
-  const canEdit = concert.status === "DRAFT";
+  const canEdit = concert.status === "DRAFT" || concert.status === "PUBLISHED";
   const canDelete = concert.status !== "CANCELLED";
   const ticketTypeLabel = `${(concert.ticket_types ?? []).length.toLocaleString("vi-VN")} loại vé`;
 
@@ -2080,7 +2102,7 @@ function OrganizerConcertCard({
                 <Eye className="h-4 w-4" />
               </Link>
               {canEdit && (
-                <button type="button" onClick={onEdit} className="rounded-lg p-1.5 text-[#7B61FF] transition-colors hover:bg-white/10" title="Chỉnh sửa DRAFT">
+                <button type="button" onClick={onEdit} className="rounded-lg p-1.5 text-[#7B61FF] transition-colors hover:bg-white/10" title="Chỉnh sửa">
                   <Edit2 className="h-4 w-4" />
                 </button>
               )}
@@ -2163,6 +2185,128 @@ function OrganizerConcertCard({
       )}
     </article>
   );
+}
+
+function GuestSection({ concert }: { concert: OrganizerConcert }) {
+  const [folder, setFolder] = useState(concert.guest_drive_folder_id ?? "");
+  const [savingFolder, setSavingFolder] = useState(false);
+  const [folderMsg, setFolderMsg] = useState("");
+  const [guests, setGuests] = useState<OrganizerGuest[] | null>(null);
+  const [loadingGuests, setLoadingGuests] = useState(false);
+  const [openGuests, setOpenGuests] = useState(false);
+
+  // Chỉ khoá khi concert đã PUBLISHED và quá 0h ngày diễn (lúc cron import chạy).
+  // Concert DRAFT chưa được nhập nên luôn cho sửa.
+  const locked = concert.status === "PUBLISHED" && Date.now() >= guestFolderEditCutoff(concert.starts_at);
+
+  async function saveFolder() {
+    setSavingFolder(true);
+    setFolderMsg("");
+    try {
+      const result = await setOrganizerConcertDriveFolder(concert.id, folder.trim());
+      setFolder(result.guest_drive_folder_id ?? "");
+      setFolderMsg("Đã lưu thư mục Drive.");
+    } catch (err) {
+      setFolderMsg(err instanceof Error ? err.message : "Không lưu được thư mục.");
+    } finally {
+      setSavingFolder(false);
+    }
+  }
+
+  async function toggleGuests() {
+    const next = !openGuests;
+    setOpenGuests(next);
+    if (next && guests === null) {
+      setLoadingGuests(true);
+      try {
+        setGuests(await listOrganizerConcertGuests(concert.id));
+      } catch {
+        setGuests([]);
+      } finally {
+        setLoadingGuests(false);
+      }
+    }
+  }
+
+  return (
+    <div className="border-t border-white/10 bg-white/[0.02] p-5">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#F0EDEB]">
+        <Users className="h-4 w-4 text-[#2DBE6C]" />
+        Khách mời
+      </h3>
+
+      <label className="mb-1 block text-xs font-semibold text-[#8585A0]">Thư mục Google Drive (CSV khách mời)</label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          value={folder}
+          onChange={(event) => setFolder(event.target.value)}
+          disabled={locked}
+          placeholder="Dán link thư mục Drive hoặc ID…"
+          className={inputClass}
+          style={inputStyle}
+        />
+        <button
+          type="button"
+          onClick={saveFolder}
+          disabled={locked || savingFolder}
+          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#7B61FF] px-4 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {savingFolder ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          Lưu
+        </button>
+      </div>
+      <p className="mt-1.5 text-xs leading-5 text-[#8585A0]">
+        {locked
+          ? "Đã khoá chỉnh sửa — quá 0h ngày diễn (hệ thống đã/đang nhập danh sách)."
+          : "Share thư mục (Viewer) cho storage@ticketbox-500711.iam.gserviceaccount.com. Chỉ sửa được trước 0h ngày diễn."}
+      </p>
+      {folderMsg && <p className="mt-1 text-xs text-[#C9BCFF]">{folderMsg}</p>}
+
+      <button type="button" onClick={toggleGuests} className="mt-4 flex items-center gap-2 text-sm font-semibold text-[#F0EDEB]">
+        Danh sách khách mời{guests ? ` (${guests.length})` : ""}
+        {openGuests ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+      {openGuests && (
+        <div className="mt-2">
+          {loadingGuests && (
+            <p className="flex items-center gap-2 text-xs text-[#8585A0]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang tải…
+            </p>
+          )}
+          {!loadingGuests && guests && guests.length === 0 && (
+            <p className="text-xs leading-5 text-[#8585A0]">
+              Chưa có khách mời. Gán thư mục Drive rồi chờ hệ thống nhập lúc 0h, hoặc nhờ admin nhập ngay.
+            </p>
+          )}
+          {!loadingGuests && guests && guests.length > 0 && (
+            <div className="space-y-1.5">
+              {guests.map((guest) => (
+                <div key={guest.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs">
+                  <span className="min-w-0 truncate">
+                    <b className="text-[#F0EDEB]">{guest.full_name}</b>
+                    <span className="text-[#8585A0]"> · {guest.email}</span>
+                  </span>
+                  <span className="shrink-0 text-[#8585A0]">{guestStatusLabel(guest.status)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 0h (giờ VN) ngày diễn — mốc cron import chạy; sau đó khoá sửa folder.
+function guestFolderEditCutoff(startsAtIso: string): number {
+  const ICT = 7 * 60 * 60 * 1000;
+  const wall = new Date(startsAtIso).getTime() + ICT;
+  const dayStart = Math.floor(wall / 86_400_000) * 86_400_000;
+  return dayStart - ICT;
+}
+
+function guestStatusLabel(status: OrganizerGuest["status"]) {
+  return status === "CHECKED_IN" ? "Đã vào" : status === "CANCELLED" ? "Đã hủy" : "Đã mời";
 }
 
 function ConcertCard({

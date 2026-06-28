@@ -95,13 +95,9 @@ async function processGuestImportJob(
     const csv = await downloadDriveFile(job.fileUrl);
     const rows = parseCsv(csv);
 
-    // "Chỉ có VIP": mọi khách mời được gán vào zone VIP duy nhất của concert.
-    const vipZoneId = await resolveVipZoneId(job.concertId);
-    if (!vipZoneId) {
-      throw new Error("Không tìm thấy seat zone VIP cho concert này.");
-    }
-
-    const stats = await importRows(job, rows, vipZoneId);
+    // Mọi khách mời được gán vào khu khách mời (zone code = "GUEST") — tự tạo nếu thiếu.
+    const guestZoneId = await resolveGuestZoneId(job.concertId);
+    const stats = await importRows(job, rows, guestZoneId);
     const finalStatus = stats.errorRows > 0 ? "PARTIAL" : "DONE";
 
     await prisma.guestImportJob.update({
@@ -131,7 +127,7 @@ async function processGuestImportJob(
 async function importRows(
   job: GuestImportJob,
   rows: CsvRow[],
-  vipZoneId: string,
+  guestZoneId: string,
 ): Promise<ImportStats> {
   let successRows = 0;
   const errors: RowError[] = [];
@@ -154,7 +150,7 @@ async function importRows(
         phone: guest.phone,
         code: guest.code,
         note: guest.note,
-        seatZoneId: vipZoneId,
+        seatZoneId: guestZoneId,
         importJobId: job.id,
         status: "INVITED",
       },
@@ -165,7 +161,7 @@ async function importRows(
         phone: guest.phone,
         code: guest.code,
         note: guest.note,
-        seatZoneId: vipZoneId,
+        seatZoneId: guestZoneId,
         importJobId: job.id,
         status: "INVITED",
       },
@@ -223,16 +219,22 @@ function validateGuestRow(job: GuestImportJob, row: CsvRow): GuestRowValidation 
   };
 }
 
-/** "Chỉ có VIP": ưu tiên zone có code chứa "VIP"; nếu concert chỉ có 1 zone thì dùng zone đó. */
-async function resolveVipZoneId(concertId: string): Promise<string | null> {
-  const zones = await prisma.seatZone.findMany({
-    where: { concertId },
-    select: { id: true, code: true },
+/** Khu khách mời = seat zone code "GUEST". Tự tạo nếu concert chưa có để import luôn chạy được. */
+async function resolveGuestZoneId(concertId: string): Promise<string> {
+  const zone = await prisma.seatZone.upsert({
+    where: { concertId_code: { concertId, code: "GUEST" } },
+    update: {},
+    create: {
+      concertId,
+      code: "GUEST",
+      name: "Khu khách mời",
+      description: "Khu vực dành cho khách mời (tự tạo khi nhập guest list).",
+      capacity: 1000,
+      sortOrder: 99,
+    },
+    select: { id: true },
   });
-  if (zones.length === 0) return null;
-  const vip = zones.find((zone) => /vip/i.test(zone.code));
-  if (vip) return vip.id;
-  return zones.length === 1 ? zones[0].id : null;
+  return zone.id;
 }
 
 function parseCsv(input: string): CsvRow[] {

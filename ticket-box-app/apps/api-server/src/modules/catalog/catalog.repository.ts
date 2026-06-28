@@ -199,7 +199,9 @@ export class CatalogRepository {
     return venues.map(mapVenue);
   }
 
-  async listAdminConcerts(query: ListAdminQuery): Promise<ConcertSummaryDto[]> {
+  async listAdminConcerts(
+    query: ListAdminQuery
+  ): Promise<(ConcertSummaryDto & { guest_drive_folder_id?: string })[]> {
     const concerts = await prisma.concert.findMany({
       where: {
         ...buildConcertFilters(query),
@@ -216,7 +218,11 @@ export class CatalogRepository {
       take: query.limit
     });
 
-    return concerts.map(mapConcertSummary);
+    // Admin-only: kèm thư mục Drive khách mời để UI hiển thị link đã gán.
+    return concerts.map((concert) => ({
+      ...mapConcertSummary(concert),
+      guest_drive_folder_id: concert.guestDriveFolderId ?? undefined
+    }));
   }
 
   async createVenue(input: {

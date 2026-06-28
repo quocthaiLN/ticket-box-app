@@ -10,13 +10,17 @@ const TIMEZONE = "Asia/Ho_Chi_Minh";
  * Đăng ký lịch quét Drive chạy đúng 0h (giờ Việt Nam) mỗi ngày.
  * BullMQ sinh job tên "scan-drive-folders" theo cron; worker guest-import xử lý.
  */
-export async function registerNightlyGuestImportSchedule(queue: Queue): Promise<void> {
+export async function registerNightlyGuestImportSchedule(
+  queue: Queue,
+): Promise<void> {
   await queue.upsertJobScheduler(
     SCHEDULE_ID,
     { pattern: "0 0 * * *", tz: TIMEZONE },
     { name: "scan-drive-folders", data: {} },
   );
-  console.log(`[nightly-guest-import] Scheduled at 0h ${TIMEZONE} (cron "0 0 * * *")`);
+  console.log(
+    `[nightly-guest-import] Scheduled at 0h ${TIMEZONE} (cron "0 0 * * *")`,
+  );
 }
 
 /**
@@ -38,7 +42,11 @@ export async function scanAndEnqueueGuestImports(
     for (const file of files) {
       // Khử trùng: đã có job (chưa FAILED) cho đúng file Drive này thì bỏ qua.
       const existing = await prisma.guestImportJob.findFirst({
-        where: { concertId: concert.id, fileUrl: file.id, status: { not: "FAILED" } },
+        where: {
+          concertId: concert.id,
+          fileUrl: file.id,
+          status: { not: "FAILED" },
+        },
         select: { id: true },
       });
       if (existing) {
@@ -74,8 +82,9 @@ export async function scanAndEnqueueGuestImports(
 /** Concert cần quét: theo id (thủ công) hoặc các concert PUBLISHED diễn ra trong 24h tới. */
 function findConcertsToScan(concertId?: string) {
   if (concertId) {
+    // Trigger thủ công của admin: nhập cho concert này bất kể trạng thái (miễn đã gán folder).
     return prisma.concert.findMany({
-      where: { id: concertId, status: "PUBLISHED", guestDriveFolderId: { not: null } },
+      where: { id: concertId, guestDriveFolderId: { not: null } },
       select: { id: true, organizerId: true, guestDriveFolderId: true },
     });
   }

@@ -41,6 +41,10 @@ organizerRouter.post(
   "/organizer/concerts/:concert_id",
   controller.updateDraftConcert,
 );
+organizerRouter.put(
+  "/organizer/concerts/:concert_id/guest-drive-folder",
+  controller.setGuestDriveFolder,
+);
 organizerRouter.post(
   "/organizer/concerts/:concert_id/seat-zones",
   controller.createSeatZone,

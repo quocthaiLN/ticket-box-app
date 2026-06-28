@@ -602,6 +602,15 @@ export const Errors = {
         : "Guest import job was not found.",
     }),
 
+  guestFolderLocked: () =>
+    new ApiError({
+      title: "Guest folder locked",
+      status: 409,
+      code: "GUEST_FOLDER_LOCKED",
+      detail:
+        "Đã quá hạn chỉnh sửa thư mục khách mời (sau 0h ngày diễn, lúc hệ thống nhập danh sách).",
+    }),
+
   // Organizer / Admin approval
   organizerRequestNotFound: (id?: string) =>
     new ApiError({

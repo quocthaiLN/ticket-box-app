@@ -37,6 +37,7 @@ export type ConcertSummary = {
   ends_at: string;
   status: ConcertStatus;
   cover_image_url?: string;
+  guest_drive_folder_id?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
   ticket_price_range?: {
     min_amount: number;
@@ -136,6 +137,14 @@ export async function apiPatch<TData>(
   init?: RequestInit,
 ): Promise<TData> {
   return apiRequest<TData>(path, jsonInit("PATCH", body, init));
+}
+
+export async function apiPut<TData>(
+  path: string,
+  body?: unknown,
+  init?: RequestInit,
+): Promise<TData> {
+  return apiRequest<TData>(path, jsonInit("PUT", body, init));
 }
 
 export async function apiDelete<TData>(

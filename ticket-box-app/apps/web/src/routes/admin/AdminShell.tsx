@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Trash2,
   UserCog,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -17,6 +18,7 @@ const navItems: Array<{ to: string; label: string; icon: LucideIcon }> = [
   { to: "/admin", label: "Tổng quan", icon: LayoutDashboard },
   { to: "/admin/organizer-requests", label: "Hồ sơ BTC", icon: FileText },
   { to: "/admin/deletion-requests", label: "Yêu cầu hủy", icon: Trash2 },
+  { to: "/admin/guest-list", label: "Khách mời", icon: Users },
   { to: "/admin/accounts", label: "Account", icon: UserCog },
 ];
 

@@ -14,6 +14,11 @@ export class GuestListService {
     return this.repository.getImportJob(jobId);
   }
 
+  // Danh sách job import của 1 concert.
+  listImportJobs(concertId: string, limit: number) {
+    return this.repository.listImportJobs(concertId, limit);
+  }
+
   // Lỗi từng dòng của 1 job (phân trang cursor).
   listImportErrors(jobId: string, limit: number, cursor?: string) {
     return this.repository.listImportErrors(jobId, limit, cursor);

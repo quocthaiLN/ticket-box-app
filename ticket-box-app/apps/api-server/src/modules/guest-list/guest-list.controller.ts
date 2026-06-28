@@ -40,6 +40,17 @@ export async function getGuestImportJobErrors(req: Request, res: Response, next:
   }
 }
 
+// Danh sách job import của 1 concert (admin theo dõi sau khi trigger).
+export async function listGuestImportJobs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { limit } = parseImportErrorsQuery(req.query as Record<string, unknown>);
+    const jobs = await service.listImportJobs(req.params.concert_id, limit);
+    res.json(collection(jobs, req.requestId, { next_cursor: null, has_more: false, limit }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 // Nhận request tìm guest và trả danh sách có phân trang đơn giản.
 export async function searchGuests(req: Request, res: Response, next: NextFunction) {
   try {

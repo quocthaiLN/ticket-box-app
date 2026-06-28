@@ -1,4 +1,4 @@
-import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma } from "@ticketbox/database";
+import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma, type GuestImportJob } from "@ticketbox/database";
 import { enqueueGuestImportScan } from "@ticketbox/queue";
 import { Errors } from "../../shared/http/problem-details.js";
 import type {
@@ -43,19 +43,17 @@ export class GuestListRepository {
     if (!job) {
       throw Errors.guestImportJobNotFound(jobId);
     }
-    return {
-      id: job.id,
-      concert_id: job.concertId,
-      status: job.status,
-      total_rows: job.totalRows,
-      success_rows: job.successRows,
-      error_rows: job.errorRows,
-      skipped_rows: job.skippedRows,
-      file_url: job.fileUrl,
-      started_at: job.startedAt?.toISOString() ?? null,
-      completed_at: job.completedAt?.toISOString() ?? null,
-      error_message: job.errorMessage ?? null
-    };
+    return mapImportJob(job);
+  }
+
+  // Danh sách job import gần đây của 1 concert (admin theo dõi sau khi trigger).
+  async listImportJobs(concertId: string, limit: number): Promise<GuestImportJobStatus[]> {
+    const jobs = await prisma.guestImportJob.findMany({
+      where: { concertId },
+      orderBy: { createdAt: "desc" },
+      take: limit
+    });
+    return jobs.map(mapImportJob);
   }
 
   // Lỗi từng dòng của 1 job, phân trang theo cursor (id).
@@ -350,6 +348,23 @@ function toRejectedResponse(
 // Chọn staff check-in, ưu tiên staff từ request nếu hợp lệ.
 function resolveStaffId(inputStaffId: string | undefined, deviceStaffId: string) {
   return inputStaffId && isUuid(inputStaffId) ? inputStaffId : deviceStaffId;
+}
+
+// Map row guest_import_jobs sang DTO trạng thái.
+function mapImportJob(job: GuestImportJob): GuestImportJobStatus {
+  return {
+    id: job.id,
+    concert_id: job.concertId,
+    status: job.status,
+    total_rows: job.totalRows,
+    success_rows: job.successRows,
+    error_rows: job.errorRows,
+    skipped_rows: job.skippedRows,
+    file_url: job.fileUrl,
+    started_at: job.startedAt?.toISOString() ?? null,
+    completed_at: job.completedAt?.toISOString() ?? null,
+    error_message: job.errorMessage ?? null
+  };
 }
 
 // Che bớt số điện thoại guest khi trả dữ liệu ra ngoài.
