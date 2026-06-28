@@ -14,10 +14,10 @@ import { getQueueItems } from '../db/queries';
 type HistoryFilter = 'ALL' | 'SUCCESS' | 'WRONG_GATE' | 'CONFLICT';
 
 type HistoryScreenProps = {
-  // Can be empty or contain callbacks if needed
+  currentScreen: string;
 };
 
-export function HistoryScreen({}: HistoryScreenProps) {
+export function HistoryScreen({ currentScreen }: HistoryScreenProps) {
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<HistoryFilter>('ALL');
   const [items, setItems] = useState<any[]>([]);
@@ -28,9 +28,12 @@ export function HistoryScreen({}: HistoryScreenProps) {
     conflict: 0,
   });
 
+  // Reload mỗi khi user navigate sang tab Lịch sử
   useEffect(() => {
-    void loadHistory();
-  }, []);
+    if (currentScreen === 'history') {
+      void loadHistory();
+    }
+  }, [currentScreen]);
 
   async function loadHistory() {
     setLoading(true);

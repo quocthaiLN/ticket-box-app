@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 export type AllowedSeatZone = {
   id: string;
@@ -27,6 +28,7 @@ export type QueueItem = {
   client_item_id: string;
   type: 'TICKET' | 'GUEST';
   qr_token: string | null;
+  qr_payload_hash: string | null;
   guest_id: string | null;
   phone: string | null;
   concert_id: string;
@@ -35,6 +37,8 @@ export type QueueItem = {
   status: string;
   message: string | null;
 };
+
+const BATCH_SIZE = 200;
 
 export async function savePreloadData(
   db: SQLiteDatabase,
@@ -48,7 +52,7 @@ export async function savePreloadData(
     await db.runAsync('DELETE FROM tickets');
     await db.runAsync('DELETE FROM guests');
 
-    // 2. Insert allowed zones
+    // 2. Insert allowed zones (thường ít, giữ nguyên insert từng dòng)
     for (const zone of allowedZones) {
       await db.runAsync(
         'INSERT INTO allowed_seat_zones (id, code, name) VALUES (?, ?, ?)',
@@ -56,32 +60,44 @@ export async function savePreloadData(
       );
     }
 
-    // 3. Insert tickets
-    for (const ticket of tickets) {
-      await db.runAsync(
-        'INSERT INTO tickets (ticket_id, qr_payload_hash, concert_id, zone_id, status_snapshot) VALUES (?, ?, ?, ?, ?)',
-        [
+    // 3. Insert tickets theo lô (batch) để tăng hiệu năng với dữ liệu lớn
+    for (let i = 0; i < tickets.length; i += BATCH_SIZE) {
+      const batch = tickets.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?)').join(', ');
+      const values: (string)[] = [];
+      for (const ticket of batch) {
+        values.push(
           ticket.ticket_id,
           ticket.qr_payload_hash,
           ticket.concert_id,
           ticket.zone_id,
-          ticket.status_snapshot,
-        ]
+          ticket.status_snapshot
+        );
+      }
+      await db.runAsync(
+        `INSERT INTO tickets (ticket_id, qr_payload_hash, concert_id, zone_id, status_snapshot) VALUES ${placeholders}`,
+        values
       );
     }
 
-    // 4. Insert guests
-    for (const guest of guests) {
-      await db.runAsync(
-        'INSERT INTO guests (guest_id, concert_id, zone_id, full_name, phone_masked, status_snapshot) VALUES (?, ?, ?, ?, ?, ?)',
-        [
+    // 4. Insert guests theo lô (batch) để tăng hiệu năng với dữ liệu lớn
+    for (let i = 0; i < guests.length; i += BATCH_SIZE) {
+      const batch = guests.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      const values: (string)[] = [];
+      for (const guest of batch) {
+        values.push(
           guest.guest_id,
           guest.concert_id,
           guest.zone_id,
           guest.full_name,
           guest.phone_masked,
-          guest.status_snapshot,
-        ]
+          guest.status_snapshot
+        );
+      }
+      await db.runAsync(
+        `INSERT INTO guests (guest_id, concert_id, zone_id, full_name, phone_masked, status_snapshot) VALUES ${placeholders}`,
+        values
       );
     }
   });
@@ -136,7 +152,7 @@ export async function checkInGuestOffline(
   concertId: string,
   gateId: string
 ): Promise<void> {
-  const clientItemId = `local-guest-${Date.now()}`;
+  const clientItemId = `local-guest-${Crypto.randomUUID()}`;
   const now = new Date().toISOString();
 
   await db.withTransactionAsync(async () => {
@@ -148,8 +164,8 @@ export async function checkInGuestOffline(
 
     // 2. Insert into offline_queue
     await db.runAsync(
-      `INSERT INTO offline_queue (client_item_id, type, qr_token, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
-       VALUES (?, 'GUEST', NULL, ?, NULL, ?, ?, ?, 'SUCCESS', 'Check-in khách mời offline thành công!')`,
+      `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+       VALUES (?, 'GUEST', NULL, NULL, ?, NULL, ?, ?, ?, 'SUCCESS', 'Check-in khách mời offline thành công!')`,
       [clientItemId, guestId, concertId, gateId, now]
     );
   });

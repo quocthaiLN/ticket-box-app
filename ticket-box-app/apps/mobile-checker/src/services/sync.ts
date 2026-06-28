@@ -18,9 +18,21 @@ export type SyncResult = {
   message: string;
 };
 
+// Cờ module-level để chặn gọi executeQueueSync đồng thời (race condition)
+let isSyncing = false;
+
 export async function executeQueueSync(
   config: SyncConfig
 ): Promise<SyncResult> {
+  // Nếu đang đồng bộ, bỏ qua lần gọi này
+  if (isSyncing) {
+    return {
+      syncedCount: 0,
+      conflictCount: 0,
+      failedCount: 0,
+      message: 'Đang đồng bộ, bỏ qua lần gọi trùng.',
+    };
+  }
   const db = await getDatabase();
   const pendingItems = await getPendingQueueItems(db);
 
@@ -38,6 +50,7 @@ export async function executeQueueSync(
     await updateQueueItemStatus(db, item.client_item_id, 'syncing', null);
   }
 
+  isSyncing = true;
   try {
     // 2. call the backend sync API
     const response = await syncOfflineQueue(
@@ -51,6 +64,7 @@ export async function executeQueueSync(
         client_item_id: item.client_item_id,
         type: item.type,
         qr_token: item.qr_token,
+        qr_payload_hash: item.qr_payload_hash,
         guest_id: item.guest_id,
         phone: item.phone,
         concert_id: item.concert_id,
@@ -107,5 +121,7 @@ export async function executeQueueSync(
       );
     }
     throw error;
+  } finally {
+    isSyncing = false;
   }
 }

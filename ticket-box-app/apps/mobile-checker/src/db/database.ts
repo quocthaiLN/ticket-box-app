@@ -38,6 +38,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       client_item_id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
       qr_token TEXT,
+      qr_payload_hash TEXT,
       guest_id TEXT,
       phone TEXT,
       concert_id TEXT NOT NULL,

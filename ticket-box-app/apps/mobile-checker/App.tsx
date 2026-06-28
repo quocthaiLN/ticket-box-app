@@ -103,7 +103,7 @@ export default function App() {
         );
       case 'history':
         return (
-          <HistoryScreen />
+          <HistoryScreen currentScreen={currentScreen} />
         );
       case 'queue':
         return (

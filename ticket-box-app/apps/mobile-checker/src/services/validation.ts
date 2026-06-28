@@ -8,13 +8,15 @@ export async function validateTicketOffline(
 ): Promise<{ result: string; reason?: string }> {
   const db = await getDatabase();
   const now = new Date().toISOString();
-  const clientItemId = `local-${Date.now()}`;
+  const clientItemId = `local-${Crypto.randomUUID()}`;
   
   // 1. Resolve QR payload (check if it is a JSON format containing qr_token or qrToken)
   let token = qrToken;
+  let ticketIdFromPayload: string | undefined;
   try {
     const parsed = JSON.parse(qrToken);
     token = parsed.qr_token || parsed.qrToken || qrToken;
+    ticketIdFromPayload = parsed.ticket_id || parsed.ticketId;
   } catch {}
 
   // 2. Hash token to SHA-256 string
@@ -23,16 +25,32 @@ export async function validateTicketOffline(
     token
   );
 
-  // 3. Query the ticket from the local SQLite database
-  const ticket = await db.getFirstAsync<{
+  // 3. Query the ticket from the local SQLite database (query by ticket_id if present in payload, fallback to qr_payload_hash)
+  let ticket: {
     ticket_id: string;
     zone_id: string;
     status_snapshot: string;
-  }>('SELECT ticket_id, zone_id, status_snapshot FROM tickets WHERE qr_payload_hash = ?', [tokenHash]);
+  } | null = null;
+
+  if (ticketIdFromPayload) {
+    ticket = await db.getFirstAsync<{
+      ticket_id: string;
+      zone_id: string;
+      status_snapshot: string;
+    }>('SELECT ticket_id, zone_id, status_snapshot FROM tickets WHERE ticket_id = ?', [ticketIdFromPayload]);
+  }
+
+  if (!ticket) {
+    ticket = await db.getFirstAsync<{
+      ticket_id: string;
+      zone_id: string;
+      status_snapshot: string;
+    }>('SELECT ticket_id, zone_id, status_snapshot FROM tickets WHERE qr_payload_hash = ?', [tokenHash]);
+  }
 
   if (!ticket) {
     // If not found, log invalid ticket to the queue
-    await insertQueue(db, clientItemId, 'TICKET', qrToken, null, null, null, concertId, gateId, now, 'INVALID_TICKET', 'Vé không hợp lệ!');
+    await insertQueue(db, clientItemId, 'TICKET', qrToken, tokenHash, null, null, null, concertId, gateId, now, 'INVALID_TICKET', 'Vé không hợp lệ!');
     return { result: 'INVALID_TICKET', reason: 'Vé không hợp lệ!' };
   }
 
@@ -42,14 +60,14 @@ export async function validateTicketOffline(
     [ticket.zone_id]
   );
   if (!zoneAllowed) {
-    await insertQueue(db, clientItemId, 'TICKET', qrToken, ticket.ticket_id, null, null, concertId, gateId, now, 'WRONG_GATE', 'Vé đi sai cổng!');
+    await insertQueue(db, clientItemId, 'TICKET', qrToken, null, ticket.ticket_id, null, null, concertId, gateId, now, 'WRONG_GATE', 'Vé đi sai cổng!');
     return { result: 'WRONG_GATE', reason: 'Vé đi sai cổng!' };
   }
 
   // 5. Verify double check-in
   const isAlreadyCheckedIn = ticket.status_snapshot === 'CHECKED_IN';
   if (isAlreadyCheckedIn) {
-    await insertQueue(db, clientItemId, 'TICKET', qrToken, ticket.ticket_id, null, null, concertId, gateId, now, 'ALREADY_CHECKED_IN', 'Vé đã soát!');
+    await insertQueue(db, clientItemId, 'TICKET', qrToken, null, ticket.ticket_id, null, null, concertId, gateId, now, 'ALREADY_CHECKED_IN', 'Vé đã soát!');
     return { result: 'ALREADY_CHECKED_IN', reason: 'Vé đã soát!' };
   }
 
@@ -60,9 +78,9 @@ export async function validateTicketOffline(
       await db.runAsync('UPDATE tickets SET status_snapshot = ? WHERE ticket_id = ?', ['CHECKED_IN', ticket.ticket_id]);
       // Save details to the offline queue table for sync
       await db.runAsync(`
-        INSERT INTO offline_queue (client_item_id, type, qr_token, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
-        VALUES (?, 'TICKET', ?, NULL, NULL, ?, ?, ?, 'SUCCESS', 'Soát vé thành công!')
-      `, [clientItemId, qrToken, concertId, gateId, now]);
+        INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+        VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, 'SUCCESS', 'Soát vé thành công!')
+      `, [clientItemId, qrToken, tokenHash, concertId, gateId, now]);
     });
     return { result: 'SUCCESS' };
   } catch (error) {
@@ -75,6 +93,7 @@ async function insertQueue(
   clientItemId: string,
   type: string,
   qrToken: string | null,
+  qrPayloadHash: string | null,
   ticketId: string | null,
   guestId: string | null,
   phone: string | null,
@@ -85,9 +104,9 @@ async function insertQueue(
   message: string
 ) {
   await db.runAsync(`
-    INSERT INTO offline_queue (client_item_id, type, qr_token, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [clientItemId, type, qrToken, guestId, phone, concertId, gateId, scannedAt, status, message]);
+    INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [clientItemId, type, qrToken, qrPayloadHash, guestId, phone, concertId, gateId, scannedAt, status, message]);
 }
 
 export async function validateGuestOffline(
@@ -98,7 +117,7 @@ export async function validateGuestOffline(
 ): Promise<{ result: string; reason?: string }> {
   const db = await getDatabase();
   const now = new Date().toISOString();
-  const clientItemId = `local-guest-${Date.now()}`;
+  const clientItemId = `local-guest-${Crypto.randomUUID()}`;
 
   const cleanGuestId = guestId.trim();
   const cleanPhone = phone.trim();
@@ -126,6 +145,7 @@ export async function validateGuestOffline(
       'GUEST',
       null,
       null,
+      null,
       cleanGuestId || null,
       cleanPhone || null,
       concertId,
@@ -149,6 +169,7 @@ export async function validateGuestOffline(
       'GUEST',
       null,
       null,
+      null,
       guest.guest_id,
       cleanPhone || null,
       concertId,
@@ -166,6 +187,7 @@ export async function validateGuestOffline(
       db,
       clientItemId,
       'GUEST',
+      null,
       null,
       null,
       guest.guest_id,
@@ -187,8 +209,8 @@ export async function validateGuestOffline(
       
       // Save check-in item in sync offline queue
       await db.runAsync(`
-        INSERT INTO offline_queue (client_item_id, type, qr_token, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
-        VALUES (?, 'GUEST', NULL, ?, ?, ?, ?, ?, 'SUCCESS', 'Check-in khách mời offline thành công!')
+        INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+        VALUES (?, 'GUEST', NULL, NULL, ?, ?, ?, ?, ?, 'SUCCESS', 'Check-in khách mời offline thành công!')
       `, [clientItemId, guest.guest_id, cleanPhone || null, concertId, gateId, now]);
     });
     return { result: 'SUCCESS' };

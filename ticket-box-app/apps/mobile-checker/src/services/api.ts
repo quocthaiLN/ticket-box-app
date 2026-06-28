@@ -8,6 +8,17 @@ export const DEFAULT_API_BASE_URL =
 export type PreloadResponse = {
   snapshot_id: string;
   generated_at: string;
+  concert: {
+    id: string;
+    title: string;
+    starts_at: string;
+  };
+  gate: {
+    id: string;
+    code: string;
+    name: string;
+    is_active: boolean;
+  };
   allowed_seat_zones: Array<{ id: string; code: string; name: string }>;
   tickets: Array<{
     ticket_id: string;
@@ -30,6 +41,7 @@ export type SyncItemInput = {
   client_item_id: string;
   type: 'TICKET' | 'GUEST';
   qr_token: string | null;
+  qr_payload_hash: string | null;
   guest_id: string | null;
   phone: string | null;
   concert_id: string;
@@ -119,6 +131,7 @@ export async function syncOfflineQueue(
         client_item_id: item.client_item_id,
         type: item.type,
         qr_token: item.qr_token || undefined,
+        qr_payload_hash: item.qr_payload_hash || undefined,
         guest_id: item.guest_id || undefined,
         phone: item.phone || undefined,
         concert_id: item.concert_id,
@@ -144,15 +157,16 @@ export async function apiPost<TData>(
   init?: RequestInit
 ): Promise<TData> {
   const baseUrl = apiBaseUrl.trim() || DEFAULT_API_BASE_URL;
+  const { headers, ...restInit } = init || {};
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...init?.headers,
+      ...headers,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
+    ...restInit,
   });
 
   if (!response.ok) {

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
+import * as Crypto from 'expo-crypto';
 import { apiPost } from '../services/api';
 import { validateTicketOffline, validateGuestOffline } from '../services/validation';
 import { getDatabase } from '../db/database';
@@ -124,6 +125,10 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
         }
       } else {
         // Online checkin
+        const qrPayloadHash = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          data
+        );
         const response: any = await apiPost(
           config.apiBaseUrl,
           '/check-in/scan',
@@ -132,6 +137,7 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
             gate_id: config.gateId,
             device_id: config.deviceId,
             qr_token: data,
+            qr_payload_hash: qrPayloadHash,
             scanned_at: new Date().toISOString(),
           },
           {
@@ -155,6 +161,21 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
         status: 'ERROR',
         message: error instanceof Error ? error.message : 'Lỗi kết nối máy chủ.',
       });
+      // Vấn đề 3: Lưu vào offline_queue khi online mà API thất bại để có thể retry sau
+      if (mode === 'online') {
+        try {
+          const db = await getDatabase();
+          const clientItemId = `local-${Crypto.randomUUID()}`;
+          const now = new Date().toISOString();
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, 'pending', 'Lưu tạm do lỗi kết nối khi online scan')`,
+            [clientItemId, data, null, config.concertId, config.gateId, now]
+          );
+        } catch (dbError) {
+          console.error('Lỗi lưu offline_queue khi online scan thất bại:', dbError);
+        }
+      }
     } finally {
       setBusy(false);
       setCameraModalVisible(false); // Close camera modal upon scan
@@ -191,6 +212,10 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
         }
       } else {
         // Online checkin
+        const qrPayloadHash = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          code
+        );
         const response: any = await apiPost(
           config.apiBaseUrl,
           '/check-in/scan',
@@ -199,6 +224,7 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
             gate_id: config.gateId,
             device_id: config.deviceId,
             qr_token: code,
+            qr_payload_hash: qrPayloadHash,
             scanned_at: new Date().toISOString(),
           },
           {
@@ -222,6 +248,21 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
         status: 'ERROR',
         message: error instanceof Error ? error.message : 'Kết nối thất bại.',
       });
+      // Vấn đề 3: Lưu vào offline_queue khi online mà API thất bại để có thể retry sau
+      if (mode === 'online') {
+        try {
+          const db = await getDatabase();
+          const clientItemId = `local-${Crypto.randomUUID()}`;
+          const now = new Date().toISOString();
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, 'pending', 'Lưu tạm do lỗi kết nối khi online scan')`,
+            [clientItemId, code, null, config.concertId, config.gateId, now]
+          );
+        } catch (dbError) {
+          console.error('Lỗi lưu offline_queue khi online manual ticket thất bại:', dbError);
+        }
+      }
     } finally {
       setBusy(false);
       void loadStats();
@@ -289,6 +330,21 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
         status: 'ERROR',
         message: error instanceof Error ? error.message : 'Kết nối thất bại.',
       });
+      // Vấn đề 3: Lưu vào offline_queue khi online mà API thất bại để có thể retry sau
+      if (mode === 'online') {
+        try {
+          const db = await getDatabase();
+          const clientItemId = `local-guest-${Crypto.randomUUID()}`;
+          const now = new Date().toISOString();
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'GUEST', NULL, NULL, ?, ?, ?, ?, ?, 'pending', 'Lưu tạm do lỗi kết nối khi online guest check-in')`,
+            [clientItemId, guestId || null, phone || null, config.concertId, config.gateId, now]
+          );
+        } catch (dbError) {
+          console.error('Lỗi lưu offline_queue khi online guest thất bại:', dbError);
+        }
+      }
     } finally {
       setBusy(false);
       void loadStats();

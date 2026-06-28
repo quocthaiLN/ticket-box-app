@@ -15,6 +15,19 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Add support for wasm files (needed by expo-sqlite on Web)
+config.resolver.assetExts.push('wasm');
+
+// Add COEP and COOP headers to support SharedArrayBuffer in the browser for expo-sqlite WebAssembly
+config.server = config.server || {};
+config.server.enhanceMiddleware = (middleware) => {
+  return (req, res, next) => {
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    middleware(req, res, next);
+  };
+};
+
 // Force React, React DOM, and React Native to resolve to single instances in the root workspace node_modules
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (
