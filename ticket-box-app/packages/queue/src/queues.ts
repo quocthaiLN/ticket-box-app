@@ -64,3 +64,25 @@ export function getEmailQueue(): Queue {
     connection: createRedisConnection(),
   }));
 }
+
+/**
+ * Đóng tất cả queue singleton đã được khởi tạo (graceful shutdown).
+ * Chỉ close những queue thực sự đã tạo (lazy — nếu chưa gọi get*Queue thì bỏ qua).
+ */
+export async function closeAllQueues(): Promise<void> {
+  const queues = [
+    _expireHoldsQueue,
+    _notificationsQueue,
+    _aiBioQueue,
+    _guestImportQueue,
+    _emailQueue,
+  ].filter((q): q is Queue => q !== null);
+
+  await Promise.allSettled(queues.map((q) => q.close()));
+
+  _expireHoldsQueue = null;
+  _notificationsQueue = null;
+  _aiBioQueue = null;
+  _guestImportQueue = null;
+  _emailQueue = null;
+}
