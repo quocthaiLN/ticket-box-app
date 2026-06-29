@@ -2,6 +2,7 @@ import {
   ConcertStatus,
   Prisma,
   TicketTypeStatus,
+  UserStatus,
   prisma
 } from "@ticketbox/database";
 import type { ListAdminQuery, ListConcertsQuery } from "./catalog.schema.js";
@@ -280,11 +281,26 @@ export class CatalogRepository {
     return mapConcertDetail(concert);
   }
 
-  async setConcertStatus(concertId: string, status: "PUBLISHED" | "CANCELLED"): Promise<ConcertDetailDto> {
-    const concert = await prisma.concert.update({
-      where: { id: concertId },
-      data: { status },
-      include: { venue: true }
+  async setConcertStatus(concertId: string, status: "PUBLISHED" | "CANCELLED" | "COMPLETED"): Promise<ConcertDetailDto> {
+    const concert = await prisma.$transaction(async (tx) => {
+      const updatedConcert = await tx.concert.update({
+        where: { id: concertId },
+        data: { status },
+        include: { venue: true }
+      });
+
+      if (status === ConcertStatus.CANCELLED || status === ConcertStatus.COMPLETED) {
+        await tx.user.updateMany({
+          where: {
+            role: "CHECKER",
+            status: { not: UserStatus.DISABLED },
+            concertCheckerAccounts: { some: { concertId } }
+          },
+          data: { status: UserStatus.DISABLED }
+        });
+      }
+
+      return updatedConcert;
     });
 
     return mapConcertDetail(concert);

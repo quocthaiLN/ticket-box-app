@@ -39,24 +39,47 @@ Role hợp lệ: `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`.
 | `POST`  | `/auth/logout`                  | User          | Thu hồi token hiện tại qua Redis denylist. |
 | `POST`  | `/auth/refresh`                 | Refresh token | Cấp access token mới.                      |
 | `GET`   | `/auth/me`                      | User          | Lấy thông tin user hiện tại và role.       |
-| `GET`   | `/admin/users`                  | `ADMIN`       | Tra cứu user.                              |
-| `POST`  | `/admin/users`                  | `ADMIN`       | Tạo user nội bộ.                           |
-| `PATCH` | `/admin/users/{user_id}/status` | `ADMIN`       | Khóa/mở/disable user.                      |
-| `PATCH` | `/admin/users/{user_id}/role`   | `ADMIN`       | Gán role chính cho user.                   |
+| `GET`   | `/auth/admin/users`                  | `ADMIN`       | Tra cứu user.                              |
+| `POST`  | `/auth/admin/users`                  | `ADMIN`       | Tạo user nội bộ.                           |
+| `PATCH` | `/auth/admin/users/{user_id}/status` | `ADMIN`       | Khóa/mở/disable user.                      |
+| `PATCH` | `/auth/admin/users/{user_id}/role`   | `ADMIN`       | Gán role chính cho user.                   |
 
 ---
 
+> **Sprint 6 — endpoint bổ sung/đổi** (chi tiết ở §4):
+>
+> - `POST /auth/otp/request` (Public) — gửi OTP trước khi register.
+> - `PATCH /auth/me` (`requireAuth`) — user tự sửa `full_name`/`phone`.
+> - `PATCH /auth/admin/users/role-by-email` (`ADMIN`) — đổi role theo email; khai báo **trước** `/auth/admin/users/{user_id}/role`.
+> - `POST /auth/login` trả thêm `redirect_to`; `POST /auth/register` nhận thêm `full_name`.
+
 ## 4. API chi tiết
+
+### 4.0. `POST /auth/otp/request`
+
+Gửi OTP 6 chữ số tới email để chuẩn bị đăng ký.
+
+```json
+{
+  "email": "audience@example.com"
+}
+```
+
+Response `200`: `{ "data": { "email": "audience@example.com", "expires_in": 300 }, "meta": { "request_id": "req_01JX9Q6N4E" } }`.
+
+- OTP lưu Redis với TTL ngắn (vd 5 phút); không trả mã OTP trong response.
+- Rate limit theo IP + email để chống spam.
 
 ### 4.1. `POST /auth/register`
 
-Tạo tài khoản khán giả.
+Tạo tài khoản khán giả. Yêu cầu OTP đã nhận ở `POST /auth/otp/request`.
 
 ```json
 {
   "email": "audience@example.com",
   "password": "StrongPassword123!",
   "confirmPassword": "StrongPassword123!",
+  "full_name": "Nguyen Van A",
   "otp": "123456"
 }
 ```
@@ -106,7 +129,8 @@ Response `200`:
       "email": "audience@example.com",
       "full_name": "Nguyen Van A",
       "role": "AUDIENCE"
-    }
+    },
+    "redirect_to": "/"
   },
   "meta": {
     "request_id": "req_01JX9Q6N4E"
@@ -120,6 +144,14 @@ Ràng buộc:
 - `LOCKED` hoặc `DISABLED` không được đăng nhập.
 - JWT chứa `sub`, `role`, `iat`, `exp`, `jti`.
 - Refresh token lưu trong cookie.
+- **MỚI:** response trả thêm `redirect_to` theo role để client điều hướng đúng workspace.
+
+| `user.role` | `redirect_to` |
+| --- | --- |
+| `AUDIENCE` | `/` |
+| `ADMIN` | `/admin` |
+| `ORGANIZER` | `/organizer` |
+| `CHECKER` | `/checker` |
 
 ### 4.3. `POST /auth/logout`
 
@@ -149,7 +181,43 @@ Response `200`:
 }
 ```
 
-### 4.5. `PATCH /admin/users/{user_id}/role`
+### 4.5. `PATCH /auth/me`
+
+User tự cập nhật hồ sơ cá nhân (`requireAuth`, mọi role đã đăng nhập). Body optional: `full_name?` (min 1), `phone?` (min 8).
+
+```json
+{ "full_name": "Nguyen Van An", "phone": "+84901234789" }
+```
+
+Response `200` trả `id`, `full_name`, `phone`, `updated_at`. Không cho sửa `email`, `role`, `status` qua endpoint này.
+
+### 4.6. `PATCH /auth/admin/users/role-by-email`
+
+Đổi role của user theo email (tiện cấp quyền `ORGANIZER`/`CHECKER` mà không cần tra `user_id`). Khai báo **trước** `/auth/admin/users/{user_id}/role` để Express không bắt nhầm `role-by-email` thành `{user_id}`.
+
+```json
+{ "email": "btc@example.com", "role": "ORGANIZER" }
+```
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "user_id": "usr_01JX9Q9C",
+    "email": "btc@example.com",
+    "role": "ORGANIZER",
+    "updated_at": "2026-05-30T10:25:30Z"
+  },
+  "meta": { "request_id": "req_01JX9Q6N4E" }
+}
+```
+
+- `role ∈ {AUDIENCE, ORGANIZER, CHECKER, ADMIN}`.
+- Email không tồn tại → `404 USER_NOT_FOUND_BY_EMAIL`.
+- Ghi audit log `UPDATE_USER_ROLE` (tái dùng pattern của `{user_id}/role`).
+
+### 4.7. `PATCH /auth/admin/users/{user_id}/role`
 
 Gán role chính của user.
 
@@ -194,6 +262,8 @@ Side effects:
 | `409` | `EMAIL_ALREADY_EXISTS` | Email đã được dùng.                |
 | `409` | `PHONE_ALREADY_EXISTS` | Phone đã được dùng.                |
 | `422` | `INVALID_ROLE`         | Role không thuộc danh sách hợp lệ. |
+| `404` | `USER_NOT_FOUND_BY_EMAIL` | Email không tồn tại (role-by-email). |
+| `422` | `INVALID_OTP` | OTP sai hoặc hết hạn. |
 
 ---
 
@@ -204,3 +274,6 @@ Side effects:
 - ORGANIZER/Admin thao tác dữ liệu được backend kiểm tra ownership.
 - Logout làm token hiện tại không dùng lại được.
 - Thay đổi role/status user được ghi audit.
+- Login mỗi role trả `redirect_to` đúng (`/`, `/admin`, `/organizer`, `/checker`).
+- `PATCH /auth/admin/users/role-by-email {email, role:"ORGANIZER"}` → 200; user đó login lại → `redirect_to:"/organizer"`; email không tồn tại → 404 `USER_NOT_FOUND_BY_EMAIL`.
+- `PATCH /auth/me` đổi `full_name`/`phone` → `GET /auth/me` phản ánh thay đổi; không sửa được role/status.

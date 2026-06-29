@@ -1,44 +1,51 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+// Mật khẩu chung cho mọi tài khoản demo do seed tạo (xem README mục 11).
+const DEMO_PASSWORD = "Password@123";
 
 const userIds = {
   audience: "00000000-0000-0000-0000-000000000001",
   organizer: "00000000-0000-0000-0000-000000000002",
   checker: "00000000-0000-0000-0000-000000000003",
   admin: "00000000-0000-0000-0000-000000000004",
+  checkerSecretOne: "00000000-0000-0000-0000-000000000005",
+  checkerSecretTwo: "00000000-0000-0000-0000-000000000006",
+  organizerTwo: "00000000-0000-0000-0000-000000000007",
 };
 
 const venues = [
   {
     id: "00000000-0000-0000-0000-000000000101",
-    name: "Hoa Binh Theater",
-    address: "240 3 Thang 2 Street, District 10",
-    city: "Ho Chi Minh City",
+    name: "Nhà hát Hòa Bình",
+    address: "240 đường 3 Tháng 2, Quận 10",
+    city: "Hồ Chí Minh",
     capacity: 3500,
     mapUrl: "https://maps.example.com/hoa-binh",
   },
   {
     id: "00000000-0000-0000-0000-000000000102",
-    name: "My Dinh National Stadium",
-    address: "Pham Hung Street, Nam Tu Liem",
-    city: "Hanoi",
+    name: "Sân vận động Quốc gia Mỹ Đình",
+    address: "Đường Phạm Hùng, Nam Từ Liêm",
+    city: "Hà Nội",
     capacity: 40000,
     mapUrl: "https://maps.example.com/my-dinh",
   },
   {
     id: "00000000-0000-0000-0000-000000000103",
-    name: "SECC - Saigon Exhibition and Convention Center",
-    address: "799 Nguyen Van Linh Boulevard, District 7",
-    city: "Ho Chi Minh City",
+    name: "SECC - Trung tâm Hội chợ và Triển lãm Sài Gòn",
+    address: "799 đại lộ Nguyễn Văn Linh, Quận 7",
+    city: "Hồ Chí Minh",
     capacity: 10000,
     mapUrl: "https://maps.example.com/secc",
   },
   {
     id: "00000000-0000-0000-0000-000000000104",
-    name: "Hanoi Opera House",
-    address: "1 Trang Tien Street, Hoan Kiem",
-    city: "Hanoi",
+    name: "Nhà hát Lớn Hà Nội",
+    address: "1 Tràng Tiền, Hoàn Kiếm",
+    city: "Hà Nội",
     capacity: 598,
     mapUrl: "https://maps.example.com/opera-house",
   },
@@ -48,57 +55,59 @@ const concerts = [
   {
     id: "00000000-0000-0000-0000-000000000201",
     venueId: venues[0].id,
-    title: "Night Lights",
-    slug: "night-lights",
+    title: "Ánh Sáng Màn Đêm",
+    slug: "anh-sang-man-dem",
     description:
-      "A special Grey D live show where ballads and indie songs move between memories, the present, and quiet personal moments.",
+      "Đêm nhạc đặc biệt của Grey D, nơi những bản ballad và indie len qua miền ký ức, hiện tại và các khoảnh khắc rất riêng. Một hành trình âm nhạc cho những ai từng thương nhớ trong im lặng.",
     artistName: "Grey D",
     artistBio:
-      "Grey D is one of Vietnam's standout indie voices, known for warm vocals and introspective songwriting.",
+      "Grey D là một trong những giọng ca indie Việt nổi bật, được yêu mến bởi chất giọng ấm, nội tâm và khả năng viết nhạc tinh tế. Âm nhạc của anh thường chạm vào những cảm xúc nhỏ nhưng bền lâu.",
     startsAt: "2026-07-15T19:30:00+07:00",
     endsAt: "2026-07-15T22:00:00+07:00",
+    plannedPublishAt: "2026-06-10T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Front row seats with the best stage view.", 100),
-      zone("VIP", "VIP", "Comfortable seated area near the stage.", 300),
-      zone("CAT1", "CAT 1", "Front standing area.", 800),
-      zone("GA", "General Admission", "General standing area.", 2000),
+      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 100),
+      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 300),
+      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 800),
+      zone("GA", "General Admission", "Khu đứng tự do.", 2000),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Priority entry and exclusive poster.", 2950000, 100, 5, 68, 2),
-      ticket("VIP", "VIP", "Premium seat and gift bag.", 1950000, 300, 12, 201, 2),
-      ticket("CAT1", "CAT 1", "Front standing access.", 1250000, 800, 30, 420, 4),
-      ticket("GA", "GA", "Standard standing ticket.", 750000, 2000, 80, 1100, 4),
+      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 100, 5, 68, 2),
+      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 300, 12, 201, 2),
+      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 800, 30, 420, 4),
+      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 2000, 80, 1100, 4),
     ],
   },
   {
     id: "00000000-0000-0000-0000-000000000202",
     venueId: venues[1].id,
-    title: "Passing Through Memories Live Concert",
-    slug: "passing-through-memories",
+    title: "Đi Qua Thương Nhớ Live Concert",
+    slug: "di-qua-thuong-nho",
     description:
-      "An outdoor pop ballad night that travels through songs loved by multiple generations of audiences.",
-    artistName: "My Tam",
+      "Mỹ Tâm trở lại với một đêm nhạc lớn tại Hà Nội. Hành trình âm nhạc đi qua những ca khúc đã gắn bó với nhiều thế hệ khán giả, từ ballad da diết đến những bản pop đầy năng lượng.",
+    artistName: "Mỹ Tâm",
     artistBio:
-      "My Tam is a Vietnamese music icon with more than 20 years of performing and many landmark live concerts.",
+      "Mỹ Tâm là biểu tượng của nhạc Việt với hơn 20 năm hoạt động, giọng hát giàu nội lực và nhiều live concert để lại dấu ấn mạnh mẽ. Các ca khúc của cô đã trở thành ký ức chung của nhiều thế hệ.",
     startsAt: "2026-08-20T18:00:00+07:00",
     endsAt: "2026-08-20T21:30:00+07:00",
+    plannedPublishAt: "2026-07-01T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/di-qua-thuong-nho.jpg",
     zones: [
-      zone("SVIP", "SVIP Diamond", "Exclusive seats closest to the stage.", 500),
-      zone("VIP", "VIP Gold", "Covered seating with a premium view.", 2000),
-      zone("CAT1", "CAT 1", "Front tribune seating.", 5000),
-      zone("CAT2", "CAT 2", "Rear tribune seating.", 8000),
-      zone("GA", "General Admission", "Open standing area.", 20000),
+      zone("SVIP", "SVIP Diamond", "Khu ghế đặc biệt gần sân khấu nhất.", 500),
+      zone("VIP", "VIP Gold", "Khu ghế có mái che, tầm nhìn đẹp.", 2000),
+      zone("CAT1", "CAT 1", "Khán đài phía trước.", 5000),
+      zone("CAT2", "CAT 2", "Khán đài phía sau.", 8000),
+      zone("GA", "General Admission", "Khu đứng tự do ngoài trời.", 20000),
     ],
     tickets: [
-      ticket("SVIP", "SVIP Diamond", "VIP seat, welcoming gift, and early access.", 3500000, 500, 10, 320, 2),
-      ticket("VIP", "VIP Gold", "Covered seating area.", 2200000, 2000, 40, 1450, 4),
-      ticket("CAT1", "CAT 1", "Front tribune seating.", 1500000, 5000, 100, 3200, 4),
-      ticket("CAT2", "CAT 2", "Rear tribune seating.", 1000000, 8000, 150, 5200, 6),
-      ticket("GA", "GA", "Open standing ticket.", 650000, 20000, 500, 12000, 6),
+      ticket("SVIP", "SVIP Diamond", "Ghế VIP, quà chào mừng và vào cổng sớm.", 3500000, 500, 10, 320, 2),
+      ticket("VIP", "VIP Gold", "Khu ghế có mái che, thoải mái.", 2200000, 2000, 40, 1450, 4),
+      ticket("CAT1", "CAT 1", "Ghế khán đài phía trước.", 1500000, 5000, 100, 3200, 4),
+      ticket("CAT2", "CAT 2", "Ghế khán đài phía sau.", 1000000, 8000, 150, 5200, 6),
+      ticket("GA", "GA", "Vé đứng tự do.", 650000, 20000, 500, 12000, 6),
     ],
   },
   {
@@ -107,91 +116,101 @@ const concerts = [
     title: "Our 20th Moment 2026",
     slug: "our-20th-moment-2026",
     description:
-      "A special acoustic and orchestral evening where memories are reimagined through pure musical language.",
-    artistName: "Thanh Lam & Ha Tran",
+      "Kỷ niệm 20 năm âm nhạc bằng một đêm acoustic và orchestra đặc biệt, nơi những ký ức được tái hiện bằng ngôn ngữ âm thanh thuần khiết và nhiều chiều sâu.",
+    artistName: "Thanh Lam & Hà Trần",
     artistBio:
-      "Thanh Lam and Ha Tran are two major Vietnamese voices, coming together for a refined and emotional performance.",
+      "Thanh Lam và Hà Trần là hai giọng ca lớn của nhạc Việt, cùng đứng trên một sân khấu để tạo nên một không gian âm nhạc tinh tế, giàu cảm xúc và hiếm có.",
     startsAt: "2026-09-05T19:00:00+07:00",
     endsAt: "2026-09-05T22:30:00+07:00",
+    plannedPublishAt: "2026-07-20T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/our-20th-moment-2026.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Front row seating with cocktail reception.", 200),
-      zone("VIP", "VIP", "Premium seating.", 800),
-      zone("CAT1", "CAT 1", "Section B seating.", 2500),
-      zone("GA", "Standing", "Rear standing area.", 5000),
+      zone("SVIP", "SVIP", "Hàng đầu, kèm tiệc cocktail trước chương trình.", 200),
+      zone("VIP", "VIP", "Ghế ngồi cao cấp.", 800),
+      zone("CAT1", "CAT 1", "Khu ghế B tiêu chuẩn.", 2500),
+      zone("GA", "Standing", "Khu đứng phía sau.", 5000),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Cocktail reception and meet-and-greet opportunity.", 5500000, 200, 3, 187, 2),
-      ticket("VIP", "VIP", "Premium seat with programme book.", 3200000, 800, 20, 650, 2),
-      ticket("CAT1", "CAT 1", "Standard seated ticket.", 1800000, 2500, 50, 1900, 4),
-      ticket("GA", "Standing", "Open standing area.", 900000, 5000, 120, 3200, 4),
+      ticket("SVIP", "SVIP", "Tiệc cocktail và cơ hội giao lưu cùng nghệ sĩ.", 5500000, 200, 3, 187, 2),
+      ticket("VIP", "VIP", "Ghế cao cấp kèm programme book.", 3200000, 800, 20, 650, 2),
+      ticket("CAT1", "CAT 1", "Vé ghế ngồi tiêu chuẩn.", 1800000, 2500, 50, 1900, 4),
+      ticket("GA", "Standing", "Khu đứng tự do.", 900000, 5000, 120, 3200, 4),
     ],
   },
   {
     id: "00000000-0000-0000-0000-000000000204",
     venueId: venues[3].id,
-    title: "Once We Loved",
-    slug: "once-we-loved",
+    title: "Một Thời Đã Yêu",
+    slug: "mot-thoi-da-yeu",
     description:
-      "An intimate acoustic night with melodies from an earlier era and love songs that have become shared memories.",
-    artistName: "Lam Truong",
+      "Lam Trường và những giai điệu của một thời đã qua, các ca khúc tình yêu đã trở thành ký ức chung của nhiều khán giả. Đêm nhạc acoustic mang đến không gian thân mật và ấm áp.",
+    artistName: "Lam Trường",
     artistBio:
-      "Lam Truong is one of the most beloved Vietnamese male singers from the 1990s and 2000s.",
+      "Lam Trường là một trong những giọng ca nam được yêu mến nhất của nhạc Việt thập niên 90-2000. Những bản tình ca của anh đã đi cùng tuổi trẻ của nhiều thế hệ.",
     startsAt: "2026-10-12T19:30:00+07:00",
     endsAt: "2026-10-12T22:00:00+07:00",
+    plannedPublishAt: "2026-08-15T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/mot-thoi-da-yeu.jpg",
     zones: [
-      zone("VIP", "VIP Front Row", "Front row seats with artist interaction.", 60),
-      zone("CAT1", "CAT 1", "Middle rows.", 200),
-      zone("CAT2", "CAT 2", "Rear rows.", 320),
+      zone("VIP", "VIP Hàng Đầu", "Hàng đầu, có giao lưu cùng nghệ sĩ.", 60),
+      zone("CAT1", "CAT 1", "Khu ghế hàng giữa.", 200),
+      zone("CAT2", "CAT 2", "Khu ghế hàng sau.", 320),
     ],
     tickets: [
-      ticket("VIP", "VIP Front Row", "Post-show interaction and signing.", 2500000, 60, 2, 55, 2),
-      ticket("CAT1", "CAT 1", "Premium seated ticket.", 1500000, 200, 5, 168, 2),
-      ticket("CAT2", "CAT 2", "Standard seated ticket.", 900000, 320, 10, 245, 4),
+      ticket("VIP", "VIP Hàng Đầu", "Giao lưu và ký tặng sau chương trình.", 2500000, 60, 2, 55, 2),
+      ticket("CAT1", "CAT 1", "Vé ghế ngồi hạng nhất.", 1500000, 200, 5, 168, 2),
+      ticket("CAT2", "CAT 2", "Vé ghế ngồi tiêu chuẩn.", 900000, 320, 10, 245, 4),
     ],
   },
   {
     id: "00000000-0000-0000-0000-000000000205",
     venueId: venues[0].id,
-    title: "Where Love Begins",
-    slug: "where-love-begins",
+    title: "Nơi Tình Yêu Bắt Đầu",
+    slug: "noi-tinh-yeu-bat-dau",
     description:
-      "Bich Phuong performs her newest songs alongside the hits that have stayed close to audiences for years.",
-    artistName: "Bich Phuong",
+      "Bích Phương trình diễn trong một đêm nhạc đặc biệt tại TP.HCM, mang đến những ca khúc mới nhất cùng các bản hit đã gắn bó với khán giả suốt nhiều năm.",
+    artistName: "Bích Phương",
     artistBio:
-      "Bich Phuong is a standout Vietnamese pop singer known for catchy songs and a modern stage style.",
+      "Bích Phương là một trong những nữ ca sĩ pop nổi bật của Việt Nam, được yêu mến bởi giai điệu bắt tai, hình ảnh hiện đại và phong cách sân khấu cuốn hút.",
     startsAt: "2026-11-08T19:30:00+07:00",
     endsAt: "2026-11-08T21:30:00+07:00",
+    plannedPublishAt: "2026-09-01T10:00:00+07:00",
     status: "PUBLISHED",
     coverImageUrl: "/src/img/noi-tinh-yeu-bat-dau.jpg",
     zones: [
-      zone("SVIP", "SVIP", "VIP stage view.", 150),
-      zone("VIP", "VIP", "Seated section.", 400),
-      zone("GA", "GA", "Standing area.", 2500),
+      zone("SVIP", "SVIP", "Khu VIP có tầm nhìn sân khấu đẹp.", 150),
+      zone("VIP", "VIP", "Khu ghế ngồi.", 400),
+      zone("GA", "GA", "Khu đứng tự do.", 2500),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Gift set and early access.", 2200000, 150, 8, 95, 2),
-      ticket("VIP", "VIP", "Seated section.", 1500000, 400, 15, 280, 2),
-      ticket("GA", "GA", "Standing section.", 850000, 2500, 60, 1800, 4),
+      ticket("SVIP", "SVIP", "Gift set và quyền vào cổng sớm.", 2200000, 150, 8, 95, 2),
+      ticket("VIP", "VIP", "Khu ghế ngồi cao cấp.", 1500000, 400, 15, 280, 2),
+      ticket("GA", "GA", "Khu đứng tiêu chuẩn.", 850000, 2500, 60, 1800, 4),
     ],
   },
   {
     id: "00000000-0000-0000-0000-000000000206",
     venueId: venues[1].id,
-    title: "Coming Soon: Secret Show",
+    title: "Sắp Công Bố: Đêm Diễn Bí Mật",
     slug: "secret-show-2026",
-    description: "A mysterious show is being prepared. Details will be announced soon.",
-    artistName: "TBA",
+    description: "Một đêm diễn bí ẩn đang được chuẩn bị. Thông tin nghệ sĩ, sơ đồ vé và quyền lợi đặc biệt sẽ được công bố sớm.",
+    artistName: "Đang cập nhật",
     artistBio: "",
     startsAt: "2026-12-31T20:00:00+07:00",
     endsAt: "2026-12-31T23:59:00+07:00",
+    plannedPublishAt: "2026-12-01T10:00:00+07:00",
     status: "DRAFT",
     coverImageUrl: "/src/img/secret-show-2026.jpg",
-    zones: [],
-    tickets: [],
+    zones: [
+      zone("VIP", "VIP Secret Circle", "Khu vực riêng với tầm nhìn gần sân khấu nhất.", 120),
+      zone("GA", "General Admission", "Khu đứng cho đêm diễn bí mật.", 1200),
+    ],
+    tickets: [
+      ticket("VIP", "VIP Secret Circle", "Vé VIP nháp được tạo từ hồ sơ đã duyệt.", 1800000, 120, 0, 0, 2, "DRAFT"),
+      ticket("GA", "GA", "Vé phổ thông nháp được tạo từ hồ sơ đã duyệt.", 700000, 1200, 0, 0, 4, "DRAFT"),
+    ],
   },
 ];
 
@@ -201,22 +220,48 @@ const fixedId = (number) =>
 const zoneId = (concertIndex, zoneIndex) => fixedId(301 + concertIndex * 5 + zoneIndex);
 const gateId = (concertIndex, zoneIndex) => fixedId(401 + concertIndex * 5 + zoneIndex);
 const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex * 5 + ticketIndex);
+const organizerRequestId = (index) => fixedId(701 + index);
+const deletionRequestId = (index) => fixedId(721 + index);
+const checkerAccountId = (index) => fixedId(741 + index);
 
 function zone(code, name, description, capacity) {
   return { code, name, description, capacity };
 }
 
-function ticket(zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser) {
-  return { zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser };
+function ticket(zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser, status = "ON_SALE") {
+  return { zoneCode, name, description, price, totalQuantity, heldQuantity, soldQuantity, maxPerUser, status };
+}
+
+function requestTicketTypes(concert, saleStartAt = "2026-06-01T10:00:00+07:00", saleEndAt = "2026-12-31T23:59:59+07:00") {
+  return concert.tickets.map((item) => {
+    const zoneItem = concert.zones.find((candidate) => candidate.code === item.zoneCode);
+
+    return {
+      zone_code: item.zoneCode,
+      zone_name: zoneItem?.name ?? item.zoneCode,
+      zone_capacity: zoneItem?.capacity ?? item.totalQuantity,
+      name: item.name,
+      price: { amount: item.price, currency: "VND" },
+      total_quantity: item.totalQuantity,
+      max_per_user: item.maxPerUser,
+      sale_start_at: saleStartAt,
+      sale_end_at: saleEndAt,
+    };
+  });
 }
 
 async function seedUsers() {
   const users = [
-    ["audience", "audience@ticketbox.test", "Demo Audience", "+84900000001", "AUDIENCE"],
-    ["organizer", "organizer@ticketbox.test", "Demo Organizer", "+84900000002", "ORGANIZER"],
-    ["checker", "checker@ticketbox.test", "Demo Checker", "+84900000003", "CHECKER"],
-    ["admin", "admin@ticketbox.test", "Demo Admin", "+84900000004", "ADMIN"],
+    ["audience", "audience@gmail.com", "Khán giả 1", "+84900000001", "AUDIENCE"],
+    ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
+    ["organizerTwo", "organizer2@gmail.com", "BTC 2", "+84900000007", "ORGANIZER"],
+    ["admin", "admin@gmail.com", "Quản trị viên Demo", "+84900000004", "ADMIN"],
+    ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
+    ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
   ];
+
+  // Bcrypt hash thật (12 rounds, khớp hashPassword của api-server) để demo login được.
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 12);
 
   for (const [key, email, fullName, phone, role] of users) {
     await prisma.user.upsert({
@@ -224,13 +269,13 @@ async function seedUsers() {
       create: {
         id: userIds[key],
         email,
-        passwordHash: `$2b$10$demo-${key}`,
+        passwordHash,
         fullName,
         phone,
         role,
         status: "ACTIVE",
       },
-      update: { email, fullName, phone, role, status: "ACTIVE" },
+      update: { email, fullName, phone, role, status: "ACTIVE", passwordHash },
     });
   }
 }
@@ -258,6 +303,7 @@ async function seedCatalog() {
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
+        plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
         seatMapUrl: null,
@@ -272,6 +318,7 @@ async function seedCatalog() {
         artistBio: concert.artistBio,
         startsAt: new Date(concert.startsAt),
         endsAt: new Date(concert.endsAt),
+        plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
         seatMapUrl: null,
@@ -308,16 +355,16 @@ async function seedCatalog() {
           id: gateId(concertIndex, zoneIndex),
           concertId: concert.id,
           code: `${item.code}_GATE`,
-          name: `${item.code} Gate`,
-          description: `Gate for the ${item.code} zone.`,
+          name: `Cổng ${item.code}`,
+          description: `Cổng soát vé cho khu ${item.code}.`,
           isActive: true,
           sortOrder: zoneIndex + 1,
         },
         update: {
           concertId: concert.id,
           code: `${item.code}_GATE`,
-          name: `${item.code} Gate`,
-          description: `Gate for the ${item.code} zone.`,
+          name: `Cổng ${item.code}`,
+          description: `Cổng soát vé cho khu ${item.code}.`,
           isActive: true,
           sortOrder: zoneIndex + 1,
         },
@@ -359,7 +406,7 @@ async function seedCatalog() {
           maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
-          status: "ON_SALE",
+          status: item.status,
         },
         update: {
           concertId: concert.id,
@@ -374,10 +421,183 @@ async function seedCatalog() {
           maxPerUser: item.maxPerUser,
           saleStartAt: new Date("2026-06-01T10:00:00+07:00"),
           saleEndAt: new Date("2026-12-31T23:59:59+07:00"),
-          status: "ON_SALE",
+          status: item.status,
         },
       });
     }
+  }
+}
+
+async function seedOrganizerWorkflow() {
+  const pendingRequest = {
+    id: organizerRequestId(0),
+    organizerId: userIds.organizer,
+    venueId: venues[2].id,
+    title: "Saigon Indie Weekend",
+    artistName: "Indie Collective",
+    description: "Hồ sơ đang chờ admin duyệt cho một cuối tuần âm nhạc indie tại TP.HCM, quy tụ các nghệ sĩ trẻ Việt Nam và Đông Nam Á.",
+    startsAt: new Date("2027-01-18T19:00:00+07:00"),
+    endsAt: new Date("2027-01-18T22:30:00+07:00"),
+    plannedPublishAt: new Date("2026-12-05T10:00:00+07:00"),
+    gateCount: 2,
+    checkerCount: 3,
+    pressKitUrl: "/press-kit/saigon-indie-weekend.pdf",
+    ticketTypes: [
+      {
+        zone_code: "VIP",
+        zone_name: "VIP",
+        zone_capacity: 500,
+        name: "VIP",
+        price: { amount: 1500000, currency: "VND" },
+        total_quantity: 500,
+        max_per_user: 2,
+        sale_start_at: "2026-12-10T10:00:00+07:00",
+        sale_end_at: "2027-01-18T12:00:00+07:00",
+      },
+      {
+        zone_code: "GA",
+        zone_name: "General Admission",
+        zone_capacity: 2500,
+        name: "GA",
+        price: { amount: 650000, currency: "VND" },
+        total_quantity: 2500,
+        max_per_user: 4,
+        sale_start_at: "2026-12-10T10:00:00+07:00",
+        sale_end_at: "2027-01-18T12:00:00+07:00",
+      },
+    ],
+    status: "PENDING",
+    reviewedById: null,
+    reviewedAt: null,
+    reviewNote: null,
+    concertId: null,
+  };
+
+  const approvedConcert = concerts.find((concert) => concert.slug === "secret-show-2026");
+  const rejectedRequest = {
+    id: organizerRequestId(2),
+    organizerId: userIds.organizer,
+    venueId: venues[3].id,
+    title: "Kho Lưu Trữ Acoustic Nửa Đêm",
+    artistName: "Archive Session Band",
+    description: "Hồ sơ bị từ chối được giữ trong seed để demo lịch sử duyệt hồ sơ của admin.",
+    startsAt: new Date("2027-02-12T19:30:00+07:00"),
+    endsAt: new Date("2027-02-12T22:00:00+07:00"),
+    plannedPublishAt: new Date("2027-01-05T10:00:00+07:00"),
+    gateCount: 1,
+    checkerCount: 1,
+    pressKitUrl: "/press-kit/midnight-acoustic-archive.pdf",
+    ticketTypes: [
+      {
+        zone_code: "CAT1",
+        zone_name: "CAT 1",
+        zone_capacity: 300,
+        name: "CAT 1",
+        price: { amount: 900000, currency: "VND" },
+        total_quantity: 300,
+        max_per_user: 2,
+        sale_start_at: "2027-01-10T10:00:00+07:00",
+        sale_end_at: "2027-02-12T12:00:00+07:00",
+      },
+    ],
+    status: "REJECTED",
+    reviewedById: userIds.admin,
+    reviewedAt: new Date("2026-06-15T09:30:00+07:00"),
+    reviewNote: "Thiếu tài liệu xác nhận giữ chỗ địa điểm. Vui lòng bổ sung hồ sơ trước khi nộp lại.",
+    concertId: null,
+  };
+
+  const approvedRequest = {
+    id: organizerRequestId(1),
+    organizerId: userIds.organizer,
+    venueId: approvedConcert.venueId,
+    title: approvedConcert.title,
+    artistName: approvedConcert.artistName,
+    description: approvedConcert.description,
+    startsAt: new Date(approvedConcert.startsAt),
+    endsAt: new Date(approvedConcert.endsAt),
+    plannedPublishAt: new Date(approvedConcert.plannedPublishAt),
+    gateCount: approvedConcert.zones.length,
+    checkerCount: 2,
+    pressKitUrl: "/press-kit/secret-show-2026.pdf",
+    ticketTypes: requestTicketTypes(approvedConcert, "2026-12-01T10:00:00+07:00", "2026-12-31T12:00:00+07:00"),
+    status: "APPROVED",
+    reviewedById: userIds.admin,
+    reviewedAt: new Date("2026-06-12T14:00:00+07:00"),
+    reviewNote: "Đã duyệt để hệ thống tạo concert nháp, khu vé, cổng check-in và tài khoản checker.",
+    concertId: approvedConcert.id,
+  };
+
+  for (const request of [pendingRequest, approvedRequest, rejectedRequest]) {
+    await prisma.organizerRequest.upsert({
+      where: { id: request.id },
+      create: request,
+      update: request,
+    });
+  }
+
+  const legacyCheckerAccounts = concerts
+    .filter((concert) => concert.zones.length > 0 && concert.id !== approvedConcert.id)
+    .map((concert, index) => ({
+      id: checkerAccountId(index),
+      concertId: concert.id,
+      userId: userIds.checkerSecretOne,
+      organizerRequestId: null,
+    }));
+
+  const checkerAccounts = [
+    ...legacyCheckerAccounts,
+    {
+      id: checkerAccountId(5),
+      concertId: approvedConcert.id,
+      userId: userIds.checkerSecretOne,
+      organizerRequestId: approvedRequest.id,
+    },
+    {
+      id: checkerAccountId(6),
+      concertId: approvedConcert.id,
+      userId: userIds.checkerSecretTwo,
+      organizerRequestId: approvedRequest.id,
+    },
+  ];
+
+  for (const account of checkerAccounts) {
+    await prisma.concertCheckerAccount.upsert({
+      where: { id: account.id },
+      create: account,
+      update: account,
+    });
+  }
+
+  const deletionRequests = [
+    {
+      id: deletionRequestId(0),
+      concertId: concerts[4].id,
+      organizerId: userIds.organizer,
+      reason: "Ban tổ chức cần chuyển chương trình sang địa điểm lớn hơn do nhu cầu vé tăng cao.",
+      status: "PENDING",
+      reviewedById: null,
+      reviewedAt: null,
+      reviewNote: null,
+    },
+    {
+      id: deletionRequestId(1),
+      concertId: concerts[3].id,
+      organizerId: userIds.organizer,
+      reason: "Yêu cầu trùng được gửi trong lúc rà soát lịch diễn.",
+      status: "REJECTED",
+      reviewedById: userIds.admin,
+      reviewedAt: new Date("2026-06-16T15:15:00+07:00"),
+      reviewNote: "Concert vẫn hợp lệ và nên tiếp tục được mở bán.",
+    },
+  ];
+
+  for (const request of deletionRequests) {
+    await prisma.concertDeletionRequest.upsert({
+      where: { id: request.id },
+      create: request,
+      update: request,
+    });
   }
 }
 
@@ -475,9 +695,13 @@ async function seedDemoTickets() {
         concertId: concert.id,
         ticketTypeId: ticketType,
         seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+        gateId: gateId(sourceConcertIndex, sourceZoneIndex),
         qrTokenHash: `qr-seed-${concert.slug}-001`,
-        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
-        qrSignature: "demo-signature",
+        // Để null để api-server tự build payload (7 field) và ký Ed25519 thật khi
+        // gọi GET /me/tickets/:id/qr lần đầu (như vé phát hành thật). Không gán
+        // chữ ký demo ở đây nữa, nếu không checker sẽ verify thất bại.
+        qrPayload: null,
+        qrSignature: null,
         status: index === 2 ? "CHECKED_IN" : "ISSUED",
         issuedAt: new Date("2026-06-08T10:05:00+07:00"),
         checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,
@@ -489,9 +713,11 @@ async function seedDemoTickets() {
         concertId: concert.id,
         ticketTypeId: ticketType,
         seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+        gateId: gateId(sourceConcertIndex, sourceZoneIndex),
         qrTokenHash: `qr-seed-${concert.slug}-001`,
-        qrPayload: { ticket_id: issuedTicketId, concert_id: concert.id },
-        qrSignature: "demo-signature",
+        // Ghi đè dữ liệu demo cũ trong DB về null để lần /qr kế tiếp ký lại thật.
+        qrPayload: null,
+        qrSignature: null,
         status: index === 2 ? "CHECKED_IN" : "ISSUED",
         issuedAt: new Date("2026-06-08T10:05:00+07:00"),
         checkedInAt: index === 2 ? new Date("2026-09-05T18:45:00+07:00") : null,
@@ -504,25 +730,26 @@ async function seedOperations() {
   for (const [concertIndex, concert] of concerts.entries()) {
     if (concert.zones.length === 0) continue;
     const gateIndex = Math.max(0, concert.zones.findIndex((item) => item.code === "VIP"));
+    const staffId = concert.slug === "secret-show-2026" ? userIds.checkerSecretOne : userIds.checkerSecretTwo;
 
     await prisma.checkinDevice.upsert({
       where: { id: fixedId(641 + concertIndex) },
       create: {
         id: fixedId(641 + concertIndex),
         deviceCode: `CHECKER-${concert.slug}`,
-        staffId: userIds.checker,
+        staffId,
         concertId: concert.id,
         gateId: gateId(concertIndex, gateIndex),
-        name: `Demo checker device - ${concert.title}`,
+        name: `Thiết bị soát vé demo - ${concert.title}`,
         status: "ACTIVE",
         lastSeenAt: new Date("2026-06-08T11:00:00+07:00"),
       },
       update: {
         deviceCode: `CHECKER-${concert.slug}`,
-        staffId: userIds.checker,
+        staffId,
         concertId: concert.id,
         gateId: gateId(concertIndex, gateIndex),
-        name: `Demo checker device - ${concert.title}`,
+        name: `Thiết bị soát vé demo - ${concert.title}`,
         status: "ACTIVE",
         lastSeenAt: new Date("2026-06-08T11:00:00+07:00"),
       },
@@ -552,6 +779,7 @@ async function seedOperations() {
 async function main() {
   await seedUsers();
   await seedCatalog();
+  await seedOrganizerWorkflow();
   await seedDemoTickets();
   await seedOperations();
 }

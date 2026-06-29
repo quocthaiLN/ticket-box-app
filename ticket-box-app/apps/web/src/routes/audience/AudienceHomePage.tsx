@@ -20,7 +20,7 @@ export function AudienceHomePage() {
   const [concerts, setConcerts] = useState<UiConcert[]>([]);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState("Tất cả");
 
   useEffect(() => {
     let mounted = true;
@@ -42,11 +42,11 @@ export function AudienceHomePage() {
   }, []);
 
   const cityFilters = useMemo(
-    () => getCityFilters(concerts),
+    () => getCityFilters(concerts, "Tất cả"),
     [concerts],
   );
 
-  const filtered = filterHomeConcerts(concerts, { searchQuery, activeFilter });
+  const filtered = filterHomeConcerts(concerts, { searchQuery, activeFilter, allLabel: "Tất cả" });
 
   const featured = concerts[0];
 
@@ -69,7 +69,7 @@ export function AudienceHomePage() {
             <div className="max-w-2xl">
               <div className="mb-4 flex items-center gap-2">
                 <span className="rounded-full border border-[#F5C842]/30 bg-[#F5C842]/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#F5C842]">
-                  Featured
+                  Nổi bật
                 </span>
                 <span className="text-xs text-[#8585A0]">{featured.genre}</span>
               </div>
@@ -102,14 +102,14 @@ export function AudienceHomePage() {
                   to={`/concerts/${featured.id}`}
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/30 transition-transform hover:scale-105"
                 >
-                  View tickets now
+                  Mua vé ngay
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   to="/events"
                   className="rounded-xl border border-white/15 bg-white/[0.07] px-6 py-3 text-sm font-medium text-[#F0EDEB] transition-colors hover:bg-white/10"
                 >
-                  Explore more
+                  Khám phá thêm
                 </Link>
               </div>
             </div>
@@ -142,14 +142,24 @@ export function AudienceHomePage() {
       <AnimatedSection>
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row">
-            <div className="flex flex-1 items-center gap-3 rounded-xl border border-white/10 bg-[#111118] px-4 py-3">
+            <div
+              className="flex flex-1 items-center gap-3 rounded-xl px-4 py-3"
+              style={{ background: "#111118", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
               <Search className="h-4 w-4 shrink-0 text-[#8585A0]" />
               <input
                 type="text"
-                placeholder="Search artists, events, or venues..."
+                placeholder="Tìm kiếm nghệ sĩ, sự kiện, địa điểm..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                className="flex-1 bg-transparent text-sm text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#8585A0]"
+                style={{
+                  width: "100%",
+                  border: 0,
+                  background: "transparent",
+                  color: "#F0EDEB",
+                  padding: 0,
+                }}
               />
             </div>
           </div>
@@ -181,24 +191,24 @@ export function AudienceHomePage() {
               className="text-[#F0EDEB]"
               style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.75rem", fontWeight: 600 }}
             >
-              {activeFilter !== "All" ? `${activeFilter} events` : "Upcoming events"}
+              {activeFilter !== "Tất cả" ? `Sự kiện tại ${activeFilter}` : "Sự kiện sắp diễn ra"}
             </h2>
             <Link to="/events" className="flex items-center gap-1 text-sm text-[#8585A0] transition-colors hover:text-amber-400">
-              View all
+              Xem tất cả
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </AnimatedSection>
 
-        {status === "loading" && <StatePanel text="Loading catalog..." />}
-        {status === "error" && <StatePanel text="Could not load the Catalog API." tone="error" />}
-        {status === "ready" && filtered.length === 0 && <StatePanel text="No matching events found." />}
+        {status === "loading" && <StatePanel text="Đang tải danh mục sự kiện..." />}
+        {status === "error" && <StatePanel text="Không thể tải dữ liệu sự kiện." tone="error" />}
+        {status === "ready" && filtered.length === 0 && <StatePanel text="Không tìm thấy sự kiện phù hợp." />}
 
         {filtered.length > 0 && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((concert, index) => (
               <AnimatedSection key={concert.id} delay={index * 0.05}>
-                <ConcertCard concert={concert} featured={index === 0 && !searchQuery} />
+                <ConcertCard concert={concert} />
               </AnimatedSection>
             ))}
           </div>
@@ -213,18 +223,18 @@ export function AudienceHomePage() {
                 className="text-[#F0EDEB]"
                 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", fontWeight: 600 }}
               >
-                Why choose TicketBox?
+                Vì sao chọn TicketBox?
               </h2>
-              <p className="mt-2 text-sm text-[#8585A0]">A trusted ticketing platform for concerts and live events.</p>
+              <p className="mt-2 text-sm text-[#8585A0]">Nền tảng bán vé đáng tin cậy cho concert và sự kiện trực tiếp.</p>
             </div>
           </AnimatedSection>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: <Zap className="h-6 w-6" />, title: "Fast checkout", desc: "A clear checkout flow with payment sandbox support for demos." },
-              { icon: <Shield className="h-6 w-6" />, title: "Verified tickets", desc: "Each e-ticket has its own QR code to reduce disputes and prevent fake tickets." },
-              { icon: <Smartphone className="h-6 w-6" />, title: "Easy check-in", desc: "QR tickets are ready for online gate scanning and offline sync." },
-              { icon: <Star className="h-6 w-6" />, title: "Centralized admin", desc: "Catalog, guest lists, and artist bios live in one operational system." },
+              { icon: <Zap className="h-6 w-6" />, title: "Thanh toán nhanh", desc: "Luồng checkout rõ ràng, sẵn sàng nối VNPAY/MoMo sandbox cho demo." },
+              { icon: <Shield className="h-6 w-6" />, title: "Vé xác thực", desc: "Mỗi e-ticket có mã QR riêng để giảm tranh chấp và chống vé giả." },
+              { icon: <Smartphone className="h-6 w-6" />, title: "Check-in tiện lợi", desc: "QR ticket hỗ trợ soát vé online tại cổng và đồng bộ offline." },
+              { icon: <Star className="h-6 w-6" />, title: "Vận hành tập trung", desc: "Danh mục, khách mời và Artist Bio nằm trong một hệ thống quản trị." },
             ].map((feature, index) => (
               <AnimatedSection key={feature.title} delay={index * 0.08}>
                 <FeatureCard icon={feature.icon} title={feature.title} desc={feature.desc} />

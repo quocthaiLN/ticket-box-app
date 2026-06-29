@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { Router } from 'express';
-import { paymentConfig } from '@ticketbox/config/payment.js';
+import { env } from '@ticketbox/config';
 import { applyFault, type ControlStore } from './control.js';
 
 interface VnpayQueryBody {
@@ -28,7 +28,7 @@ function expectedSignature(b: VnpayQueryBody): string {
     b.vnp_IpAddr,
     b.vnp_OrderInfo,
   ].join('|');
-  return createHmac('sha512', paymentConfig.vnpay.hashSecret).update(hashData, 'utf8').digest('hex');
+  return createHmac('sha512', env.vnpay.hashSecret).update(hashData, 'utf8').digest('hex');
 }
 
 /** Mock of VNPay's QueryDR POST /merchant_webapi/api/transaction — validates real HMAC-SHA512. */

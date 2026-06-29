@@ -21,6 +21,7 @@ export interface TestFixture {
   concertId: string;
   seatZoneId: string;
   ticketTypeId: string;
+  gateId: string;
 }
 
 export async function createFixture(opts: {
@@ -31,6 +32,7 @@ export async function createFixture(opts: {
   const concertId = crypto.randomUUID();
   const seatZoneId = crypto.randomUUID();
   const ticketTypeId = crypto.randomUUID();
+  const gateId = crypto.randomUUID();
 
   const now = new Date();
   const saleStart = new Date(now.getTime() - 24 * 60 * 60 * 1000); // yesterday
@@ -79,7 +81,23 @@ export async function createFixture(opts: {
     },
   });
 
-  return { concertId, seatZoneId, ticketTypeId };
+  // Cổng + mapping cổng↔khu ghế: luồng phát hành vé yêu cầu mỗi zone có cổng active.
+  await db.checkinGate.create({
+    data: {
+      id:        gateId,
+      concertId,
+      code:      `GATE-${suffix}`,
+      name:      'Test Gate',
+      isActive:  true,
+      sortOrder: 1,
+    },
+  });
+
+  await db.checkinGateZone.create({
+    data: { gateId, seatZoneId, concertId },
+  });
+
+  return { concertId, seatZoneId, ticketTypeId, gateId };
 }
 
 export async function cleanupFixture(fixture: TestFixture): Promise<void> {
@@ -89,6 +107,8 @@ export async function cleanupFixture(fixture: TestFixture): Promise<void> {
   await db.ticket.deleteMany({ where: { ticketTypeId } });
   await db.order.deleteMany({ where: { concertId } }); // cascades → order_items, payments
   await db.ticketType.deleteMany({ where: { concertId } }); // cascades → user_ticket_type_counters
+  await db.checkinGateZone.deleteMany({ where: { concertId } });
+  await db.checkinGate.deleteMany({ where: { concertId } });
   await db.seatZone.deleteMany({ where: { concertId } });
   await db.concert.delete({ where: { id: concertId } });
 }

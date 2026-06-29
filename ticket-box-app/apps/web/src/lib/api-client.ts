@@ -201,6 +201,12 @@ export function publishConcert(concertId: string) {
   );
 }
 
+export function cancelConcert(concertId: string) {
+  return apiPost<ApiResponse<ConcertDetail>>(
+    `/admin/concerts/${concertId}/cancel`,
+  );
+}
+
 export function createSeatZone(
   concertId: string,
   input: Record<string, unknown>,

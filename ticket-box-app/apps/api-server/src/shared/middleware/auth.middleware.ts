@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { ApiError } from "../http/problem-details.js";
+import { ApiError, Errors } from "../http/problem-details.js";
 import { authService } from "../../modules/auth/auth.service.js";
 
 /**
@@ -14,14 +14,7 @@ export async function requireAuth(
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
-    next(
-      new ApiError({
-        title: "Unauthorized",
-        status: 401,
-        code: "UNAUTHORIZED",
-        detail: "Missing or malformed Authorization header.",
-      }),
-    );
+    next(Errors.unauthorized("Missing or malformed Authorization header."));
     return;
   }
 
@@ -38,12 +31,9 @@ export async function requireAuth(
     }
     const code = (err as { code?: string }).code ?? "UNAUTHORIZED";
     next(
-      new ApiError({
-        title: code === "TOKEN_EXPIRED" ? "Token expired" : "Unauthorized",
-        status: 401,
-        code: code as string,
-        detail: (err as Error).message,
-      }),
+      code === "TOKEN_EXPIRED"
+        ? Errors.tokenExpired()
+        : Errors.unauthorized((err as Error).message),
     );
   }
 }

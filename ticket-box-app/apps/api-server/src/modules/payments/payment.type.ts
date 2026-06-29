@@ -1,4 +1,6 @@
 import type { Request } from 'express';
+import type { z } from 'zod';
+import type { momoReturnQuerySchema, vnpayReturnQuerySchema } from './payment.schema.js';
 
 declare global {
   namespace Express {
@@ -8,11 +10,11 @@ declare global {
   }
 }
 
-export interface RetryPaymentRequest {
+export interface CreatePaymentRequest {
   payment_provider?: 'VNPAY' | 'MOMO';
 }
 
-export interface RetryPaymentResponse {
+export interface CreatePaymentResponse {
   payment_id: string;
   provider: string;
   status: string;
@@ -53,5 +55,9 @@ export interface MomoWebhookBody {
   extraData?: string;
   signature?: string;
 }
+
+// Query đã validate/ép kiểu của các route browser return (suy ra từ schema).
+export type VnpayReturnQuery = z.infer<typeof vnpayReturnQuerySchema>;
+export type MomoReturnQuery = z.infer<typeof momoReturnQuerySchema>;
 
 export interface AppRequest extends Request {}

@@ -6,12 +6,14 @@ import {
   Clock,
   HelpCircle,
   Info,
+  LogIn,
   MapPin,
   Music,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   formatCurrency,
   formatDate,
@@ -21,6 +23,7 @@ import {
   type UiConcert,
 } from "../../lib/catalog-ui";
 import { getCatalogConcertDetail } from "../../services/catalog.service";
+import { createPendingCheckout, writePendingCheckout } from "./checkout-storage";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -30,6 +33,7 @@ export function ConcertDetailPage() {
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     if (!concertId) return;
@@ -52,11 +56,11 @@ export function ConcertDetailPage() {
   }, [concertId]);
 
   if (status === "loading") {
-    return <CenteredState text="Loading concert details..." />;
+    return <CenteredState text="Đang tải chi tiết concert..." />;
   }
 
   if (status === "error" || !concert) {
-    return <CenteredState text="Could not load concert details." actionLabel="Back to home" />;
+    return <CenteredState text="Không thể tải chi tiết concert." actionLabel="Về trang chủ" />;
   }
 
   const hasAvailableTickets = concert.ticketTypes.some((ticketType) => {
@@ -65,6 +69,28 @@ export function ConcertDetailPage() {
   });
   const startTime = new Date(concert.startsAt);
   const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
+
+  function handleBuyTickets() {
+    const currentConcert = concert;
+    if (!currentConcert) return;
+
+    const session = getStoredAuthSession();
+    if (!session) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    const pending = createPendingCheckout(currentConcert.id);
+    writePendingCheckout({
+      ...pending,
+      concertTitle: currentConcert.title,
+      artistName: currentConcert.artistName,
+      coverImageUrl: currentConcert.coverImageUrl,
+      venueName: currentConcert.venue.name,
+      startsAt: currentConcert.startsAt,
+    });
+    navigate(`/concerts/${currentConcert.id}/seats`);
+  }
 
   return (
     <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -84,7 +110,7 @@ export function ConcertDetailPage() {
             type="button"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back
+            Quay lại
           </button>
         </div>
         <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-7xl px-4 pb-6 sm:px-8">
@@ -116,9 +142,9 @@ export function ConcertDetailPage() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-8 sm:px-8 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <InfoBlock icon={<Calendar className="h-5 w-5 text-[#F5C842]" />} label="Date" value={formatDate(concert.startsAt)} />
-            <InfoBlock icon={<Clock className="h-5 w-5 text-[#F5C842]" />} label="Time" value={`${formatTime(concert.startsAt)} - ${formatTime(concert.endsAt)}`} />
-            <InfoBlock icon={<MapPin className="h-5 w-5 text-[#F5C842]" />} label="Venue" value={`${concert.venue.name}, ${concert.venue.city}`} />
+            <InfoBlock icon={<Calendar className="h-5 w-5 text-[#F5C842]" />} label="Ngày diễn" value={formatDate(concert.startsAt)} />
+            <InfoBlock icon={<Clock className="h-5 w-5 text-[#F5C842]" />} label="Giờ diễn" value={`${formatTime(concert.startsAt)} - ${formatTime(concert.endsAt)}`} />
+            <InfoBlock icon={<MapPin className="h-5 w-5 text-[#F5C842]" />} label="Địa điểm" value={`${concert.venue.name}, ${concert.venue.city}`} />
           </div>
 
           <div>
@@ -136,7 +162,7 @@ export function ConcertDetailPage() {
                   }}
                   type="button"
                 >
-                  {tab === "info" ? "Information" : tab === "lineup" ? "Artist" : "Seat map"}
+                  {tab === "info" ? "Thông tin" : tab === "lineup" ? "Nghệ sĩ" : "Sơ đồ ghế"}
                 </button>
               ))}
             </div>
@@ -144,42 +170,42 @@ export function ConcertDetailPage() {
             {activeTab === "info" && (
               <div className="space-y-6">
                 <section>
-                  <h3 className="mb-2 text-sm font-semibold text-[#F0EDEB]">Event overview</h3>
+                  <h3 className="mb-2 text-sm font-semibold text-[#F0EDEB]">Giới thiệu sự kiện</h3>
                   <p className="text-sm leading-relaxed text-[#B0B0C0]">{concert.description}</p>
                 </section>
 
-                <Panel title="Event details" icon={<Info className="h-4 w-4 text-[#F5C842]" />}>
+                <Panel title="Thông tin chi tiết" icon={<Info className="h-4 w-4 text-[#F5C842]" />}>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <DetailRow label="Organizer" value="TicketBox Events" />
-                    <DetailRow label="Genre" value={concert.genre} />
-                    <DetailRow label="Event date" value={formatDate(concert.startsAt)} />
-                    <DetailRow label="Doors open" value={formatTime(doorOpenTime.toISOString())} />
-                    <DetailRow label="Show starts" value={formatTime(concert.startsAt)} />
-                    <DetailRow label="Expected end" value={formatTime(concert.endsAt)} />
-                    <DetailRow label="Venue" value={concert.venue.name} />
-                    <DetailRow label="City" value={concert.venue.city} />
-                    <DetailRow label="Address" value={concert.venue.address || "To be updated"} />
-                    <DetailRow label="Capacity" value={`${concert.venue.capacity.toLocaleString("en-US")} guests`} />
+                    <DetailRow label="Ban tổ chức" value="TicketBox Events" />
+                    <DetailRow label="Thể loại" value={concert.genre} />
+                    <DetailRow label="Ngày diễn" value={formatDate(concert.startsAt)} />
+                    <DetailRow label="Mở cửa đón khách" value={formatTime(doorOpenTime.toISOString())} />
+                    <DetailRow label="Bắt đầu chương trình" value={formatTime(concert.startsAt)} />
+                    <DetailRow label="Dự kiến kết thúc" value={formatTime(concert.endsAt)} />
+                    <DetailRow label="Địa điểm" value={concert.venue.name} />
+                    <DetailRow label="Thành phố" value={concert.venue.city} />
+                    <DetailRow label="Địa chỉ" value={concert.venue.address || "Đang cập nhật"} />
+                    <DetailRow label="Sức chứa" value={`${concert.venue.capacity.toLocaleString("vi-VN")} khán giả`} />
                   </div>
                 </Panel>
 
-                <Panel title="Event rules" icon={<AlertTriangle className="h-4 w-4 text-[#F5C842]" />}>
+                <Panel title="Quy định sự kiện" icon={<AlertTriangle className="h-4 w-4 text-[#F5C842]" />}>
                   <RuleList
                     items={[
-                      "Guests must present a valid e-ticket with QR code at the gate.",
-                      "Outside food and drinks are not allowed inside the event area.",
-                      "Cancelled, already checked-in, or wrong-gate tickets cannot be used.",
-                      "The organizer may refuse entry for security policy violations.",
+                      "Khán giả cần xuất trình e-ticket hợp lệ có mã QR tại cổng.",
+                      "Không mang đồ ăn, thức uống từ bên ngoài vào khu vực sự kiện.",
+                      "Vé đã hủy, đã check-in hoặc sai cổng không thể sử dụng.",
+                      "Ban tổ chức có quyền từ chối vào cổng khi vi phạm quy định an ninh.",
                     ]}
                   />
                 </Panel>
 
-                <Panel title="Attendance guide" icon={<CheckCircle className="h-4 w-4 text-[#2DBE6C]" />}>
+                <Panel title="Hướng dẫn tham dự" icon={<CheckCircle className="h-4 w-4 text-[#2DBE6C]" />}>
                   <div className="space-y-4">
                     {[
-                      { step: "01", title: "Arrive 60 minutes early", desc: `Doors open at ${formatTime(doorOpenTime.toISOString())}.` },
-                      { step: "02", title: "Prepare your QR code", desc: "Your e-ticket will appear in My Tickets after successful payment." },
-                      { step: "03", title: "Check in at the gate", desc: "Present the QR code so staff can scan and validate it." },
+                      { step: "01", title: "Đến sớm trước 60 phút", desc: `Cổng mở lúc ${formatTime(doorOpenTime.toISOString())}.` },
+                      { step: "02", title: "Chuẩn bị mã QR", desc: "E-ticket sẽ xuất hiện trong Vé của tôi sau khi thanh toán thành công." },
+                      { step: "03", title: "Check-in tại cổng", desc: "Xuất trình mã QR để nhân sự soát vé quét và xác thực." },
                     ].map((guide) => (
                       <div key={guide.step} className="flex gap-4">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#2DBE6C]/15 text-xs font-bold text-[#2DBE6C]">
@@ -194,18 +220,20 @@ export function ConcertDetailPage() {
                   </div>
                 </Panel>
 
-                <Panel title="Frequently asked questions" icon={<HelpCircle className="h-4 w-4 text-[#7B61FF]" />}>
-                  <FAQItem question="How many tickets can one account buy?" answer="Limits depend on each ticket type and are checked again when an order is created." />
-                  <FAQItem question="Are e-tickets secure?" answer="Each ticket has its own QR payload and can only be checked in once at the correct gate or zone." />
+                <Panel title="Câu hỏi thường gặp" icon={<HelpCircle className="h-4 w-4 text-[#7B61FF]" />}>
+                  <FAQItem question="Vé có hoàn trả được không?" answer="Vé đã mua không được hoàn trả, trừ trường hợp sự kiện bị hủy bởi ban tổ chức. Trong trường hợp hủy sự kiện, 100% giá vé sẽ được hoàn lại." />
+                  <FAQItem question="Có thể mua vé tại cửa không?" answer="Tùy theo từng sự kiện. Thông thường vé chỉ bán online qua TicketBox. Vui lòng theo dõi thông báo từ ban tổ chức." />
+                  <FAQItem question="Một tài khoản mua được bao nhiêu vé?" answer="Giới hạn phụ thuộc từng loại vé và sẽ được kiểm tra lại khi tạo đơn hàng." />
+                  <FAQItem question="E-ticket có an toàn không?" answer="Mỗi vé có QR payload riêng và chỉ có thể check-in một lần tại đúng cổng hoặc đúng khu." />
                 </Panel>
               </div>
             )}
 
             {activeTab === "lineup" && (
-              <Panel title="Main artist" icon={<Music className="h-4 w-4 text-[#F5C842]" />}>
+              <Panel title="Nghệ sĩ chính" icon={<Music className="h-4 w-4 text-[#F5C842]" />}>
                 <p className="mb-2 font-semibold text-[#F0EDEB]">{concert.artistName}</p>
                 <p className="text-sm leading-relaxed text-[#B0B0C0]">
-                  {concert.artistBio || "Artist information is being updated."}
+                  {concert.artistBio || "Thông tin nghệ sĩ đang được cập nhật."}
                 </p>
               </Panel>
             )}
@@ -214,7 +242,7 @@ export function ConcertDetailPage() {
               <div className="space-y-4">
                 {concert.seatMapUrl ? (
                   <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111118]">
-                    <ImageWithFallback src={concert.seatMapUrl} alt="Seat map" className="max-h-[420px] w-full object-contain" />
+                    <ImageWithFallback src={concert.seatMapUrl} alt="Sơ đồ ghế" className="max-h-[420px] w-full object-contain" />
                   </div>
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-[#111118] p-6">
@@ -230,7 +258,7 @@ export function ConcertDetailPage() {
                         <p className="text-sm font-medium text-[#F0EDEB]">{zone.name}</p>
                         <p className="text-xs text-[#8585A0]">{zone.description}</p>
                       </div>
-                      <span className="text-xs text-[#8585A0]">{zone.capacity.toLocaleString("en-US")} seats</span>
+                      <span className="text-xs text-[#8585A0]">{zone.capacity.toLocaleString("vi-VN")} chỗ</span>
                     </div>
                   ))}
                 </div>
@@ -242,15 +270,15 @@ export function ConcertDetailPage() {
         <aside>
           <div id="ticket-list" className="sticky top-20 overflow-hidden rounded-2xl border border-white/10 bg-[#111118]">
             <div className="border-b border-white/10 px-5 py-4">
-              <h2 className="text-sm font-semibold text-[#F0EDEB]">Ticket prices</h2>
-              <p className="mt-0.5 text-xs text-[#8585A0]">Data comes from the Ticket Types and Inventory APIs.</p>
+              <h2 className="text-sm font-semibold text-[#F0EDEB]">Giá vé</h2>
+              <p className="mt-0.5 text-xs text-[#8585A0]">Dữ liệu lấy từ Ticket Types và Inventory API.</p>
             </div>
 
             <div className="space-y-2 p-4">
               {concert.ticketTypes.length === 0 && (
                 <div className="py-8 text-center">
                   <Info className="mx-auto mb-2 h-8 w-8 text-[#8585A0]" />
-                  <p className="text-sm text-[#8585A0]">Tickets are not on sale yet</p>
+                  <p className="text-sm text-[#8585A0]">Vé chưa mở bán</p>
                 </div>
               )}
 
@@ -278,7 +306,7 @@ export function ConcertDetailPage() {
                           />
                         </div>
                         <span className="shrink-0 text-xs text-[#8585A0]">
-                          {isSoldOut ? "Sold out" : ticketType.availableQuantity === null ? "On sale" : `${available.toLocaleString("en-US")} left`}
+                          {isSoldOut ? "Hết vé" : ticketType.availableQuantity === null ? "Đang mở bán" : `Còn ${available.toLocaleString("vi-VN")}`}
                         </span>
                       </div>
                     </div>
@@ -291,21 +319,28 @@ export function ConcertDetailPage() {
               <button
                 type="button"
                 disabled={!hasAvailableTickets}
-                onClick={() => document.getElementById("ticket-list")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={handleBuyTickets}
                 className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                View ticket types
+                Mua vé
               </button>
             </div>
 
             <div className="border-t border-white/10 bg-[#F5C842]/[0.04] px-5 py-3">
               <p className="text-xs leading-relaxed text-[#8585A0]">
-                <span className="text-[#F5C842]">Note:</span> Order and checkout will be connected in the next integration step.
+                <span className="text-[#F5C842]">Lưu ý:</span> Vé đã mua không hoàn trả trừ trường hợp sự kiện bị hủy.
               </p>
             </div>
           </div>
         </aside>
       </div>
+
+      {showLoginPrompt && (
+        <LoginPrompt
+          concertId={concert.id}
+          onClose={() => setShowLoginPrompt(false)}
+        />
+      )}
     </div>
   );
 }
@@ -384,14 +419,14 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 function SeatMapVisualization({ zones }: { zones: { id: string; name: string; color: string; capacity: number }[] }) {
   if (zones.length === 0) {
-    return <p className="text-center text-sm text-[#8585A0]">Seat map is not available yet.</p>;
+    return <p className="text-center text-sm text-[#8585A0]">Sơ đồ ghế chưa sẵn sàng.</p>;
   }
 
   return (
     <div className="w-full">
       <div className="mb-5 flex justify-center">
         <div className="min-w-[140px] rounded-lg border border-white/10 bg-white/[0.08] px-10 py-2 text-center text-xs font-semibold text-[#F0EDEB]">
-          STAGE
+          SÂN KHẤU
         </div>
       </div>
       <div className="space-y-2">
@@ -408,13 +443,44 @@ function SeatMapVisualization({ zones }: { zones: { id: string; name: string; co
                   width: widths[index] ?? "100%",
                 }}
               >
-                {zone.name} - {zone.capacity.toLocaleString("en-US")} seats
+                {zone.name} - {zone.capacity.toLocaleString("vi-VN")} chỗ
               </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-4 text-center text-xs text-[#8585A0]">Simulated layout from the Seat Zone API.</p>
+      <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ mô phỏng từ Seat Zone API.</p>
+    </div>
+  );
+}
+
+function LoginPrompt({ concertId, onClose }: { concertId: string; onClose: () => void }) {
+  function rememberRedirect() {
+    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertId}`);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur" onClick={onClose}>
+      <section className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111118] p-8 text-center" onClick={(event) => event.stopPropagation()}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#E8315B]/25 bg-[#E8315B]/10 text-[#E8315B]">
+          <LogIn className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Đăng nhập để mua vé</h2>
+        <p className="mt-2 text-sm leading-6 text-[#8585A0]">
+          Bạn cần đăng nhập bằng tài khoản khán giả để tiếp tục chọn vé và thanh toán.
+        </p>
+        <div className="mt-6 grid gap-3">
+          <Link to="/login" onClick={rememberRedirect} className="rounded-xl bg-[#E8315B] px-4 py-3 text-sm font-semibold text-white">
+            Đăng nhập ngay
+          </Link>
+          <Link to="/register" onClick={rememberRedirect} className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-[#F0EDEB]">
+            Tạo tài khoản miễn phí
+          </Link>
+          <button type="button" onClick={onClose} className="text-sm text-[#8585A0]">
+            Tiếp tục xem
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

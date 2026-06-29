@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   checkInTicketAtGate,
   CheckinResult,
@@ -8,7 +8,7 @@ import {
   Prisma,
   TicketStatus,
 } from "@ticketbox/database";
-import { env } from "@ticketbox/config";
+import { verifyQrSignature } from "../tickets/ticket.qr.js";
 import type {
   CheckinPreloadQuery,
   CheckinPreloadResponse,
@@ -29,7 +29,7 @@ import type {
   UpdateGateRequest,
 } from "./checkin.types.js";
 import { processOfflineSyncBatch } from "./checkin.sync.js";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 
 type DeviceContext = {
   id: string;
@@ -166,11 +166,7 @@ export class CheckinRepository {
     });
 
     if (!device || !device.gate.isActive) {
-      throw domainError(
-        "DEVICE_NOT_ASSIGNED",
-        "Device is not active or is not assigned to this concert/gate.",
-        422,
-      );
+      throw Errors.deviceNotAssigned();
     }
 
     const allowedZones = await prisma.checkinGateZone.findMany({
@@ -318,7 +314,7 @@ export class CheckinRepository {
       },
     });
 
-    if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
+    if (!gate) throw Errors.gateNotFound();
     return toGateDto(gate);
   }
 
@@ -408,7 +404,7 @@ export class CheckinRepository {
       where: { id: deviceId },
     });
     if (!current)
-      throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
+      throw Errors.deviceNotFound();
 
     const targetGateId = input.gate_id ?? current.gateId;
     await this.assertGateBelongsToConcert(targetGateId, current.concertId);
@@ -433,7 +429,7 @@ export class CheckinRepository {
       where: { id: deviceId },
     });
     if (!current)
-      throw domainError("DEVICE_NOT_FOUND", "Device was not found.", 404);
+      throw Errors.deviceNotFound();
 
     const device = await prisma.checkinDevice.update({
       where: { id: deviceId },
@@ -466,7 +462,7 @@ export class CheckinRepository {
     const gate = await prisma.checkinGate.findUnique({
       where: { id: input.gate_id },
     });
-    if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
+    if (!gate) throw Errors.gateNotFound();
     await this.assertZoneBelongsToConcert(input.seat_zone_id, gate.concertId);
 
     const mapping = await prisma.checkinGateZone.upsert({
@@ -493,7 +489,7 @@ export class CheckinRepository {
     input: ReplaceGateZonesRequest,
   ): Promise<GateZoneMappingDto[]> {
     const gate = await prisma.checkinGate.findUnique({ where: { id: gateId } });
-    if (!gate) throw domainError("GATE_NOT_FOUND", "Gate was not found.", 404);
+    if (!gate) throw Errors.gateNotFound();
 
     for (const zoneId of input.seat_zone_ids) {
       await this.assertZoneBelongsToConcert(zoneId, gate.concertId);
@@ -528,22 +524,13 @@ export class CheckinRepository {
   async deleteGateZoneMapping(mappingId: string): Promise<GateZoneMappingDto> {
     const [gateId, seatZoneId] = mappingId.split(":");
     if (!gateId || !seatZoneId) {
-      throw domainError(
-        "INVALID_MAPPING_ID",
-        "Mapping id must be formatted as gate_id:seat_zone_id.",
-        400,
-      );
+      throw Errors.invalidMappingId();
     }
 
     const existing = await prisma.checkinGateZone.findUnique({
       where: { gateId_seatZoneId: { gateId, seatZoneId } },
     });
-    if (!existing)
-      throw domainError(
-        "MAPPING_NOT_FOUND",
-        "Gate-zone mapping was not found.",
-        404,
-      );
+    if (!existing) throw Errors.gateMappingNotFound();
 
     await prisma.checkinGateZone.delete({
       where: { gateId_seatZoneId: { gateId, seatZoneId } },
@@ -656,11 +643,7 @@ export class CheckinRepository {
     });
 
     if (!device) {
-      throw domainError(
-        "DEVICE_NOT_ASSIGNED",
-        "Device is not active or is not assigned to this concert/gate.",
-        422,
-      );
+      throw Errors.deviceNotAssigned();
     }
 
     return device;
@@ -744,7 +727,7 @@ export class CheckinRepository {
       select: { id: true },
     });
     if (!concert)
-      throw domainError("CONCERT_NOT_FOUND", "Concert was not found.", 404);
+      throw Errors.concertNotFound();
   }
 
   // Đảm bảo gate thuộc đúng concert đang thao tác.
@@ -754,11 +737,7 @@ export class CheckinRepository {
       select: { id: true },
     });
     if (!gate)
-      throw domainError(
-        "GATE_NOT_FOUND",
-        "Gate was not found for this concert.",
-        404,
-      );
+      throw Errors.gateNotFound("Gate was not found for this concert.");
   }
 
   // Đảm bảo seat zone thuộc đúng concert đang cấu hình.
@@ -771,11 +750,7 @@ export class CheckinRepository {
       select: { id: true },
     });
     if (!zone)
-      throw domainError(
-        "SEAT_ZONE_NOT_FOUND",
-        "Seat zone was not found for this concert.",
-        422,
-      );
+      throw Errors.seatZoneNotFoundForConcert();
   }
 }
 
@@ -794,26 +769,6 @@ function normalizePayload(value: unknown): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
-}
-
-// Verify chữ ký QR bằng HMAC để phát hiện payload bị chỉnh sửa.
-function verifyQrSignature(
-  payload: Record<string, unknown>,
-  signature: string,
-) {
-  const payloadWithoutSignature = { ...payload };
-  delete payloadWithoutSignature["qr_signature"];
-  delete payloadWithoutSignature["qrSignature"];
-  const sorted = Object.fromEntries(
-    Object.keys(payloadWithoutSignature)
-      .sort()
-      .map((key) => [key, payloadWithoutSignature[key]]),
-  );
-  const canonical = JSON.stringify(sorted);
-  const expected = createHmac("sha256", env.qr.signingSecret)
-    .update(canonical, "utf8")
-    .digest("base64");
-  return expected === signature;
 }
 
 // Chuyển Prisma gate model sang DTO trả về API.
@@ -908,12 +863,3 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-// Tạo lỗi API theo chuẩn problem-details của hệ thống.
-function domainError(code: string, detail: string, status: number) {
-  return new ApiError({
-    title: code,
-    status,
-    code,
-    detail,
-  });
-}

@@ -7,7 +7,7 @@ import {
   prisma,
   Prisma,
 } from "@ticketbox/database";
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import type {
   OfflineSyncItemRequest,
   OfflineSyncItemStatus,
@@ -142,12 +142,7 @@ async function getOrCreateBatch(input: OfflineSyncRequest): Promise<BatchContext
   const gateId = input.gate_id ?? first?.gate_id;
 
   if (!input.device_id || !concertId || !gateId) {
-    throw new ApiError({
-      title: "INVALID_OFFLINE_BATCH",
-      status: 422,
-      code: "INVALID_OFFLINE_BATCH",
-      detail: "device_id, concert_id, and gate_id are required for a new offline batch.",
-    });
+    throw Errors.invalidOfflineBatch();
   }
 
   const device = await prisma.checkinDevice.findFirst({
@@ -162,12 +157,7 @@ async function getOrCreateBatch(input: OfflineSyncRequest): Promise<BatchContext
   });
 
   if (!device) {
-    throw new ApiError({
-      title: "DEVICE_NOT_ASSIGNED",
-      status: 422,
-      code: "DEVICE_NOT_ASSIGNED",
-      detail: "Device is not active or is not assigned to this concert/gate.",
-    });
+    throw Errors.deviceNotAssigned();
   }
 
   const batch = await prisma.offlineCheckinBatch.create({

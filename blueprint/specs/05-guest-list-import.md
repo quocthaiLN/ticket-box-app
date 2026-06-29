@@ -6,7 +6,7 @@
 
 ## 2. Actor / Thành phần tham gia
 
-- Ban tổ chức
+- Admin
 - CSV Sync Worker
 - Guest List Module
 - PostgreSQL

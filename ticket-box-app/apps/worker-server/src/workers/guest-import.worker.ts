@@ -10,7 +10,7 @@ import {
   type SeatZone,
 } from "@ticketbox/database";
 import {
-  getRedisConnection,
+  createRedisConnection,
   QUEUE_NAMES,
   type GuestImportJobData,
 } from "@ticketbox/queue";
@@ -63,7 +63,7 @@ export function createGuestImportWorker(): Worker<GuestImportJobData> {
       });
       return result;
     },
-    { connection: getRedisConnection() },
+    { connection: createRedisConnection() },
   );
 
   worker.on("completed", (job) =>

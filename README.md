@@ -1,7 +1,5 @@
 # TicketBox Local Run Guide
 
-Hướng dẫn này tập trung vào việc chuẩn bị database, seed dữ liệu và chạy Web UI trên localhost để kiểm tra các màn Home, Events và Concert Detail.
-
 Các lệnh bên dưới chạy từ thư mục workspace npm:
 
 ```powershell
@@ -81,25 +79,17 @@ Lệnh này apply các migration hiện có vào database được trỏ bởi `
 npm run db:seed
 ```
 
-Seed thực thi file:
+Seed thực thi file: `packages/database/prisma/seed.mjs`
 
-```text
-packages/database/prisma/seed.mjs
-```
+Dữ liệu seed hiện tại đáp ứng Sprint 6 mới nhất.
 
-Dữ liệu seed hiện tại phục vụ Home, Events và Concert Detail:
-
-- 6 concerts dựa trên mock data của `fe/src/app/data/mockData.ts`.
-- 5 concerts `PUBLISHED`, 1 concert `DRAFT`.
-- Venues, seat zones, gates, ticket types và inventory.
-- Demo users, orders, payments, tickets, check-in devices và artist bio jobs.
-- Ảnh catalog nằm trong `apps/web/src/img/`.
-
-Nếu muốn xem database bằng Prisma Studio:
+Xem database bằng Prisma Studio để có thể đổi role nhanh chóng: `http://localhost:5555`
 
 ```powershell
 npm run db:studio
 ```
+
+> Mở terminal khác để tiếp tục các lệnh dưới
 
 ## 7. Build các package nền cho API
 
@@ -120,13 +110,7 @@ Mở terminal 1 tại `ticket-box-app/`:
 npm run dev:api
 ```
 
-API mặc định chạy tại:
-
-```text
-http://localhost:3000
-```
-
-Lưu ý URL phải có hai dấu slash sau `http`, tức là `http://localhost:3000`. `http:/localhost/3000` là sai cú pháp URL.
+API mặc định chạy tại: `http://localhost:3000`
 
 Catalog endpoints cần kiểm tra nhanh:
 
@@ -145,105 +129,105 @@ Mở terminal 2 tại `ticket-box-app/`:
 npm run dev:web
 ```
 
-Web UI chạy tại:
+Web UI chạy tại: `http://localhost:3001`
 
-```text
-http://localhost:3001
-```
+Nếu port `3001` đang bận, có thể là `http://localhost:3002`
 
-Nếu port `3001` đang bận, Vite có thể tự động chuyển sang port tiếp theo, ví dụ:
+## 10. Chạy Notification Worker
 
-```text
-http://localhost:3002
-```
+Worker xử lý job nền (gửi email OTP, notification SENT/FAILED). **Auth OTP và notification sẽ không hoạt động nếu worker không chạy.**
 
-Hãy mở đúng URL mà terminal `npm run dev:web` in ra.
-
-Web mặc định gọi API tại:
-
-```text
-http://localhost:3000/v1
-```
-
-Nếu cần override API base URL:
+Mở terminal 3 tại `ticket-box-app/`:
 
 ```powershell
-$env:VITE_API_BASE_URL="http://localhost:3000/v1"
-npm run dev:web
+npm run build:redis
+npm run build:queue
+npm run dev:worker
 ```
 
-## 10. Luồng kiểm tra UI
+Worker đọc job từ Redis (BullMQ). Khi đăng ký tài khoản, OTP được đẩy vào queue → worker gửi email (ở môi trường local, email được log ra console của worker — copy mã OTP từ đó).
 
-Sau khi API và Web đều đang chạy:
+## 11. Auth & RBAC — luồng và endpoint (Sprint 6)
 
-1. Mở URL web mà Vite in ra, thường là `http://localhost:3001` hoặc `http://localhost:3002`.
-2. Xem Home lấy concert từ Catalog API.
-3. Mở `/events` trên cùng port web đang chạy.
-4. Search/filter danh sách Events.
-5. Mở một concert detail từ card event.
-6. Kiểm tra venue, description, ticket types và inventory.
+Tất cả endpoint auth nằm dưới `http://localhost:3000/v1/auth`.
 
-## Lệnh build nhanh cho Web
+| Method | Endpoint | Role | Ghi chú |
+| --- | --- | --- | --- |
+| `POST` | `/auth/otp/request` | Public | Gửi OTP 6 số tới email (xem console worker). |
+| `POST` | `/auth/register` | Public | Cần `otp` hợp lệ; tạo user `AUDIENCE`. |
+| `POST` | `/auth/login` | Public | Trả `access_token` + `redirect_to` theo role. |
+| `GET` | `/auth/me` | User | Thông tin user hiện tại. |
+| `PATCH` | `/auth/me` | User | Tự sửa `full_name` / `phone`. |
+| `POST` | `/auth/logout` | User | Thu hồi token (Redis denylist). |
+| `PATCH` | `/auth/admin/users/role-by-email` | ADMIN | Đổi role theo email (cấp `ORGANIZER`/`CHECKER`). |
+| `PATCH` | `/auth/admin/users/:user_id/role` | ADMIN | Đổi role theo id. |
+| `PATCH` | `/auth/admin/users/:user_id/status` | ADMIN | Khóa/mở/disable user. |
 
-```powershell
-npm run build:web
+**`redirect_to` trả về khi login** (client dùng để điều hướng workspace):
+
+| role | redirect_to |
+| --- | --- |
+| `AUDIENCE` | `/` |
+| `ADMIN` | `/admin` |
+| `ORGANIZER` | `/organizer` |
+| `CHECKER` | `/checker` |
+
+### Tài khoản demo (seed)
+
+Seed tạo sẵn 4 tài khoản chính, **tất cả dùng chung mật khẩu `Password@123`** (bcrypt hash thật 12 rounds — login được ngay sau `npm run db:seed`):
+
+| Email | Role | redirect_to |
+| --- | --- | --- |
+| `audience@ticketbox.test` | `AUDIENCE` | `/` |
+| `organizer@ticketbox.test` | `ORGANIZER` | `/organizer` |
+| `checker@ticketbox.test` | `CHECKER` | `/checker` |
+| `admin@ticketbox.test` | `ADMIN` | `/admin` |
+
+Ví dụ login admin (đổi role cho user khác qua `role-by-email` sau khi có token ADMIN):
+
+```bash
+curl -X POST http://localhost:3000/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@ticketbox.test","password":"Password@123"}'
+# → 200 { access_token, redirect_to: "/admin", user, expires_in }
 ```
 
-## Troubleshooting
+> Mật khẩu demo là hằng `DEMO_PASSWORD` trong `packages/database/prisma/seed.mjs`; đổi rồi chạy lại `npm run db:seed`. Ngoài ra vẫn có thể đăng ký user `AUDIENCE` thật qua OTP: `POST /auth/otp/request` → lấy OTP ở console worker → `POST /auth/register`.
 
-### `Environment variable not found: DATABASE_URL`
+Checker account do Admin **approve hồ sơ** sinh ra (mục 13) dùng bcrypt hash thật nên **login được ngay** bằng password trả về một lần ở response approve.
 
-Kiểm tra `ticket-box-app/.env` đã có `DATABASE_URL`, sau đó chạy lại các script database từ workspace root.
+## 12. Redis dùng để làm gì
 
-### `Can't reach database server at localhost:5432`
+`UPSTASH_REDIS_URL` (local: `redis://localhost:6379`) phục vụ:
 
-Nếu đang dùng Docker Compose của repo, port đúng là `5433`, không phải `5432`.
+- **OTP store**: mã OTP đăng ký (TTL ~5 phút) + cooldown chống spam resend.
+- **JWT denylist**: `jti` của token bị logout/thu hồi (TTL = thời gian sống còn lại của token).
+- **Catalog cache**: cache đọc concert/metadata/inventory; tự invalidate khi sửa concert.
+- **Queue (BullMQ)**: hàng đợi email/notification cho worker.
 
-Sửa `.env`:
+Kiểm tra Redis sống: `docker compose ps` (service redis) hoặc `redis-cli ping` → `PONG`.
 
-```env
-DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5433/ticketbox?schema=public
-```
+## 13. Luồng Organizer → Admin duyệt (smoke test A5 + A6)
 
-Sau đó chạy lại:
+1. **ORGANIZER** nộp hồ sơ: `POST /v1/organizer/requests` (cần token ORGANIZER) → trạng thái `PENDING`.
+2. **ADMIN** xem: `GET /v1/admin/organizer-requests?status=PENDING`.
+3. **ADMIN** duyệt: `POST /v1/admin/organizer-requests/:request_id/approve` → tạo trong **một transaction**: Concert `DRAFT` + seat zones + ticket types + `gate_count` cổng + `checker_count` tài khoản `CHECKER`. **Response trả password checker đúng một lần** — bàn giao ngay.
+4. Checker đăng nhập bằng email/password vừa nhận → `redirect_to: /checker`, check-in được.
+5. **ORGANIZER** xin xóa: `POST /v1/organizer/concerts/:concert_id/deletion-requests`.
+6. **ADMIN** duyệt xóa: `POST /v1/admin/concert-deletion-requests/:request_id/approve` → concert `CANCELLED`, checker của concert tự chuyển `DISABLED` (không login được nữa).
+7. Xem checker theo concert: `GET /v1/admin/concerts/:concert_id/checker-accounts` (không lộ password).
 
-```powershell
-npm run db:validate
-npm run db:migrate
-npm run db:seed
-```
+Duyệt lại hồ sơ/yêu cầu đã xử lý → `409 ORGANIZER_REQUEST_NOT_PENDING` / `409 DELETION_REQUEST_NOT_PENDING`.
 
-### Docker Compose báo lỗi pipe hoặc Docker engine
+## 14. Troubleshooting
 
-Nếu `docker compose ps` báo lỗi liên quan `dockerDesktopLinuxEngine`, hãy mở Docker Desktop trước, chờ engine start xong rồi chạy lại:
+| Triệu chứng | Nguyên nhân & cách xử lý |
+| --- | --- |
+| Build api đỏ: `Property 'organizerRequest' does not exist on type 'PrismaClient'` / `has no exported member 'ApprovalStatus'` | Prisma Client **chưa generate** sau khi đổi schema. Chạy `npm run db:generate` (hoặc `npm run prisma:generate -w @ticketbox/database`) **trước** khi build. |
+| `pnpm: command not found` | Repo dùng **npm workspaces**, không phải pnpm. Dùng `npm run build`, `npm run dev:api`, … |
+| Tài khoản seed login `401 INVALID_CREDENTIALS` | Chưa chạy lại `npm run db:seed` sau khi cập nhật seed. Mật khẩu demo là `Password@123` (mục 11) — re-seed rồi thử lại. |
+| `PATCH /auth/admin/users/role-by-email` trả `404 USER_NOT_FOUND_BY_EMAIL` | Email không tồn tại trong DB. Kiểm tra chính tả / đã seed chưa. |
+| Đăng ký không nhận được OTP | Worker chưa chạy (mục 10). OTP được log ở console worker, không trả trong response. |
+| `Can't reach database server` | Container Postgres chưa chạy (`docker compose up -d`) hoặc `DATABASE_URL` sai port (5432 vs 5433 — xem mục 2). |
+| Login OK nhưng `redirect_to` sai workspace | Role user chưa đúng — dùng `role-by-email` để cấp `ORGANIZER`/`CHECKER`. |
 
-```powershell
-docker compose up -d
-docker compose ps
-```
-
-### Web không có dữ liệu
-
-Kiểm tra API:
-
-```text
-http://localhost:3000/v1/concerts
-```
-
-Nếu API chưa chạy:
-
-```powershell
-npm run dev:api
-```
-
-### Port 3001 bị chiếm
-
-```powershell
-npm run dev -w @ticketbox/web -- --port 3002
-```
-
-Sau đó mở:
-
-```text
-http://localhost:3002
-```

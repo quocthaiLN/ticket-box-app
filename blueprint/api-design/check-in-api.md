@@ -40,26 +40,25 @@ Nguồn nghiệp vụ chính:
 
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
-| `GET` | `/check-in/devices/{device_id}/bootstrap` | `CHECKER`, `ADMIN` | Lấy cấu hình device/concert/gate. |
-| `GET` | `/check-in/preload` | `CHECKER`, `ADMIN` | Tải dữ liệu offline cho thiết bị/cổng. |
-| `POST` | `/check-in/scans` | `CHECKER`, `ADMIN` | Quét vé online. |
-| `POST` | `/check-in/guests/scans` | `CHECKER`, `ADMIN` | Check-in guest VIP online. |
-| `POST` | `/check-in/offline-batches` | `CHECKER`, `ADMIN` | Tạo/lấy batch sync offline. |
-| `POST` | `/check-in/offline-batches/{batch_id}/items` | `CHECKER`, `ADMIN` | Gửi item offline vào batch. |
-| `POST` | `/check-in/offline-batches/{batch_id}/complete` | `CHECKER`, `ADMIN` | Chốt batch. |
-| `GET` | `/check-in/offline-batches/{batch_id}` | `CHECKER`, `ADMIN` | Xem trạng thái batch. |
-| `GET` | `/admin/concerts/{concert_id}/check-in/gates` | `ORGANIZER`, `ADMIN` | Danh sách cổng. |
-| `POST` | `/admin/concerts/{concert_id}/check-in/gates` | `ORGANIZER`, `ADMIN` | Tạo cổng. |
-| `PUT` | `/admin/check-in/gates/{gate_id}/zones` | `ORGANIZER`, `ADMIN` | Cấu hình gate-zone. |
-| `POST` | `/admin/check-in/devices` | `ORGANIZER`, `ADMIN` | Đăng ký thiết bị. |
+| `POST` | `/check-in/scan` | `CHECKER` | Quét vé online. |
+| `GET` | `/check-in/preload` | `CHECKER` | Tải dữ liệu offline cho thiết bị/cổng. |
+| `POST` | `/check-in/offline-sync` | `CHECKER` | Sync batch offline. |
+| `POST` | `/check-in/offline-batches` | `CHECKER` | Tạo/lấy batch sync offline. |
+| `POST` | `/check-in/offline-batches/{batch_id}/items` | `CHECKER` | Gửi item offline vào batch. |
+| `POST` | `/check-in/offline-batches/{batch_id}/complete` | `CHECKER` | Chốt batch. |
+| `GET` | `/check-in/offline-batches/{batch_id}` | `CHECKER` | Xem trạng thái batch. |
+| `GET` | `/check-in/guests/search` | `CHECKER` | Tra cứu guest tại cổng (xem `guest-list-api.md`). |
+| `GET` | `/admin/check-in/gates` | `ADMIN` | Danh sách cổng. |
+
+> **Sprint 6 (single-role + bỏ alias):** route quét chuẩn là `POST /check-in/scan` (không phải `/check-in/scans`); preload chuẩn là `GET /check-in/preload` (không phải `/check-in/devices/{id}/bootstrap`). **Bỏ** (trả `404`): `POST /check-in/scans`, `GET /check-in/bootstrap`, `GET /check-in/devices/{id}/preload`, `GET /check-in/gates/{id}/preload`, `POST /check-in/guests/scans`. Admin check-in **chỉ còn** `GET /admin/check-in/gates` (`ADMIN`); mọi route gate write, device, gate-zone-mapping đã bỏ.
 
 ---
 
 ## 4. API chi tiết
 
-### 4.1. `GET /check-in/devices/{device_id}/bootstrap`
+### 4.1. `GET /check-in/devices/{device_id}/bootstrap` — ĐÃ BỎ (dùng `GET /check-in/preload`)
 
-Mobile gọi sau khi checker đăng nhập.
+Route bootstrap đã bỏ ở sprint 6; mobile dùng `GET /check-in/preload` (xem §4.2) sau khi checker đăng nhập. Dữ liệu device/concert/gate/allowed_seat_zones bên dưới nay được trả trong preload.
 
 Response `200`:
 
@@ -154,9 +153,9 @@ Headers:
 Cache-Control: no-store
 ```
 
-### 4.3. `POST /check-in/scans`
+### 4.3. `POST /check-in/scan`
 
-Quét vé online.
+Quét vé online. (Route chuẩn sprint 6; alias `POST /check-in/scans` đã bỏ.)
 
 ```json
 {
@@ -192,7 +191,7 @@ Response `200`:
 
 Validation order:
 
-1. Verify role `CHECKER` hoặc `ADMIN`.
+1. Verify role `CHECKER`.
 2. Device tồn tại và thuộc staff hiện tại.
 3. Gate thuộc concert và `is_active = TRUE`.
 4. Verify QR signature/token.
@@ -201,9 +200,9 @@ Validation order:
 7. `ticket.seat_zone_id` nằm trong `checkin_gate_zones` của `gate_id`.
 8. Update ticket và ghi `checkin_logs` trong transaction.
 
-### 4.4. `POST /check-in/guests/scans`
+### 4.4. `POST /check-in/guests/scans` — ĐÃ BỎ (sprint 6)
 
-Check-in khách mời VIP online.
+Route check-in guest riêng đã bỏ; check-in khách mời VIP gộp vào luồng scan/`check-in`. Tra cứu guest tại cổng dùng `GET /check-in/guests/search` (role `CHECKER`, xem `guest-list-api.md`). Mô tả bên dưới giữ làm tham chiếu lịch sử.
 
 ```json
 {
@@ -265,9 +264,11 @@ Request:
 
 Server không tin tuyệt đối local result; luôn validate lại với PostgreSQL.
 
-### 4.7. Admin gate/device configuration
+### 4.7. Admin gate/device configuration — ĐÃ BỎ (sprint 6)
 
-Tạo cổng:
+> **Sprint 6:** mọi route admin gate write, device và gate-zone-mapping đã bỏ (trả `404`). Admin check-in **chỉ còn** `GET /admin/check-in/gates` (role `ADMIN`) để xem danh sách cổng. Gate nay được tạo trong luồng admin duyệt hồ sơ (xem `organizer-admin-api.md`). Các ví dụ bên dưới chỉ giữ làm tham chiếu lịch sử.
+
+Tạo cổng (đã bỏ):
 
 ```http
 POST /v1/admin/concerts/{concert_id}/check-in/gates
@@ -333,3 +334,5 @@ POST /v1/admin/check-in/devices
 - Offline preload chỉ trả ticket/guest thuộc allowed zones.
 - Batch offline retry bằng cùng `batch_token` không xử lý trùng.
 - Conflict/wrong-gate được ghi rõ trong `offline_checkin_items` và `checkin_logs`.
+- CHECKER → `POST /check-in/scan` = 200; alias `POST /check-in/scans` → 404.
+- ORGANIZER → mọi route check-in = 403; admin check-in chỉ còn `GET /admin/check-in/gates` (`ADMIN`).

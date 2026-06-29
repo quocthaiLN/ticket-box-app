@@ -65,6 +65,7 @@ export interface QrPayload {
   concert_id: string;
   ticket_type_id: string;
   seat_zone_id: string;
+  gate_id: string;
   issued_at: string;
   qr_token: string;
 }
@@ -74,18 +75,6 @@ export interface TicketQrResponse {
   payload: QrPayload;
   qr_signature: string;
   expires_at: string | null;
-}
-
-export interface IssuedTicketItem {
-  id: string;
-  ticket_type_id: string;
-  seat_zone_id: string;
-  status: string;
-}
-
-export interface IssueTicketsResponse {
-  order_id: string;
-  tickets: IssuedTicketItem[];
 }
 
 export interface VoidTicketResponse {

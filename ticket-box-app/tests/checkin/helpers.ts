@@ -218,6 +218,7 @@ export async function issueTicket(
       concertId: fixture.concertId,
       ticketTypeId: fixture.ticketTypeId,
       seatZoneId: fixture.allowedZoneId,
+      gateId: fixture.gateId,
       qrTokenHash,
       qrPayload: { ticket_id: ticketId, concert_id: fixture.concertId },
       qrSignature: 'test-signature',

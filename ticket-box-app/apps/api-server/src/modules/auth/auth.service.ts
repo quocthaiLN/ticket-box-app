@@ -1,4 +1,4 @@
-import { ApiError } from "../../shared/http/problem-details.js";
+import { Errors } from "../../shared/http/problem-details.js";
 import { authRepository } from "./auth.repository.js";
 import type {
   AuthUser,
@@ -17,7 +17,17 @@ import {
   verifyRefreshToken,
   verifyToken,
 } from "./auth.utils.js";
-import { addToDenylist, isTokenRevoked } from "@ticketbox/redis";
+import {
+  addToDenylist,
+  isTokenRevoked,
+  setOtp,
+  getOtp,
+  deleteOtp,
+  checkResendCooldown,
+  setResendCooldown,
+} from "@ticketbox/redis";
+import { enqueueEmail } from "@ticketbox/queue";
+import { buildOtpEmail } from "../../shared/utils/email.js";
 
 function toAuthUser(user: {
   id: string;
@@ -38,15 +48,32 @@ function toAuthUser(user: {
 }
 
 export const authService = {
+  async requestOtp(email: string): Promise<{ message: string }> {
+    const hasCooldown = await checkResendCooldown(email);
+    if (hasCooldown) {
+      throw Errors.otpResendCooldown();
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await setOtp(email, code);
+    await setResendCooldown(email);
+    await enqueueEmail({ to: email, ...buildOtpEmail(code) });
+
+    return { message: "OTP đã được gửi tới email của bạn." };
+  },
+
   async register(input: RegisterInput): Promise<AuthUser> {
+    const storedCode = await getOtp(input.email);
+    if (!storedCode) {
+      throw Errors.otpExpired();
+    }
+    if (storedCode !== input.otp) {
+      throw Errors.otpInvalid();
+    }
+
     const existing = await authRepository.findByEmail(input.email);
     if (existing) {
-      throw new ApiError({
-        title: "Email already exists",
-        status: 409,
-        code: "EMAIL_ALREADY_EXISTS",
-        detail: "An account with this email already exists.",
-      });
+      throw Errors.emailAlreadyExists();
     }
 
     const passwordHash = await hashPassword(input.password);
@@ -56,6 +83,8 @@ export const authService = {
       fullName: input.full_name,
     });
 
+    await deleteOtp(input.email);
+
     return toAuthUser(user);
   },
 
@@ -63,40 +92,26 @@ export const authService = {
     input: LoginInput,
   ): Promise<{ user: AuthUser; tokens: TokenPair }> {
     const user = await authRepository.findByEmail(input.email);
-
     // Không tiết lộ email có tồn tại hay không
     if (!user) {
-      throw new ApiError({
-        title: "Invalid credentials",
-        status: 401,
-        code: "INVALID_CREDENTIALS",
-        detail: "Email or password is incorrect.",
-      });
+      throw Errors.invalidCredentials();
     }
 
     if (user.status === "LOCKED" || user.status === "DISABLED") {
-      throw new ApiError({
-        title: "Account inactive",
-        status: 403,
-        code: "FORBIDDEN",
-        detail: "Your account is not active. Please contact support.",
-      });
+      throw Errors.accountInactive();
     }
 
     const valid = await verifyPassword(input.password, user.passwordHash);
+
     if (!valid) {
-      throw new ApiError({
-        title: "Invalid credentials",
-        status: 401,
-        code: "INVALID_CREDENTIALS",
-        detail: "Email or password is incorrect.",
-      });
+      throw Errors.invalidCredentials();
     }
 
     const accessToken = signAccessToken({
       sub: user.id,
       role: user.role as Role,
     });
+
     const refreshToken = signRefreshToken({ sub: user.id });
 
     return {
@@ -125,12 +140,7 @@ export const authService = {
   async me(userId: string): Promise<AuthUser> {
     const user = await authRepository.findById(userId);
     if (!user) {
-      throw new ApiError({
-        title: "User not found",
-        status: 404,
-        code: "NOT_FOUND",
-        detail: "User not found.",
-      });
+      throw Errors.notFound("User");
     }
     return toAuthUser(user);
   },
@@ -141,12 +151,7 @@ export const authService = {
     const payload = verifyRefreshToken(refreshToken);
     const user = await authRepository.findById(payload.sub);
     if (!user || user.status === "LOCKED" || user.status === "DISABLED") {
-      throw new ApiError({
-        title: "Unauthorized",
-        status: 401,
-        code: "UNAUTHORIZED",
-        detail: "Invalid refresh token.",
-      });
+      throw Errors.unauthorized("Invalid refresh token.");
     }
     return {
       access_token: signAccessToken({ sub: user.id, role: user.role as Role }),
@@ -161,12 +166,7 @@ export const authService = {
   ): Promise<AuthUser> {
     const target = await authRepository.findById(targetUserId);
     if (!target) {
-      throw new ApiError({
-        title: "User not found",
-        status: 404,
-        code: "NOT_FOUND",
-        detail: `User ${targetUserId} not found.`,
-      });
+      throw Errors.notFound(`User ${targetUserId}`);
     }
 
     const updated = await authRepository.updateRole(targetUserId, role);
@@ -181,6 +181,61 @@ export const authService = {
     return toAuthUser(updated);
   },
 
+  async updateUserRoleByEmail(
+    actorId: string,
+    email: string,
+    role: Role,
+  ): Promise<AuthUser> {
+    const target = await authRepository.findByEmail(email);
+    if (!target) {
+      throw Errors.userNotFoundByEmail(email);
+    }
+
+    const updated = await authRepository.updateRole(target.id, role);
+    await authRepository.createAuditLog({
+      actorUserId: actorId,
+      action: "UPDATE_USER_ROLE",
+      entityType: "user",
+      entityId: target.id,
+      metadata: { from: target.role, to: role, via: "email" },
+    });
+
+    return toAuthUser(updated);
+  },
+
+  async updateProfile(
+    userId: string,
+    input: { full_name?: string; phone?: string },
+  ): Promise<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    updated_at: Date;
+  }> {
+    try {
+      const updated = await authRepository.updateProfile(userId, {
+        fullName: input.full_name,
+        phone: input.phone,
+      });
+      return {
+        id: updated.id,
+        full_name: updated.fullName,
+        phone: updated.phone,
+        updated_at: updated.updatedAt,
+      };
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        throw Errors.phoneAlreadyExists();
+      }
+      throw err;
+    }
+  },
+
   async updateUserStatus(
     actorId: string,
     targetUserId: string,
@@ -188,12 +243,7 @@ export const authService = {
   ): Promise<AuthUser> {
     const target = await authRepository.findById(targetUserId);
     if (!target) {
-      throw new ApiError({
-        title: "User not found",
-        status: 404,
-        code: "NOT_FOUND",
-        detail: `User ${targetUserId} not found.`,
-      });
+      throw Errors.notFound(`User ${targetUserId}`);
     }
 
     const updated = await authRepository.updateStatus(targetUserId, status);
@@ -214,12 +264,7 @@ export const authService = {
     const payload = verifyToken(token);
     const revoked = await isTokenRevoked(payload.jti);
     if (revoked) {
-      throw new ApiError({
-        title: "Token revoked",
-        status: 401,
-        code: "TOKEN_REVOKED",
-        detail: "This token has been revoked. Please log in again.",
-      });
+      throw Errors.tokenRevoked();
     }
     return { userId: payload.sub, role: payload.role, jti: payload.jti };
   },

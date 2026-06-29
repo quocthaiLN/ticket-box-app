@@ -17,7 +17,7 @@ export function Footer() {
               </span>
             </div>
             <p className="mb-4 text-sm leading-relaxed">
-              A music event ticketing platform with e-tickets, QR check-in, and a secure checkout experience.
+              Nền tảng bán vé sự kiện âm nhạc với e-ticket, QR check-in và thanh toán an toàn.
             </p>
             <div className="flex gap-3">
               <SocialIcon icon={<Globe className="h-4 w-4" />} />
@@ -26,11 +26,11 @@ export function Footer() {
             </div>
           </div>
 
-          <FooterColumn title="Events" links={["Concert & Live Music", "Festival", "Theater & Art", "Sports"]} />
-          <FooterColumn title="Support" links={["How to buy tickets", "Refund policy", "FAQ", "Terms of use"]} />
+          <FooterColumn title="Sự kiện" links={["Concert & nhạc sống", "Festival", "Sân khấu & nghệ thuật", "Thể thao"]} />
+          <FooterColumn title="Hỗ trợ" links={["Cách mua vé", "Chính sách hoàn tiền", "Câu hỏi thường gặp", "Điều khoản sử dụng"]} />
 
           <div>
-            <h4 className="mb-4 text-sm font-semibold text-[#F0EDEB]">Contact</h4>
+            <h4 className="mb-4 text-sm font-semibold text-[#F0EDEB]">Liên hệ</h4>
             <ul className="space-y-3 text-sm">
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 shrink-0 text-[#F5C842]" />
@@ -42,16 +42,16 @@ export function Footer() {
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#F5C842]" />
-                <span>Ho Chi Minh City, Vietnam</span>
+                <span>Thành phố Hồ Chí Minh, Việt Nam</span>
               </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs sm:flex-row">
-          <p>(c) 2026 TicketBox Vietnam. All rights reserved.</p>
+          <p>(c) 2026 TicketBox Việt Nam. Bảo lưu mọi quyền.</p>
           <div className="flex gap-4">
-            <Link to="#" className="transition-colors hover:text-amber-400">Privacy policy</Link>
+            <Link to="#" className="transition-colors hover:text-amber-400">Chính sách riêng tư</Link>
             <Link to="#" className="transition-colors hover:text-amber-400">Cookie</Link>
           </div>
         </div>

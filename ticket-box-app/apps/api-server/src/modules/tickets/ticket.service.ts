@@ -2,12 +2,9 @@ import {
   listTicketsForUser,
   getTicketDetailForUser,
   getTicketQrForUser,
-  issueTicketsForOrder,
   voidTicketById,
 } from './ticket.repository.js';
 import type {
-  IssueTicketsResponse,
-  IssuedTicketItem,
   TicketDetail,
   TicketListQuery,
   TicketListResponse,
@@ -72,20 +69,6 @@ export async function getMyTicketQr(userId: string, ticketId: string): Promise<T
     payload,
     qr_signature: qrSignature,
     expires_at: null,
-  };
-}
-
-export async function issueTickets(orderId: string): Promise<IssueTicketsResponse> {
-  const { orderId: oid, tickets } = await issueTicketsForOrder(orderId);
-
-  return {
-    order_id: oid,
-    tickets: tickets.map((t): IssuedTicketItem => ({
-      id: t.id,
-      ticket_type_id: t.ticketTypeId,
-      seat_zone_id: t.seatZoneId,
-      status: t.status,
-    })),
   };
 }
 

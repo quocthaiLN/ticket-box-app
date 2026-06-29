@@ -13,7 +13,7 @@ This starts:
 - **PostgreSQL 16** on `localhost:5432`
 - **Redis 7** on `localhost:6379`
 
-`DATABASE_URL` and `UPSTASH_REDIS_URL` in `.env` are already set to point to these containers.
+`DATABASE_URL` and `REDIS_URL` in `.env` are already set to point to these containers.
 
 ## Step 1 — Apply migrations
 
@@ -48,3 +48,5 @@ docker compose stop
 # Stop and delete all data
 docker compose down -v
 ```
+Có bảng lưu số tiền admin + host
+Bảng lưu lịch sử chuyển tiền admin -> host
