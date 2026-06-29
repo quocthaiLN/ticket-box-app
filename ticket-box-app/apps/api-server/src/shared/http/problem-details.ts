@@ -592,6 +592,25 @@ export const Errors = {
       detail,
     }),
 
+  guestImportJobNotFound: (id?: string) =>
+    new ApiError({
+      title: "Guest import job not found",
+      status: 404,
+      code: "GUEST_IMPORT_JOB_NOT_FOUND",
+      detail: id
+        ? `Guest import job ${id} was not found.`
+        : "Guest import job was not found.",
+    }),
+
+  guestFolderLocked: () =>
+    new ApiError({
+      title: "Guest folder locked",
+      status: 409,
+      code: "GUEST_FOLDER_LOCKED",
+      detail:
+        "Đã quá hạn chỉnh sửa thư mục khách mời (sau 0h ngày diễn, lúc hệ thống nhập danh sách).",
+    }),
+
   // Organizer / Admin approval
   organizerRequestNotFound: (id?: string) =>
     new ApiError({

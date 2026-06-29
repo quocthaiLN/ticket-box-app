@@ -1,9 +1,11 @@
-import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma } from "@ticketbox/database";
-import { enqueueGuestImport } from "@ticketbox/queue";
+import { CheckinResult, DeviceStatus, GuestStatus, prisma, Prisma, type GuestImportJob } from "@ticketbox/database";
+import { enqueueGuestImportScan } from "@ticketbox/queue";
 import { Errors } from "../../shared/http/problem-details.js";
 import type {
-  GuestImportRequest,
-  GuestImportResponse,
+  GuestImportErrorItem,
+  GuestImportErrorsPage,
+  GuestImportJobStatus,
+  GuestImportTriggerResponse,
   GuestScanRequest,
   GuestScanResponse,
   GuestSearchQuery,
@@ -27,65 +29,68 @@ type DeviceContext = {
 };
 
 export class GuestListRepository {
-  // Tạo job import guest và đẩy CSV sang worker xử lý nền.
-  async createImportJob(input: GuestImportRequest): Promise<GuestImportResponse> {
-    const fileUrl = input.file_url ?? input.file_object_key;
+  // Enqueue job quét Drive cho 1 concert. Hệ thống tự nhập lúc 0h; đây là đường chạy
+  // thủ công cho admin (test/chạy lại) — worker sẽ list file Drive và import.
+  async triggerConcertImport(concertId: string): Promise<GuestImportTriggerResponse> {
+    await this.assertConcertExists(concertId);
+    const queueJobId = await enqueueGuestImportScan(concertId);
+    return { concert_id: concertId, status: "SCAN_ENQUEUED", queue_job_id: queueJobId };
+  }
 
-    if (!fileUrl) {
-      throw Errors.invalidCsv();
+  // Trạng thái 1 job import (số dòng thành công/lỗi, trạng thái cuối).
+  async getImportJob(jobId: string): Promise<GuestImportJobStatus> {
+    const job = await prisma.guestImportJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      throw Errors.guestImportJobNotFound(jobId);
+    }
+    return mapImportJob(job);
+  }
+
+  // Danh sách job import gần đây của 1 concert (admin theo dõi sau khi trigger).
+  async listImportJobs(concertId: string, limit: number): Promise<GuestImportJobStatus[]> {
+    const jobs = await prisma.guestImportJob.findMany({
+      where: { concertId },
+      orderBy: { createdAt: "desc" },
+      take: limit
+    });
+    return jobs.map(mapImportJob);
+  }
+
+  // Lỗi từng dòng của 1 job, phân trang theo cursor (id).
+  async listImportErrors(
+    jobId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<GuestImportErrorsPage> {
+    const job = await prisma.guestImportJob.findUnique({
+      where: { id: jobId },
+      select: { id: true }
+    });
+    if (!job) {
+      throw Errors.guestImportJobNotFound(jobId);
     }
 
-    if (!input.uploaded_by_user_id) {
-      throw Errors.unauthorized("Authenticated user is required to create a guest import job.");
-    }
-
-    await this.assertConcertExists(input.concert_id);
-
-    const importJob = await prisma.guestImportJob.create({
-      data: {
-        concertId: input.concert_id,
-        uploadedById: input.uploaded_by_user_id,
-        fileUrl,
-        status: "PENDING"
-      }
+    const rows = await prisma.guestImportError.findMany({
+      where: { jobId },
+      orderBy: [{ rowNumber: "asc" }, { id: "asc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
     });
 
-    try {
-      const queueJobId = await enqueueGuestImport({
-        job_id: importJob.id,
-        concert_id: input.concert_id,
-        csv_object_key: fileUrl,
-        uploaded_by_user_id: input.uploaded_by_user_id
-      });
+    const hasMore = rows.length > limit;
+    const items: GuestImportErrorItem[] = rows.slice(0, limit).map((error) => ({
+      id: error.id,
+      row_number: error.rowNumber,
+      error_code: error.errorCode,
+      error_message: error.errorMessage,
+      raw_data: error.rawData
+    }));
 
-      return {
-        job_id: importJob.id,
-        concert_id: input.concert_id,
-        status: "PENDING",
-        file_url: fileUrl,
-        queue_job_id: queueJobId,
-        dry_run: input.dry_run
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await prisma.guestImportJob.update({
-        where: { id: importJob.id },
-        data: {
-          status: "FAILED",
-          errorMessage: `Failed to enqueue guest import job: ${message}`,
-          completedAt: new Date()
-        }
-      });
-
-      return {
-        job_id: importJob.id,
-        concert_id: input.concert_id,
-        status: "FAILED",
-        file_url: fileUrl,
-        dry_run: input.dry_run,
-        error_message: message
-      };
-    }
+    return {
+      items,
+      next_cursor: hasMore ? items[items.length - 1].id : null,
+      has_more: hasMore
+    };
   }
 
   private async assertConcertExists(concertId: string) {
@@ -112,6 +117,7 @@ export class GuestListRepository {
         ...(q
           ? {
               OR: [
+                { email: { contains: q, mode: "insensitive" } },
                 { phone: { contains: q, mode: "insensitive" } },
                 { fullName: { contains: q, mode: "insensitive" } }
               ]
@@ -126,7 +132,8 @@ export class GuestListRepository {
       guest_id: guest.id,
       concert_id: guest.concertId,
       full_name: guest.fullName,
-      phone_masked: maskPhone(guest.phone),
+      email: guest.email,
+      phone_masked: guest.phone ? maskPhone(guest.phone) : undefined,
       zone_id: guest.seatZoneId ?? "",
       status: guest.status
     }));
@@ -341,6 +348,23 @@ function toRejectedResponse(
 // Chọn staff check-in, ưu tiên staff từ request nếu hợp lệ.
 function resolveStaffId(inputStaffId: string | undefined, deviceStaffId: string) {
   return inputStaffId && isUuid(inputStaffId) ? inputStaffId : deviceStaffId;
+}
+
+// Map row guest_import_jobs sang DTO trạng thái.
+function mapImportJob(job: GuestImportJob): GuestImportJobStatus {
+  return {
+    id: job.id,
+    concert_id: job.concertId,
+    status: job.status,
+    total_rows: job.totalRows,
+    success_rows: job.successRows,
+    error_rows: job.errorRows,
+    skipped_rows: job.skippedRows,
+    file_url: job.fileUrl,
+    started_at: job.startedAt?.toISOString() ?? null,
+    completed_at: job.completedAt?.toISOString() ?? null,
+    error_message: job.errorMessage ?? null
+  };
 }
 
 // Che bớt số điện thoại guest khi trả dữ liệu ra ngoài.

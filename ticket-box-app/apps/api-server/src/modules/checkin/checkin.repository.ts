@@ -269,7 +269,7 @@ export class CheckinRepository {
         concert_id: guest.concertId,
         zone_id: guest.seatZoneId ?? "",
         full_name: guest.fullName,
-        phone_masked: maskPhone(guest.phone),
+        phone_masked: guest.phone ? maskPhone(guest.phone) : "",
         status_snapshot: guest.status,
       })),
       offline: {

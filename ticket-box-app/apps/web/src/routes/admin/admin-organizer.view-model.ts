@@ -1,8 +1,9 @@
 import type {
+  AdminOrganizerRequestDetail,
   AdminOrganizerRequestSummary,
   ApproveOrganizerRequestResult,
 } from "../../services/admin-organizer.service";
-import type { ApprovalStatus, OrganizerRequestDetail } from "../../services/organizer.service";
+import type { ApprovalStatus } from "../../services/organizer.service";
 import { approvalStatusLabel } from "../organizer/organizer.view-model";
 
 export type AdminOrganizerRequestView = {
@@ -10,6 +11,7 @@ export type AdminOrganizerRequestView = {
   title: string;
   artistName: string;
   organizerLabel: string;
+  venueLabel: string;
   status: ApprovalStatus;
   statusLabel: string;
   startsAt: string;
@@ -22,8 +24,11 @@ export type AdminOrganizerRequestDetailView = AdminOrganizerRequestView & {
   venueId: string;
   plannedPublishAt?: string;
   pressKitLabel: string;
+  bioStatus: string | null;
+  artistBio: string | null;
+  artistBioImageUrl: string | null;
   reviewNote: string;
-  ticketTypes: OrganizerRequestDetail["ticket_types"];
+  ticketTypes: AdminOrganizerRequestDetail["ticket_types"];
 };
 
 export function toAdminOrganizerRequestView(request: AdminOrganizerRequestSummary): AdminOrganizerRequestView {
@@ -31,7 +36,8 @@ export function toAdminOrganizerRequestView(request: AdminOrganizerRequestSummar
     id: request.id,
     title: request.title,
     artistName: request.artist_name,
-    organizerLabel: request.organizer_id || "chủ hồ sơ hiện tại",
+    organizerLabel: request.organizer?.full_name || request.organizer?.email || request.organizer_id || "chủ hồ sơ hiện tại",
+    venueLabel: request.venue ? request.venue.name : request.venue_id,
     status: request.status,
     statusLabel: approvalStatusLabel(request.status),
     startsAt: request.starts_at,
@@ -40,13 +46,16 @@ export function toAdminOrganizerRequestView(request: AdminOrganizerRequestSummar
   };
 }
 
-export function toAdminOrganizerRequestDetailView(detail: OrganizerRequestDetail): AdminOrganizerRequestDetailView {
+export function toAdminOrganizerRequestDetailView(detail: AdminOrganizerRequestDetail): AdminOrganizerRequestDetailView {
   return {
     ...toAdminOrganizerRequestView(detail),
     description: detail.description || "Chưa có mô tả.",
     venueId: detail.venue_id,
     plannedPublishAt: detail.planned_publish_at,
     pressKitLabel: detail.press_kit_url || "Chưa cung cấp",
+    bioStatus: detail.bio_status ?? null,
+    artistBio: detail.artist_bio ?? null,
+    artistBioImageUrl: detail.artist_bio_image_url ?? null,
     reviewNote: detail.review_note || "Chưa có ghi chú",
     ticketTypes: detail.ticket_types,
   };

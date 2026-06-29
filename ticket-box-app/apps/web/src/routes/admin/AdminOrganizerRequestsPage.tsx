@@ -7,14 +7,9 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
-  FileText,
   KeyRound,
-  LayoutDashboard,
   Loader2,
   ShieldCheck,
-  Ticket,
-  Trash2,
-  UserCheck,
   Users,
   XCircle,
 } from "lucide-react";
@@ -26,19 +21,20 @@ import {
   getAdminOrganizerRequest,
   listAdminOrganizerRequests,
   rejectAdminOrganizerRequest,
+  type AdminOrganizerRequestDetail,
   type ApproveOrganizerRequestResult,
   type AdminOrganizerRequestSummary,
 } from "../../services/admin-organizer.service";
 import {
   normalizeTicketTypes,
   type ApprovalStatus,
-  type OrganizerRequestDetail,
 } from "../../services/organizer.service";
 import {
   approveResultTitle,
   toAdminOrganizerRequestDetailView,
   toAdminOrganizerRequestView,
 } from "./admin-organizer.view-model";
+import { AdminShell } from "./AdminShell";
 
 type LoadState = "loading" | "ready" | "error";
 const statuses = ["all", "PENDING", "APPROVED", "REJECTED"] as const;
@@ -48,7 +44,7 @@ export function AdminOrganizerRequestsPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [filter, setFilter] = useState<(typeof statuses)[number]>("all");
   const [requests, setRequests] = useState<AdminOrganizerRequestSummary[]>([]);
-  const [details, setDetails] = useState<Record<string, OrganizerRequestDetail>>({});
+  const [details, setDetails] = useState<Record<string, AdminOrganizerRequestDetail>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -120,34 +116,15 @@ export function AdminOrganizerRequestsPage() {
   const pendingCount = requests.filter((request) => request.status === "PENDING").length;
 
   return (
-    <div className="flex min-h-screen bg-[#08080E] pt-16 text-[#F0EDEB]">
-      <aside className="fixed bottom-0 left-0 top-16 hidden w-56 flex-col border-r border-white/[0.07] bg-[#0D0D15] px-3 py-6 md:flex">
-        <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-widest text-[#8585A0]">Quản trị</div>
-        <nav className="flex-1 space-y-1">
-          <AdminSideLink to="/admin" active={false} icon={<LayoutDashboard className="h-4 w-4" />} label="Tổng quan" />
-          <AdminSideLink to="/admin/organizer-requests" active icon={<FileText className="h-4 w-4" />} label="Hồ sơ BTC" badge={pendingCount} />
-          <AdminSideLink to="/admin/deletion-requests" active={false} icon={<Trash2 className="h-4 w-4" />} label="Yêu cầu hủy" />
-          <AdminSideLink to="/admin/catalog" active={false} icon={<Ticket className="h-4 w-4" />} label="Danh mục" />
-        </nav>
-        <Link to="/events" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[#8585A0] transition-colors hover:bg-white/5">
-          <ChevronRight className="h-3.5 w-3.5 rotate-180" />
-          Trang khách
-        </Link>
-      </aside>
-
-      <main className="min-w-0 flex-1 p-4 sm:p-6 md:ml-56">
-        <section className="mx-auto max-w-7xl">
-          <div className="mb-6 flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <AdminShell>
+      <section className="mx-auto max-w-7xl">
+          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase text-[#F5C842]">
-                <ShieldCheck className="h-4 w-4" />
-                Duyệt hồ sơ
-              </div>
-              <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                Hồ sơ ban tổ chức
+              <h1 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                Hồ sơ Ban Tổ Chức
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-[#8585A0]">
-                Xem xét hồ sơ, tạo concert sau khi duyệt và bàn giao thông tin soát vé một lần.
+              <p className="mt-0.5 text-sm text-[#8585A0]">
+                Duyệt hồ sơ xin tổ chức concert
               </p>
             </div>
             {pendingCount > 0 && (
@@ -161,18 +138,9 @@ export function AdminOrganizerRequestsPage() {
           {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
           {approveResult && <CheckerPasswords result={approveResult} />}
 
-          <section className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Chờ duyệt" value={pendingCount} tone="#F5C842" icon={<Clock className="h-4 w-4" />} />
-              <Stat label="Đã duyệt" value={requests.filter((request) => request.status === "APPROVED").length} tone="#2DBE6C" icon={<CheckCircle2 className="h-4 w-4" />} />
-              <Stat label="Từ chối" value={requests.filter((request) => request.status === "REJECTED").length} tone="#E8315B" icon={<XCircle className="h-4 w-4" />} />
-              <Stat label="Đã tải" value={requests.length} tone="#7B61FF" icon={<FileText className="h-4 w-4" />} />
-            </div>
-          </section>
+          <FilterTabs value={filter} pendingCount={pendingCount} onChange={setFilter} />
 
-          <FilterTabs value={filter} onChange={setFilter} />
-
-          <section className="mt-5 grid gap-3">
+          <section className="mt-5 space-y-3">
             {loadState === "loading" && <LoadingState />}
             {loadState === "ready" && requests.length === 0 && (
               <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-10 text-center text-sm text-[#8585A0]">
@@ -199,27 +167,8 @@ export function AdminOrganizerRequestsPage() {
               />
             ))}
           </section>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function AdminSideLink({ to, active, icon, label, badge }: { to: string; active: boolean; icon: ReactNode; label: string; badge?: number }) {
-  return (
-    <Link
-      to={to}
-      className="flex items-center gap-2.5 rounded-lg border-l-[3px] px-3 py-2.5 text-sm transition-all"
-      style={{
-        background: active ? "rgba(245,200,66,0.1)" : "transparent",
-        borderLeftColor: active ? "#F5C842" : "transparent",
-        color: active ? "#F5C842" : "#8585A0",
-      }}
-    >
-      {icon}
-      <span className="flex-1">{label}</span>
-      {badge ? <span className="rounded-full bg-[#E8315B]/20 px-1.5 py-0.5 text-xs font-semibold text-[#E8315B]">{badge}</span> : null}
-    </Link>
+      </section>
+    </AdminShell>
   );
 }
 
@@ -237,7 +186,7 @@ function RequestReviewCard({
   onReject,
 }: {
   request: AdminOrganizerRequestSummary;
-  detail?: OrganizerRequestDetail;
+  detail?: AdminOrganizerRequestDetail;
   expanded: boolean;
   reviewing: boolean;
   reviewNote: string;
@@ -263,23 +212,26 @@ function RequestReviewCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
-      <div className="grid gap-3 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-center">
-        <button type="button" onClick={onToggle} className="min-w-0 text-left">
+      <div className="flex items-center gap-4 px-5 py-4">
+        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <ApprovalBadge status={requestView.status} />
             <span className="text-xs text-[#8585A0]">#{requestView.id}</span>
           </div>
           <h2 className="truncate text-sm font-semibold">{requestView.title}</h2>
-          <div className="mt-1 flex flex-wrap gap-3 text-xs text-[#8585A0]">
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
             <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{requestView.organizerLabel}</span>
+            <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{requestView.venueLabel}</span>
             <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(requestView.startsAt)}</span>
           </div>
         </button>
-        <p className="inline-flex items-center gap-1 text-xs text-[#8585A0]"><Building2 className="h-3 w-3" />{requestView.artistName}</p>
-        <p className="text-xs text-[#8585A0]">{requestView.gateCount} cổng / {requestView.checkerCount} nhân sự soát vé</p>
-        <div className="flex gap-2 lg:justify-end">
+        <div className="flex shrink-0 items-center gap-2">
           {request.status === "PENDING" && (
-            <button type="button" onClick={onStartReview} className="rounded-lg bg-[#F5C842] px-3 py-2 text-xs font-semibold text-[#0D0D14] shadow-[0_6px_18px_rgba(245,200,66,0.22)]">
+            <button
+              type="button"
+              onClick={onStartReview}
+              className="rounded-lg bg-[#F5C842] px-3 py-1.5 text-xs font-semibold text-[#0D0D14] transition-transform hover:scale-105"
+            >
               Xem xét
             </button>
           )}
@@ -290,31 +242,68 @@ function RequestReviewCard({
       </div>
 
       {expanded && (
-        <div className="border-t border-white/[0.07] px-5 py-4">
+        <div className="border-t border-white/[0.07] px-5 pb-4">
           {!detailView ? (
-            <p className="text-sm text-[#8585A0]">Đang tải chi tiết...</p>
+            <p className="pt-4 text-sm text-[#8585A0]">Đang tải chi tiết...</p>
           ) : (
-            <div className="grid gap-4">
-              <p className="text-sm leading-6 text-[#B0B0C0]">{detailView.description}</p>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                <Detail label="ID địa điểm" value={detailView.venueId} />
-                <Detail label="Dự kiến publish" value={detailView.plannedPublishAt ? formatDate(detailView.plannedPublishAt) : "Chưa đặt"} />
-                <Detail label="Bộ tư liệu" value={detailView.pressKitLabel} />
-                <Detail label="Ghi chú duyệt" value={detailView.reviewNote} />
-              </div>
-              <div className="grid gap-2">
+            <div className="grid gap-5 pt-4">
+              <section>
+                <div className="mb-5">
+                  <p className="mb-1 text-xs text-[#8585A0]">Mô tả</p>
+                  <p className="max-w-3xl text-sm leading-6 text-[#B0B0C0]">{detailView.description}</p>
+                </div>
+                <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
+                  <DetailItem label="Nghệ sĩ" value={detailView.artistName} />
+                  <DetailItem label="Số cổng check-in" value={`${detailView.gateCount} cổng`} />
+                  <DetailItem label="Số checker" value={`${detailView.checkerCount} người`} />
+                  <DetailItem label="Dự kiến publish" value={detailView.plannedPublishAt ? formatDate(detailView.plannedPublishAt) : "Chưa đặt"} />
+                  <DetailItem label="Press Kit" value={detailView.pressKitLabel} />
+                </div>
+              </section>
+
+              <section>
+                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Giới thiệu nghệ sĩ (AI)</p>
+                <div className="flex flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 sm:flex-row">
+                  {detailView.artistBioImageUrl && (
+                    <img src={detailView.artistBioImageUrl} alt="Ảnh nghệ sĩ" className="h-24 w-24 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <BioStatusBadge status={detailView.bioStatus} />
+                    <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[#B0B0C0]">
+                      {detailView.artistBio || bioStatusHint(detailView.bioStatus)}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Loại vé đề xuất</p>
+                <div className="space-y-2">
                 {normalizeTicketTypes(detailView.ticketTypes).map((ticket) => (
-                  <div key={`${ticket.zone_code}-${ticket.name}`} className="grid gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 md:grid-cols-[minmax(0,1fr)_180px_160px]">
+                  <div
+                    key={`${ticket.zone_code}-${ticket.name}`}
+                    className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{ticket.zone_name} - {ticket.name}</p>
-                      <p className="mt-1 text-xs text-[#8585A0]">Khu {ticket.zone_code}, sức chứa {ticket.zone_capacity.toLocaleString("vi-VN")}</p>
+                      <p className="truncate text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
+                      <p className="mt-0.5 text-xs text-[#8585A0]">Capacity: {ticket.zone_capacity.toLocaleString("vi-VN")}</p>
                     </div>
-                    <p className="text-xs text-[#F5C842]">{formatMoney(ticket.price.amount)}</p>
-                    <p className="text-xs text-[#8585A0]">{ticket.total_quantity.toLocaleString("vi-VN")} vé, tối đa {ticket.max_per_user}</p>
+                    <div className="shrink-0 text-left sm:text-right">
+                      <p className="text-xs font-semibold text-[#F5C842]">{formatMoney(ticket.price.amount)}</p>
+                      <p className="text-xs text-[#8585A0]">{ticket.total_quantity.toLocaleString("vi-VN")} vé - max {ticket.max_per_user}/người</p>
+                    </div>
                   </div>
                 ))}
+                </div>
+              </section>
+
+              {detailView.reviewNote !== "Chưa có ghi chú" && (
+                <section className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="mb-1 text-xs font-semibold text-[#8585A0]">Ghi chú review</p>
+                  <p className="text-xs text-[#B0B0C0]">{detailView.reviewNote}</p>
+                </section>
+              )}
               </div>
-            </div>
           )}
         </div>
       )}
@@ -393,7 +382,15 @@ function AdminAccessState({ role }: { role?: string }) {
   );
 }
 
-function FilterTabs({ value, onChange }: { value: (typeof statuses)[number]; onChange: (value: (typeof statuses)[number]) => void }) {
+function FilterTabs({
+  value,
+  pendingCount,
+  onChange,
+}: {
+  value: (typeof statuses)[number];
+  pendingCount: number;
+  onChange: (value: (typeof statuses)[number]) => void;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       {statuses.map((status) => (
@@ -405,31 +402,48 @@ function FilterTabs({ value, onChange }: { value: (typeof statuses)[number]; onC
           style={value === status ? { background: "#F5C842", color: "#0D0D14", fontWeight: 700 } : { background: "rgba(255,255,255,0.05)", color: "#8585A0", border: "1px solid rgba(255,255,255,0.08)" }}
         >
           {status === "all" ? "Tất cả" : statusLabel(status)}
+          {status === "PENDING" && pendingCount > 0 && (
+            <span className="ml-1.5 rounded-full bg-[#E8315B]/20 px-1.5 py-0.5 text-xs text-[#E8315B]">
+              {pendingCount}
+            </span>
+          )}
         </button>
       ))}
     </div>
   );
 }
 
-function Stat({ label, value, icon, tone }: { label: string; value: number; icon: ReactNode; tone: string }) {
+function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs text-[#8585A0]">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${tone}18`, color: tone }}>{icon}</span>
-      </div>
-      <p className="text-2xl font-bold">{value}</p>
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-xs text-[#8585A0]">{label}</span>
+      <span className="min-w-0 break-words text-right text-xs font-medium text-[#F0EDEB]">{value}</span>
     </div>
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function BioStatusBadge({ status }: { status: string | null }) {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    PENDING: { label: "Đang chờ AI", color: "#F5C842", bg: "rgba(245,200,66,0.12)" },
+    PROCESSING: { label: "AI đang xử lý", color: "#26A7DE", bg: "rgba(38,167,222,0.12)" },
+    DONE: { label: "Đã sinh bio", color: "#2DBE6C", bg: "rgba(45,190,108,0.12)" },
+    FAILED: { label: "Lỗi sinh bio", color: "#E8315B", bg: "rgba(232,49,91,0.12)" },
+  };
+  const style = status ? map[status] : undefined;
+  if (!style) {
+    return <span className="text-xs text-[#8585A0]">Không có press kit / chưa tạo bio</span>;
+  }
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
-      <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 break-words text-sm">{value}</p>
-    </div>
+    <span className="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: style.bg, color: style.color }}>
+      {style.label}
+    </span>
   );
+}
+
+function bioStatusHint(status: string | null) {
+  if (status === "FAILED") return "AI không sinh được bio (PDF lỗi hoặc API lỗi). Có thể nhập bio tay sau khi duyệt.";
+  if (status === "PENDING" || status === "PROCESSING") return "Đang chờ AI sinh giới thiệu từ press kit...";
+  return "Chưa có nội dung giới thiệu.";
 }
 
 function ApprovalBadge({ status }: { status: ApprovalStatus }) {

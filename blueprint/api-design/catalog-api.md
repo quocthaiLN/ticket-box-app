@@ -95,7 +95,7 @@ Lỗi dùng RFC 7807:
 Trường database quan trọng cần phản ánh trong API:
 
 - `venues`: `id`, `name`, `address`, `city`, `capacity`, `map_url`.
-- `concerts`: `id`, `venue_id`, `organizer_id`, `title`, `slug`, `description`, `artist_name`, `artist_bio`, `starts_at`, `ends_at`, `planned_publish_at`, `status`, `cover_image_url`, `seat_map_url`. `planned_publish_at` (nullable) lấy từ hồ sơ `organizer_requests` khi admin duyệt.
+- `concerts`: `id`, `venue_id`, `organizer_id`, `title`, `slug`, `description`, `artist_name`, `artist_bio`, `starts_at`, `ends_at`, `planned_publish_at`, `status`, `cover_image_url`, `seat_map_url`, `guest_drive_folder_id`. `planned_publish_at` (nullable) lấy từ hồ sơ `organizer_requests` khi admin duyệt. `guest_drive_folder_id` (nullable) = id thư mục Google Drive chứa CSV khách mời; chỉ ghi qua update concert, không trả ở response công khai.
 - `seat_zones`: `id`, `concert_id`, `code`, `name`, `description`, `capacity`, `svg_path`, `sort_order`.
 - `ticket_types`: `id`, `concert_id`, `seat_zone_id`, `name`, `description`, `price`, `currency`, `total_quantity`, `held_quantity`, `sold_quantity`, `max_per_user`, `sale_start_at`, `sale_end_at`, `status`. API có thể trả `available_quantity` như computed field, không phải cột DB.
 
@@ -701,7 +701,8 @@ Cập nhật thông tin concert.
   "artist_name": "Various Artists",
   "starts_at": "2026-08-10T12:00:00Z",
   "ends_at": "2026-08-10T16:00:00Z",
-  "cover_image_url": "https://cdn.ticketbox.vn/concerts/anh-trai-say-hi.webp"
+  "cover_image_url": "https://cdn.ticketbox.vn/concerts/anh-trai-say-hi.webp",
+  "guest_drive_folder_id": "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz"
 }
 ```
 
@@ -724,6 +725,7 @@ Cập nhật thông tin concert.
 
 - Route này chỉ `ADMIN`. BTC sửa concert `DRAFT` của mình qua `POST /organizer/concerts/{concert_id}` (xem `organizer-api.md`).
 - Không cho sửa `id`, `organizer_id`, trạng thái bằng endpoint này.
+- `guest_drive_folder_id` (optional): nhận full URL `https://drive.google.com/drive/folders/<ID>` hoặc ID thuần; server parse ra ID rồi lưu `Concert.guestDriveFolderId`. Input không hợp lệ → `400 INVALID_CATALOG_REQUEST`.
 - Nếu concert đã `PUBLISHED`, update metadata phải invalidate cache ngay.
 - Ghi audit log `UPDATE_CONCERT`.
 

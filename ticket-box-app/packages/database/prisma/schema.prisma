@@ -249,12 +249,15 @@ model Concert {
   description      String?
   artistName       String        @map("artist_name") @db.VarChar(255)
   artistBio        String?       @map("artist_bio")
+  artistBioImageUrl String?      @map("artist_bio_image_url")
   startsAt         DateTime      @map("starts_at")
   endsAt           DateTime      @map("ends_at")
   plannedPublishAt DateTime?     @map("planned_publish_at")
   status           ConcertStatus @default(DRAFT)
   coverImageUrl    String?       @map("cover_image_url")
   seatMapUrl       String?       @map("seat_map_url")
+  // Thư mục Google Drive chứa CSV khách mời VIP của concert (BTC tự quản lý file).
+  guestDriveFolderId String?     @map("guest_drive_folder_id")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
 
@@ -295,6 +298,11 @@ model OrganizerRequest {
   gateCount        Int            @default(1) @map("gate_count")
   checkerCount     Int            @default(1) @map("checker_count")
   pressKitUrl      String?        @map("press_kit_url")
+  // Bio do AI sinh từ press kit (denormalize để admin xem trước & copy sang concert lúc approve).
+  artistBio        String?            @map("artist_bio")
+  bioStatus        ArtistBioJobStatus? @map("bio_status")
+  // Ảnh nghệ sĩ BTC upload kèm hồ sơ (gắn ngay, độc lập với bio); copy sang concert khi approve.
+  artistBioImageUrl String?           @map("artist_bio_image_url")
   ticketTypes      Json           @map("ticket_types") @db.JsonB
   status           ApprovalStatus @default(PENDING)
   reviewedById     String?        @map("reviewed_by") @db.Uuid
@@ -309,6 +317,7 @@ model OrganizerRequest {
   reviewedBy      User?                   @relation("OrganizerRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   concert         Concert?                @relation(fields: [concertId], references: [id], onDelete: SetNull)
   checkerAccounts ConcertCheckerAccount[]
+  artistBioJobs   ArtistBioJob[]
 
   @@index([organizerId, status, createdAt])
   @@index([status, createdAt])
@@ -731,8 +740,10 @@ model GuestList {
   seatZoneId    String?     @map("seat_zone_id") @db.Uuid
   importJobId   String?     @map("import_job_id") @db.Uuid
   fullName      String      @map("full_name") @db.VarChar(255)
-  phone         String      @db.VarChar(20)
-  email         String?     @db.VarChar(255)
+  // Email = danh tính khử trùng khách mời trong 1 concert (bắt buộc).
+  email         String      @db.VarChar(255)
+  // Phone tùy chọn — chỉ phục vụ tra cứu/đối chiếu tại cổng.
+  phone         String?     @db.VarChar(20)
   code          String?     @db.VarChar(100)
   status        GuestStatus @default(INVITED)
   checkedInAt   DateTime?   @map("checked_in_at")
@@ -748,7 +759,7 @@ model GuestList {
   checkinLogs  CheckinLog[]
   offlineItems OfflineCheckinItem[]
 
-  @@unique([concertId, phone])
+  @@unique([concertId, email])
   @@unique([concertId, code])
   @@index([concertId, status])
   @@index([phone])
@@ -773,21 +784,27 @@ model GuestImportError {
 }
 
 model ArtistBioJob {
-  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  concertId     String             @map("concert_id") @db.Uuid
-  requestedById String?            @map("requested_by") @db.Uuid
-  status        ArtistBioJobStatus @default(PENDING)
-  sourceFileUrl String             @map("source_file_url")
-  extractedText String?            @map("extracted_text")
-  generatedBio  String?            @map("generated_bio")
-  errorMessage  String?            @map("error_message")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at")
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Job gắn vào concert (luồng cũ) HOẶC vào organizer request (luồng nộp hồ sơ, concert chưa tồn tại).
+  concertId          String?            @map("concert_id") @db.Uuid
+  organizerRequestId String?            @map("organizer_request_id") @db.Uuid
+  requestedById      String?            @map("requested_by") @db.Uuid
+  status             ArtistBioJobStatus @default(PENDING)
+  sourceFileUrl      String             @map("source_file_url")
+  extractedText      String?            @map("extracted_text")
+  generatedBio       String?            @map("generated_bio")
+  modelName          String?            @map("model_name")
+  errorMessage       String?            @map("error_message")
+  completedAt        DateTime?          @map("completed_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at")
 
-  concert     Concert @relation(fields: [concertId], references: [id], onDelete: Cascade)
-  requestedBy User?   @relation("ArtistBioRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  concert          Concert?          @relation(fields: [concertId], references: [id], onDelete: Cascade)
+  organizerRequest OrganizerRequest? @relation(fields: [organizerRequestId], references: [id], onDelete: Cascade)
+  requestedBy      User?             @relation("ArtistBioRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
 
   @@index([concertId, status])
+  @@index([organizerRequestId, status])
   @@index([status, createdAt])
   @@map("artist_bio_jobs")
 }

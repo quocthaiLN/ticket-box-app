@@ -1,12 +1,3 @@
-export type GuestImportRequest = {
-  concert_id: string;
-  file_object_key?: string;
-  file_url?: string;
-  default_zone_id?: string;
-  dry_run: boolean;
-  uploaded_by_user_id?: string;
-};
-
 export type GuestSearchQuery = {
   concert_id: string;
   q?: string;
@@ -28,22 +19,46 @@ export type GuestScanRequest = {
   staff_user_id?: string;
 };
 
-export type GuestListPlaceholderState = "pending_sprint_2";
-
-export type GuestImportResponse = {
-  job_id: string;
+// Admin enqueue 1 job quét Drive cho 1 concert (chạy nhập thủ công ngoài lịch 0h).
+export type GuestImportTriggerResponse = {
   concert_id: string;
-  status: "PENDING" | "FAILED";
-  file_url: string;
+  status: "SCAN_ENQUEUED";
   queue_job_id?: string;
-  dry_run: boolean;
-  error_message?: string;
+};
+
+export type GuestImportJobStatus = {
+  id: string;
+  concert_id: string;
+  status: "PENDING" | "PROCESSING" | "DONE" | "PARTIAL" | "FAILED";
+  total_rows: number;
+  success_rows: number;
+  error_rows: number;
+  skipped_rows: number;
+  file_url: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+};
+
+export type GuestImportErrorItem = {
+  id: string;
+  row_number: number;
+  error_code: string;
+  error_message: string;
+  raw_data: unknown;
+};
+
+export type GuestImportErrorsPage = {
+  items: GuestImportErrorItem[];
+  next_cursor: string | null;
+  has_more: boolean;
 };
 
 export type GuestSummary = {
   guest_id: string;
   concert_id: string;
   full_name: string;
+  email: string;
   phone_masked?: string;
   zone_id: string;
   status: "INVITED" | "CHECKED_IN" | "CANCELLED";

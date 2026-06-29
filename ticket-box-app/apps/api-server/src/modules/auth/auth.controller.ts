@@ -343,3 +343,28 @@ export async function handleAdminUpdateStatus(
     next(err);
   }
 }
+
+export async function handleAdminDeleteUser(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { user_id } = req.params;
+    const actorId: string = res.locals.auth?.user_id;
+    const deleted = await authService.deleteUser(actorId, user_id);
+
+    res.status(200).json(
+      ok(
+        {
+          user_id: deleted.id,
+          status: deleted.status,
+          deleted_at: new Date(),
+        },
+        req.requestId,
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+}

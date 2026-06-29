@@ -31,11 +31,13 @@ export type ConcertSummary = {
   id: string;
   title: string;
   slug: string;
+  description?: string;
   artist_name: string;
   starts_at: string;
   ends_at: string;
   status: ConcertStatus;
   cover_image_url?: string;
+  guest_drive_folder_id?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
   ticket_price_range?: {
     min_amount: number;
@@ -47,6 +49,7 @@ export type ConcertSummary = {
 export type ConcertDetail = ConcertSummary & {
   description?: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
   seat_map_url?: string;
   venue: Venue;
 };
@@ -106,6 +109,7 @@ export type ConcertMetadata = {
     fallback_image_url?: string;
   };
   artist_bio?: string;
+  artist_bio_image_url?: string;
 };
 
 const apiBaseUrl =
@@ -133,6 +137,35 @@ export async function apiPatch<TData>(
   init?: RequestInit,
 ): Promise<TData> {
   return apiRequest<TData>(path, jsonInit("PATCH", body, init));
+}
+
+export async function apiPut<TData>(
+  path: string,
+  body?: unknown,
+  init?: RequestInit,
+): Promise<TData> {
+  return apiRequest<TData>(path, jsonInit("PUT", body, init));
+}
+
+export async function apiDelete<TData>(
+  path: string,
+  init?: RequestInit,
+): Promise<TData> {
+  return apiRequest<TData>(path, { method: "DELETE", ...init });
+}
+
+export async function apiUploadFile<TData>(
+  path: string,
+  file: File,
+): Promise<TData> {
+  return apiRequest<TData>(path, {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+  });
 }
 
 export async function listConcerts(params: Record<string, string> = {}) {

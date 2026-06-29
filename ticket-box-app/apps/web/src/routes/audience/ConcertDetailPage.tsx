@@ -231,10 +231,21 @@ export function ConcertDetailPage() {
 
             {activeTab === "lineup" && (
               <Panel title="Nghệ sĩ chính" icon={<Music className="h-4 w-4 text-[#F5C842]" />}>
-                <p className="mb-2 font-semibold text-[#F0EDEB]">{concert.artistName}</p>
-                <p className="text-sm leading-relaxed text-[#B0B0C0]">
-                  {concert.artistBio || "Thông tin nghệ sĩ đang được cập nhật."}
-                </p>
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  {concert.artistBioImageUrl && (
+                    <img
+                      src={concert.artistBioImageUrl}
+                      alt={concert.artistName}
+                      className="h-40 w-40 shrink-0 rounded-xl object-cover"
+                    />
+                  )}
+                  <div>
+                    <p className="mb-2 font-semibold text-[#F0EDEB]">{concert.artistName}</p>
+                    <p className="text-sm leading-relaxed text-[#B0B0C0]">
+                      {concert.artistBio || "Thông tin nghệ sĩ đang được cập nhật."}
+                    </p>
+                  </div>
+                </div>
               </Panel>
             )}
 

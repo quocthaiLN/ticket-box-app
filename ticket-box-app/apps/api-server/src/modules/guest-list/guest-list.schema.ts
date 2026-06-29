@@ -1,19 +1,13 @@
 import { Errors } from "../../shared/http/problem-details.js";
 import type {
-  GuestImportRequest,
   GuestScanRequest,
   GuestSearchQuery,
 } from "./guest-list.types.js";
 
-export function parseGuestImportBody(body: unknown): GuestImportRequest {
-  const value = asRecord(body);
-
+export function parseImportErrorsQuery(query: Record<string, unknown>) {
   return {
-    concert_id: requiredString(value.concert_id, "concert_id"),
-    file_object_key: optionalString(value.file_object_key),
-    file_url: optionalString(value.file_url),
-    default_zone_id: optionalString(value.default_zone_id),
-    dry_run: value.dry_run === true || value.dry_run === "true",
+    limit: parseLimit(query.limit, 20),
+    cursor: optionalString(query.cursor),
   };
 }
 

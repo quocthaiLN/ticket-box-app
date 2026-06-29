@@ -199,7 +199,9 @@ export class CatalogRepository {
     return venues.map(mapVenue);
   }
 
-  async listAdminConcerts(query: ListAdminQuery): Promise<ConcertSummaryDto[]> {
+  async listAdminConcerts(
+    query: ListAdminQuery
+  ): Promise<(ConcertSummaryDto & { guest_drive_folder_id?: string })[]> {
     const concerts = await prisma.concert.findMany({
       where: {
         ...buildConcertFilters(query),
@@ -216,7 +218,11 @@ export class CatalogRepository {
       take: query.limit
     });
 
-    return concerts.map(mapConcertSummary);
+    // Admin-only: kèm thư mục Drive khách mời để UI hiển thị link đã gán.
+    return concerts.map((concert) => ({
+      ...mapConcertSummary(concert),
+      guest_drive_folder_id: concert.guestDriveFolderId ?? undefined
+    }));
   }
 
   async createVenue(input: {
@@ -248,6 +254,7 @@ export class CatalogRepository {
     endsAt: Date;
     coverImageUrl?: string;
     seatMapUrl?: string;
+    guestDriveFolderId?: string;
   }): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.create({
       data: input,
@@ -270,6 +277,7 @@ export class CatalogRepository {
       endsAt: Date;
       coverImageUrl: string | null;
       seatMapUrl: string | null;
+      guestDriveFolderId: string | null;
     }>
   ): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.update({
@@ -474,6 +482,7 @@ function mapConcertSummary(concert: ConcertWithVenueAndPrices): ConcertSummaryDt
     id: concert.id,
     title: concert.title,
     slug: concert.slug,
+    description: concert.description ?? undefined,
     artist_name: concert.artistName,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
@@ -503,6 +512,7 @@ function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
     description: concert.description ?? undefined,
     artist_name: concert.artistName,
     artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
     status: concert.status,
@@ -533,7 +543,8 @@ function mapConcertMetadata(concert: ConcertMetadataRecord): ConcertMetadataDto 
     seat_map: {
       svg_url: concert.seatMapUrl ?? undefined
     },
-    artist_bio: concert.artistBio ?? undefined
+    artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined
   };
 }
 

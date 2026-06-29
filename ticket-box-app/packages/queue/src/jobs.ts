@@ -40,9 +40,11 @@ export type NotificationJobData = {
 export type AiBioJobData = {
   /** ID row trong bảng artist_bio_jobs */
   job_id: string;
-  concert_id: string;
+  /** Một trong hai: concert_id (luồng cũ) HOẶC organizer_request_id (luồng nộp hồ sơ) */
+  concert_id?: string;
+  organizer_request_id?: string;
   artist_name: string;
-  /** Raw text/bio để AI tóm tắt (optional, có thể null nếu chỉ dùng artist_name) */
+  /** Raw text/bio để AI tóm tắt (optional; nếu có thì bỏ qua bước tải/parse file) */
   source_text?: string;
 };
 
@@ -54,9 +56,18 @@ export type GuestImportJobData = {
   /** ID row trong bảng guest_import_jobs */
   job_id: string;
   concert_id: string;
-  /** Object key trên MinIO của file CSV đã upload */
+  /** Google Drive file id của file CSV cần import */
   csv_object_key: string;
   uploaded_by_user_id: string;
+};
+
+/**
+ * Job quét thư mục Google Drive để sinh ra các guest-import job.
+ * Scheduler 0h enqueue không kèm concert_id (quét mọi concert diễn ra hôm đó);
+ * trigger thủ công của admin enqueue kèm concert_id (chỉ quét 1 concert).
+ */
+export type GuestImportScanData = {
+  concert_id?: string;
 };
 
 // ---------------------------------------------------------------------------

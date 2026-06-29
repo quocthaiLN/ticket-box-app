@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -88,17 +89,13 @@ export function AdminDeletionRequestsPage() {
   return (
     <AdminShell>
       <section className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase text-[#E8315B]">
-              <AlertTriangle className="h-4 w-4" />
-              Duyệt yêu cầu hủy
-            </div>
-            <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-              Yêu cầu hủy concert
+            <h1 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+              Yêu cầu Hủy Concert
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-[#8585A0]">
-              Duyệt yêu cầu xóa từ ban tổ chức. Khi duyệt, backend chuyển concert sang `CANCELLED` và vô hiệu hóa checker của concert đó.
+            <p className="mt-0.5 text-sm text-[#8585A0]">
+              Duyệt hoặc từ chối yêu cầu hủy concert từ BTC
             </p>
           </div>
           {pendingCount > 0 && (
@@ -111,15 +108,9 @@ export function AdminDeletionRequestsPage() {
 
         {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
 
-        <section className="mb-5 grid gap-3 sm:grid-cols-3">
-          <Stat label="Chờ duyệt" value={pendingCount} tone="#F5C842" icon={<Clock className="h-4 w-4" />} />
-          <Stat label="Đã duyệt" value={requests.filter((request) => request.status === "APPROVED").length} tone="#2DBE6C" icon={<CheckCircle2 className="h-4 w-4" />} />
-          <Stat label="Từ chối" value={requests.filter((request) => request.status === "REJECTED").length} tone="#E8315B" icon={<XCircle className="h-4 w-4" />} />
-        </section>
+        <FilterTabs value={filter} pendingCount={pendingCount} onChange={setFilter} />
 
-        <FilterTabs value={filter} onChange={setFilter} />
-
-        <section className="mt-5 grid gap-3">
+        <section className="mt-5 space-y-3">
           {loadState === "loading" && <LoadingState />}
           {loadState === "ready" && requests.length === 0 && (
             <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-10 text-center text-sm text-[#8585A0]">
@@ -174,6 +165,8 @@ function DeletionRequestCard({
   onReject: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const concertTitle = request.concert?.title ?? `Concert ${request.concert_id}`;
+  const organizerLabel = request.organizer?.full_name || request.organizer?.email || request.organizer_id;
 
   async function run(action: "approve" | "reject") {
     setBusy(action);
@@ -186,25 +179,24 @@ function DeletionRequestCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
-      <div className="grid gap-3 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-center">
-        <button type="button" onClick={onToggle} className="min-w-0 text-left">
+      <div className="flex items-center gap-4 px-5 py-4">
+        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <ApprovalBadge status={request.status} />
             <span className="text-xs text-[#8585A0]">#{request.id}</span>
           </div>
-          <h2 className="truncate text-sm font-semibold">Concert {request.concert_id}</h2>
-          <p className="mt-1 truncate text-xs text-[#8585A0]">
-            Organizer {request.organizer_id}
-          </p>
+          <h2 className="truncate text-sm font-semibold">{concertTitle}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
+            <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" />{organizerLabel}</span>
+            <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(request.created_at)}</span>
+          </div>
         </button>
-        <p className="text-xs text-[#8585A0]">{formatDate(request.created_at)}</p>
-        <p className="truncate text-xs text-[#8585A0]">{request.review_note || "Chưa có ghi chú duyệt"}</p>
-        <div className="flex gap-2 lg:justify-end">
+        <div className="flex shrink-0 items-center gap-2">
           {request.status === "PENDING" && (
             <button
               type="button"
               onClick={onStartReview}
-              className="rounded-lg bg-[#E8315B] px-3 py-2 text-xs font-semibold text-white shadow-[0_6px_18px_rgba(232,49,91,0.22)]"
+              className="rounded-lg bg-[#E8315B] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-105"
             >
               Xem xét
             </button>
@@ -216,11 +208,25 @@ function DeletionRequestCard({
       </div>
 
       {expanded && (
-        <div className="grid gap-3 border-t border-white/[0.07] px-5 py-4 md:grid-cols-2">
-          <Detail label="Concert ID" value={request.concert_id} />
-          <Detail label="Organizer ID" value={request.organizer_id} />
-          <Detail label="Lý do" value={request.reason || "Không có lý do."} wide />
-          <Detail label="Ghi chú duyệt" value={request.review_note || "Chưa có ghi chú."} wide />
+        <div className="grid gap-5 border-t border-white/[0.07] px-5 pb-4 pt-4">
+          <section>
+            <p className="mb-1 text-xs text-[#8585A0]">Lý do xin hủy</p>
+            <p className="max-w-3xl text-sm leading-6 text-[#B0B0C0]">{request.reason || "Không có lý do."}</p>
+          </section>
+
+          <section className="grid max-w-3xl gap-3 sm:grid-cols-2">
+            <DetailItem label="Concert" value={concertTitle} />
+            <DetailItem label="BTC" value={organizerLabel} />
+            <DetailItem label="Ngày gửi" value={formatDate(request.created_at)} />
+            <DetailItem label="Trạng thái" value={statusLabel(request.status)} />
+          </section>
+
+          {request.review_note && (
+            <section className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
+              <p className="mb-1 text-xs font-semibold text-[#8585A0]">Ghi chú review</p>
+              <p className="text-xs text-[#B0B0C0]">{request.review_note}</p>
+            </section>
+          )}
         </div>
       )}
 
@@ -275,7 +281,15 @@ function AdminAccessState({ role }: { role?: string }) {
   );
 }
 
-function FilterTabs({ value, onChange }: { value: (typeof statuses)[number]; onChange: (value: (typeof statuses)[number]) => void }) {
+function FilterTabs({
+  value,
+  pendingCount,
+  onChange,
+}: {
+  value: (typeof statuses)[number];
+  pendingCount: number;
+  onChange: (value: (typeof statuses)[number]) => void;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       {statuses.map((status) => (
@@ -287,6 +301,11 @@ function FilterTabs({ value, onChange }: { value: (typeof statuses)[number]; onC
           style={value === status ? { background: "#F5C842", color: "#0D0D14", fontWeight: 700 } : { background: "rgba(255,255,255,0.05)", color: "#8585A0", border: "1px solid rgba(255,255,255,0.08)" }}
         >
           {status === "all" ? "Tất cả" : statusLabel(status)}
+          {status === "PENDING" && pendingCount > 0 && (
+            <span className="ml-1.5 rounded-full bg-[#E8315B]/20 px-1.5 py-0.5 text-xs text-[#E8315B]">
+              {pendingCount}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -294,32 +313,25 @@ function FilterTabs({ value, onChange }: { value: (typeof statuses)[number]; onC
 }
 
 function ApprovalBadge({ status }: { status: ApprovalStatus }) {
-  const styles: Record<ApprovalStatus, { label: string; bg: string; color: string }> = {
-    PENDING: { label: "Chờ duyệt", bg: "rgba(245,200,66,0.12)", color: "#F5C842" },
-    APPROVED: { label: "Đã duyệt", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C" },
-    REJECTED: { label: "Từ chối", bg: "rgba(232,49,91,0.12)", color: "#E8315B" },
+  const styles: Record<ApprovalStatus, { label: string; bg: string; color: string; icon: React.ReactNode }> = {
+    PENDING: { label: "Chờ duyệt", bg: "rgba(245,200,66,0.12)", color: "#F5C842", icon: <Clock className="h-3.5 w-3.5" /> },
+    APPROVED: { label: "Đã duyệt", bg: "rgba(45,190,108,0.12)", color: "#2DBE6C", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+    REJECTED: { label: "Từ chối", bg: "rgba(232,49,91,0.12)", color: "#E8315B", icon: <XCircle className="h-3.5 w-3.5" /> },
   };
   const style = styles[status];
-  return <span className="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: style.bg, color: style.color }}>{style.label}</span>;
-}
-
-function Stat({ label, value, icon, tone }: { label: string; value: number; icon: React.ReactNode; tone: string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs text-[#8585A0]">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${tone}18`, color: tone }}>{icon}</span>
-      </div>
-      <p className="text-2xl font-bold">{value}</p>
-    </div>
+    <span className="inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: style.bg, color: style.color }}>
+      {style.icon}
+      {style.label}
+    </span>
   );
 }
 
-function Detail({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 ${wide ? "md:col-span-2" : ""}`}>
-      <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 break-words text-sm">{value}</p>
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-xs text-[#8585A0]">{label}</span>
+      <span className="min-w-0 break-words text-right text-xs font-medium text-[#F0EDEB]">{value}</span>
     </div>
   );
 }

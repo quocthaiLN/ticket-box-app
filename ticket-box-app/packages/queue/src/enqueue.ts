@@ -16,6 +16,7 @@ import type {
   EmailJobData,
   ExpireHoldsJobData,
   GuestImportJobData,
+  GuestImportScanData,
   NotificationJobData,
 } from "./jobs.js";
 
@@ -68,11 +69,22 @@ export async function enqueueAiBio(data: AiBioJobData): Promise<string> {
 }
 
 /**
- * Enqueue một guest CSV import job.
+ * Enqueue một guest CSV import job (1 file CSV trên Drive).
  */
 export async function enqueueGuestImport(data: GuestImportJobData): Promise<string> {
   const queue = getGuestImportQueue();
   const job = await queue.add("import-guest-csv", data, DEFAULT_WORKER_OPTS);
+  return job.id ?? "";
+}
+
+/**
+ * Enqueue job quét thư mục Drive để sinh các guest-import job.
+ * Dùng cho cả scheduler 0h (không concertId) và trigger thủ công của admin (có concertId).
+ */
+export async function enqueueGuestImportScan(concertId?: string): Promise<string> {
+  const queue = getGuestImportQueue();
+  const data: GuestImportScanData = { concert_id: concertId };
+  const job = await queue.add("scan-drive-folders", data, DEFAULT_WORKER_OPTS);
   return job.id ?? "";
 }
 

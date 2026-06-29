@@ -755,6 +755,85 @@ async function seedOperations() {
       },
     });
 
+    // Khu khách mời (guest list) — zone/gate/mapping/device dùng dải id riêng
+    // (không theo công thức *5 vốn chỉ chứa 5 zone/concert).
+    const guestZoneSeedId = fixedId(361 + concertIndex);
+    const guestGateSeedId = fixedId(461 + concertIndex);
+
+    await prisma.seatZone.upsert({
+      where: { id: guestZoneSeedId },
+      create: {
+        id: guestZoneSeedId,
+        concertId: concert.id,
+        code: "GUEST",
+        name: "Khu khách mời",
+        description: "Khu vực riêng cho khách mời nhãn hàng tài trợ.",
+        capacity: 100,
+        svgPath: "M10 120 H82 V200 H10 Z",
+        sortOrder: 99,
+      },
+      update: {
+        concertId: concert.id,
+        code: "GUEST",
+        name: "Khu khách mời",
+        capacity: 100,
+        sortOrder: 99,
+      },
+    });
+
+    await prisma.checkinGate.upsert({
+      where: { id: guestGateSeedId },
+      create: {
+        id: guestGateSeedId,
+        concertId: concert.id,
+        code: "GUEST_GATE",
+        name: "Cổng khách mời",
+        description: "Cổng soát vé cho khu khách mời.",
+        isActive: true,
+        sortOrder: 99,
+      },
+      update: {
+        concertId: concert.id,
+        code: "GUEST_GATE",
+        name: "Cổng khách mời",
+        isActive: true,
+        sortOrder: 99,
+      },
+    });
+
+    await prisma.checkinGateZone.upsert({
+      where: {
+        gateId_seatZoneId: { gateId: guestGateSeedId, seatZoneId: guestZoneSeedId },
+      },
+      create: {
+        gateId: guestGateSeedId,
+        seatZoneId: guestZoneSeedId,
+        concertId: concert.id,
+      },
+      update: { concertId: concert.id },
+    });
+
+    await prisma.checkinDevice.upsert({
+      where: { id: fixedId(661 + concertIndex) },
+      create: {
+        id: fixedId(661 + concertIndex),
+        deviceCode: `CHECKER-GUEST-${concert.slug}`,
+        staffId,
+        concertId: concert.id,
+        gateId: guestGateSeedId,
+        name: `Thiết bị soát vé khách mời - ${concert.title}`,
+        status: "ACTIVE",
+        lastSeenAt: new Date("2026-06-08T11:00:00+07:00"),
+      },
+      update: {
+        deviceCode: `CHECKER-GUEST-${concert.slug}`,
+        staffId,
+        concertId: concert.id,
+        gateId: guestGateSeedId,
+        status: "ACTIVE",
+      },
+    });
+
     await prisma.artistBioJob.upsert({
       where: { id: fixedId(681 + concertIndex) },
       create: {

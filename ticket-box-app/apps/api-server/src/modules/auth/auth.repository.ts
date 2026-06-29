@@ -27,6 +27,16 @@ export const authRepository = {
     });
   },
 
+  async deleteUser(userId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: "DISABLED",
+        deletedAt: new Date(),
+      },
+    });
+  },
+
   async updateStatus(userId: string, status: "ACTIVE" | "LOCKED" | "DISABLED") {
     return prisma.user.update({
       where: { id: userId },
@@ -49,6 +59,7 @@ export const authRepository = {
 
   async listUsers(params: { limit: number; cursor?: string }) {
     return prisma.user.findMany({
+      where: { deletedAt: null },
       take: params.limit + 1,
       cursor: params.cursor ? { id: params.cursor } : undefined,
       orderBy: { createdAt: "desc" },
