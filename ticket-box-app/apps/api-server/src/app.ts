@@ -32,7 +32,11 @@ export function createApp() {
     cors({
       credentials: true,
       origin(origin, callback) {
-        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+        if (
+          !origin ||
+          /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) ||
+          /^https:\/\/[a-z0-9-]+\.ngrok-free\.(dev|app)$/.test(origin)
+        ) {
           callback(null, true);
           return;
         }
