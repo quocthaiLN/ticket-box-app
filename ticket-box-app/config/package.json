@@ -1,0 +1,13 @@
+{
+  "name": "@ticketbox/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./env.ts",
+  "exports": {
+    ".": "./env.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  }
+}

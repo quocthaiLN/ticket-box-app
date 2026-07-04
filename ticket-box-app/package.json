@@ -1,0 +1,46 @@
+{
+  "name": "ticket-box-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "config",
+    "apps/*",
+    "packages/*",
+    "config",
+    "tests"
+  ],
+  "scripts": {
+    "build": "npm run build:redis && npm run build:database && npm run build:queue && npm run build:storage && npm run build:api && npm run build:web && npm run build:worker",
+    "dev:api": "npm run dev -w @ticketbox/api-server",
+    "dev:web": "npm run dev -w @ticketbox/web",
+    "dev:mobile": "npm run start -w mobile-checker",
+    "dev:worker": "npm run dev -w @ticketbox/worker-server",
+    "dev:payment": "npm run dev -w @ticketbox/payment-mocks",
+    "build:api": "npm run build -w @ticketbox/api-server",
+    "build:web": "npm run build -w @ticketbox/web",
+    "build:worker": "npm run build -w @ticketbox/worker-server",
+    "build:database": "npm run build -w @ticketbox/database",
+    "build:storage": "npm run build -w @ticketbox/storage",
+    "build:redis": "npm run build -w @ticketbox/redis",
+    "build:queue": "npm run build -w @ticketbox/queue",
+    "build:payment": "npm run build -w @ticketbox/payment-mocks",
+    "db:validate": "prisma validate --schema=packages/database/prisma/schema.prisma",
+    "db:generate": "prisma generate --schema=packages/database/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=packages/database/prisma/schema.prisma",
+    "db:seed": "node --env-file=.env packages/database/prisma/seed.mjs",
+    "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "expo": "^56.0.12",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}

@@ -21,35 +21,36 @@ QR phải đủ dữ liệu để mobile app xác thực cục bộ khi offline,
 - `ticket_types`
 - `seat_zones`
 - `orders`
+- `order_items`
 - `payments`
-- `notification_logs`
+- `notifications`
 
 ## 4. Luồng chính
 
 1. Payment webhook hợp lệ cập nhật `payments.status = SUCCEEDED`.
-2. Order chuyển sang `PAID`.
+2. Order chuyển sang `CONFIRMED`.
 3. Ticketing Module phát hành mỗi vé thành một bản ghi `tickets`.
-4. Mỗi ticket có `qr_token` unique và `qr_signature`.
+4. Mỗi ticket có `qr_token_hash` unique và `qr_signature`.
 5. QR payload hoặc dữ liệu resolve cục bộ phải chứa tối thiểu:
    - `ticket_id`
    - `concert_id`
    - `ticket_type_id`
    - `seat_zone_id`
    - `issued_at`
-   - `qr_token`
+   - token/payload để verify chữ ký
 6. Notification Module gửi email/app notification chứa e-ticket.
 7. Mobile app khi offline dùng QR payload/signature và preload data để kiểm tra đúng concert, đúng gate-zone và chống quét trùng local.
 
 ## 5. Kịch bản lỗi
 
-- Order chưa `PAID`: không phát hành ticket.
+- Payment chưa `SUCCEEDED` hoặc order chưa `CONFIRMED`: không phát hành ticket.
 - QR token trùng: database unique constraint chặn.
-- Không gửi được email: ticket vẫn nằm trong tài khoản, notification retry/DLQ xử lý sau.
+- Không gửi được email: ticket vẫn nằm trong tài khoản, notification retry xử lý sau.
 - QR bị chỉnh sửa: verify signature thất bại, check-in trả `INVALID_TICKET`.
 
 ## 6. Ràng buộc nghiệp vụ và kỹ thuật
 
-- `qr_token` phải unique.
+- `qr_token_hash` phải unique.
 - `qr_signature` phải được tạo từ payload đã chuẩn hóa.
 - Payload phải bao gồm `seat_zone_id` hoặc app phải resolve được `seat_zone_id` từ local preload.
 - Không lưu dữ liệu nhạy cảm không cần thiết trong QR.

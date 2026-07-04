@@ -219,7 +219,7 @@ sequenceDiagram
 
         alt Số lượng vé đủ
             TS->>DB: UPDATE trừ số lượng vé
-            TS->>DB: INSERT order trạng thái PENDING
+            TS->>DB: INSERT order status HELD
             TS->>DB: COMMIT Transaction
         else Số lượng vé không đủ
             TS->>DB: ROLLBACK Transaction
@@ -246,7 +246,7 @@ sequenceDiagram
         VNP->>PM: Gửi IPN/Webhook thành công
         PM->>TS: Event Order Payment Success
 
-        TS->>DB: UPDATE orders status SUCCESS
+        TS->>DB: UPDATE payments status SUCCEEDED; UPDATE orders status CONFIRMED
         TS->>RD: DEL order hold
 
         TS-->>VNP: Confirm IPN thành công
@@ -258,7 +258,7 @@ sequenceDiagram
         TS->>DB: BEGIN Transaction
         TS->>DB: SELECT ... FOR UPDATE
         TS->>DB: Hoàn trả số lượng vé
-        TS->>DB: UPDATE order status CANCELLED
+        TS->>DB: UPDATE order status CANCELLED/EXPIRED
         TS->>DB: COMMIT Transaction
 
         TS->>RD: DEL order hold
@@ -453,7 +453,9 @@ erDiagram
     USERS ||--o{ TICKETS : owns
     CONCERTS ||--o{ TICKET_TYPES : has
     CONCERTS ||--o{ GUEST_LIST : invites
-    ORDERS ||--|{ TICKETS : contains
+    ORDERS ||--|{ ORDER_ITEMS : contains
+    ORDER_ITEMS ||--o{ TICKETS : issues
+    TICKET_TYPES ||--o{ ORDER_ITEMS : selected_by
     TICKET_TYPES ||--o{ TICKETS : defines
 
     USERS {
@@ -461,23 +463,26 @@ erDiagram
         string email UK
         string password_hash
         string full_name
-        string role "ADMIN, AUDIENCE, CHECKER"
+        string role "AUDIENCE, ORGANIZER, CHECKER, ADMIN"
     }
     CONCERTS {
         uuid id PK
         string title
         text artist_bio "Được sinh tự động bởi AI"
-        datetime start_time
-        string svg_map_url "Lưu trên S3/CDN"
-        string status "DRAFT, PUBLISHED, CANCELLED"
+        datetime starts_at
+        datetime ends_at
+        string seat_map_url "Lưu trên S3/CDN"
+        string status "DRAFT, PUBLISHED, CANCELLED, COMPLETED"
     }
     TICKET_TYPES {
         uuid id PK
         uuid concert_id FK
+        uuid seat_zone_id FK
         string name "VD: SVIP, GA"
         decimal price
         int total_quantity
-        int available_quantity "Trường quan trọng để Lock DB"
+        int held_quantity "Số vé đang giữ tạm"
+        int sold_quantity "Số vé đã bán"
         int max_per_user "Giới hạn mua mỗi tài khoản"
     }
     ORDERS {
@@ -485,48 +490,59 @@ erDiagram
         uuid user_id FK
         uuid concert_id FK
         decimal total_amount
-        string status "PENDING, PAID, FAILED, CANCELLED"
+        string status "HELD, CONFIRMED, CANCELLED, EXPIRED"
         string idempotency_key UK "Khóa chống trùng lặp"
         datetime created_at
-        datetime held_until "Hết hạn giữ vé (10 phút)"
+        datetime hold_expires_at "Hết hạn giữ vé"
+    }
+    ORDER_ITEMS {
+        uuid id PK
+        uuid order_id FK
+        uuid ticket_type_id FK
+        int quantity
+        decimal unit_price
+        decimal line_total
     }
     TICKETS {
         uuid id PK
         uuid order_id FK
+        uuid order_item_id FK
         uuid ticket_type_id FK
         uuid user_id FK
-        string qr_code UK "Mã định danh duy nhất"
-        string status "HELD, PURCHASED, CHECKED_IN"
+        uuid concert_id FK
+        uuid seat_zone_id FK
+        string qr_token_hash UK "Mã QR đã băm"
+        string status "ISSUED, CHECKED_IN, CANCELLED, REFUNDED"
     }
     GUEST_LIST {
         uuid id PK
         uuid concert_id FK
         string email
         string full_name
-        string qr_code UK
-        string status "PENDING, CHECKED_IN"
+        string code UK
+        string status "INVITED, CHECKED_IN, CANCELLED"
     }
 ```
 
 **Mô tả chi tiết các bảng và Thiết kế giải quyết rủi ro:**
 
 #### 1. Bảng `users` (Tài khoản)
-*   Lưu trữ thông tin người dùng. Phân quyền thông qua trường `role` (`ADMIN`, `AUDIENCE`, `CHECKER`).
+*   Lưu trữ thông tin người dùng. Phân quyền MVP thông qua trường `role` (`AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN`).
 
 #### 2. Bảng `concerts` (Sự kiện) và `ticket_types` (Loại vé)
 *   `concerts.artist_bio`: Lưu trữ đoạn văn bản giới thiệu nghệ sĩ do Background Worker (gọi AI) trả về.
-*   `ticket_types.available_quantity`: **Đóng vai trò then chốt trong việc chống bán lố vé.** Khi có request đặt vé, Ticketing Module sẽ sử dụng truy vấn `SELECT ... FOR UPDATE` (Pessimistic Locking) trên dòng dữ liệu này. Hệ thống sẽ kiểm tra xem `available_quantity >= request_quantity` không, sau đó trừ thẳng và `COMMIT`. Database đảm bảo các request đến cùng mili-giây sẽ được xếp hàng tuần tự.
-*   `ticket_types.max_per_user`: Cấu hình giới hạn để Ticketing Module đếm tổng số vé người dùng đã sở hữu trước khi cho phép tạo `ORDERS` mới.
+*   `ticket_types.total_quantity`, `held_quantity`, `sold_quantity`: Đóng vai trò then chốt trong việc chống bán lố vé. Khi có request đặt vé, Ticketing Module dùng `SELECT ... FOR UPDATE` trên dòng `ticket_types`, sau đó tính `availableQuantity = total_quantity - held_quantity - sold_quantity`. Nếu đủ vé, transaction tăng `held_quantity`; khi thanh toán thành công thì chuyển sang `sold_quantity`. `availableQuantity` chỉ là giá trị tính toán/API read model, không phải cột database.
+*   `ticket_types.max_per_user`: Cấu hình giới hạn để Ticketing Module đếm `held_quantity + paid_quantity` trong `user_ticket_type_counters` trước khi cho phép tạo hold/order mới.
 
 #### 3. Bảng `orders` (Đơn hàng)
-*   `status`: Có các trạng thái `PENDING` (Đang thanh toán), `PAID` (Đã trả tiền), `FAILED/CANCELLED` (Lỗi/Hết hạn).
+*   `status`: Có các trạng thái `HELD` (đang giữ vé), `CONFIRMED` (thanh toán thành công), `CANCELLED` (hủy/thanh toán thất bại), `EXPIRED` (hết TTL giữ vé).
 *   `idempotency_key` (Unique): **Vũ khí chống trừ tiền và xuất vé 2 lần**. Khóa này sinh ra 1 lần duy nhất từ Client khi khán giả bấm nút "Thanh toán". Nếu Client bấm 2 lần do lag mạng, hoặc VNPAY gửi Webhook về 2 lần, thao tác Insert/Update vào DB sẽ bị dội ngược (Conflict Unique Constraint), giúp ngắt ngay luồng xử lý trùng lặp.
-*   `held_until`: Đóng vai trò là TTL (Time-To-Live). Một Background Worker sẽ định kỳ quét các đơn `PENDING` có `held_until` nhỏ hơn thời gian hiện tại. Khi phát hiện, hệ thống tự động cập nhật trạng thái đơn thành `CANCELLED`, thu hồi các `TICKETS` liên quan, và hoàn trả số lượng vé về `available_quantity` ở bảng `TICKET_TYPES`.
+*   `hold_expires_at`: Đóng vai trò TTL. Background Worker định kỳ quét các order `HELD` đã qua `hold_expires_at`; khi hết hạn, order chuyển sang `EXPIRED`, `ticket_types.held_quantity` và `user_ticket_type_counters.held_quantity` được giảm trả lại.
 
 #### 4. Bảng `tickets` (Vé thực tế)
 *   Đại diện cho 1 chiếc vé vật lý/e-ticket. 
-*   `status` chuyển từ `HELD` (Đang giữ chỗ - có thể bị thu hồi nếu Order timeout 10 phút) sang `PURCHASED` (Khi thanh toán xong) và `CHECKED_IN` (Khi soát vé thành công).
-*   Trường `qr_code` là duy nhất và được mã hóa (Signature) để Mobile App có thể xác thực tính nguyên vẹn (Integrity) khi làm việc hoàn toàn Offline mà không sợ vé giả.
+*   `status` chuyển từ `ISSUED` sang `CHECKED_IN` khi soát vé thành công; `CANCELLED`/`REFUNDED` dùng khi vé bị hủy hoặc hoàn tiền.
+*   Trường `qr_token_hash` là duy nhất; `qr_payload` và `qr_signature` giúp Mobile App xác thực tính toàn vẹn khi làm việc offline.
 
 #### 5. Bảng `guest_list` (Khách mời VIP)
 *   Bảng này được tách biệt hoàn toàn khỏi `tickets` và `orders` để đảm bảo luồng Worker đọc file CSV và thực hiện Bulk Upsert ban đêm sẽ **không gây Deadlock** hay ảnh hưởng đến hiệu năng của các bảng bán vé lõi đang phục vụ khán giả trực tiếp.
@@ -601,7 +617,7 @@ Hệ thống thanh toán của bên thứ ba (VNPAY/MoMo) có thể bị nghẽn
 *   **Hành vi hệ thống khi lỗi (Graceful Degradation):**
     *   **Cách ly sự cố:** Việc thanh toán lỗi không làm sập Database. Người dùng khác vẫn truy cập xem thông tin Concert và Soát vé bình thường.
     *   **Trải nghiệm người dùng:** Khán giả đang đặt vé sẽ nhận được thông báo lịch sự: *"Cổng thanh toán đối tác hiện đang bảo trì hoặc quá tải. Vui lòng thử lại sau ít phút hoặc đổi phương thức thanh toán."*
-    *   **Hoàn trả vé:** Lệnh giữ vé (`HELD`) của những khán giả không thể thanh toán do Circuit Breaker sẽ không bị giam vĩnh viễn, mà sẽ được tự động trả lại kho (`available_quantity`) khi hết TTL 10 phút.
+    *   **Hoàn trả vé:** Lệnh giữ vé (`HELD`) của những khán giả không thể thanh toán do Circuit Breaker sẽ không bị giữ vĩnh viễn. Khi hết TTL 10 phút, worker giảm `held_quantity` trên `ticket_types` và `user_ticket_type_counters` để trả vé vào kho.
 
 ### Chống trừ tiền hai lần
 <!-- Cơ chế, nơi lưu trữ, TTL, luồng xử lý khi phát hiện trùng lặp -->
@@ -614,7 +630,7 @@ Vấn đề phổ biến trong thanh toán là người dùng bấm nút "Xác n
     *   **Luồng nhận Webhook:** Khóa sẽ là sự kết hợp giữa `OrderID` của TicketBox và `TransactionID` do cổng thanh toán trả về.
 *   **Nơi lưu trữ và TTL:**
     *   **Lớp 1 (Truy xuất nhanh):** Lưu tại **Redis** với TTL là **24 giờ** (đủ để bao phủ mọi thời gian chờ và vòng lặp retry Webhook của đối tác). Giá trị lưu trữ bao gồm trạng thái xử lý (IN_PROGRESS, COMPLETED) và payload response cũ.
-    *   **Lớp 2 (Tuyệt đối):** Cấu hình ràng buộc `UNIQUE` trên cột `idempotency_key` ở bảng `orders` và bảng lưu log Webhook trong **PostgreSQL**.
+    *   **Lớp 2 (Tuyệt đối):** Cấu hình ràng buộc `UNIQUE` trên cột `idempotency_key` ở bảng `orders` và `payments`; payload webhook được lưu trong `payments.webhook_payload` để đối soát, không cần bảng `payment_webhook_events` riêng trong MVP.
 *   **Luồng xử lý khi phát hiện trùng lặp:**
     1.  Khi request tới, Payment Module kiểm tra khóa trong Redis.
     2.  Nếu khóa **chưa tồn tại**: Tạo khóa trên Redis với trạng thái `IN_PROGRESS`. Thực hiện logic giữ vé, gọi API thanh toán. Thành công thì cập nhật Redis thành `COMPLETED` kèm dữ liệu hóa đơn.

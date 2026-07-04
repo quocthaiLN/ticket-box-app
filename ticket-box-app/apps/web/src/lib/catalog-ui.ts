@@ -1,0 +1,225 @@
+import type {
+  ConcertDetail,
+  ConcertMetadata,
+  ConcertSummary,
+  Inventory,
+  SeatZone,
+  TicketType,
+} from "./api-client";
+import { resolveCatalogImageUrl } from "../img/catalog-images";
+
+export type UiVenue = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  capacity: number;
+};
+
+export type UiSeatZone = {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  capacity: number;
+  color: string;
+};
+
+export type UiTicketType = {
+  id: string;
+  seatZoneId: string;
+  zoneCode: string;
+  name: string;
+  price: number;
+  maxPerUser: number;
+  status: TicketType["status"];
+  availableQuantity: number | null;
+  soldPercent: number;
+  color: string;
+};
+
+export type UiConcert = {
+  id: string;
+  slug: string;
+  title: string;
+  artistName: string;
+  description: string;
+  artistBio: string;
+  artistBioImageUrl: string;
+  startsAt: string;
+  endsAt: string;
+  status: ConcertSummary["status"];
+  coverImageUrl: string;
+  seatMapUrl?: string;
+  genre: string;
+  tags: string[];
+  venue: UiVenue;
+  ticketTypes: UiTicketType[];
+  seatZones: UiSeatZone[];
+  minPrice: number | null;
+};
+
+const zoneColors = ["#F5C842", "#E8315B", "#7B61FF", "#2DBE6C", "#26A7DE", "#F97316"];
+
+export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
+  const minPrice = concert.ticket_price_range?.min_amount ?? null;
+
+  return {
+    id: concert.id,
+    slug: concert.id,
+    title: concert.title,
+    artistName: concert.artist_name,
+    description: toDescriptionExcerpt(concert.description),
+    artistBio: "",
+    artistBioImageUrl: "",
+    startsAt: concert.starts_at,
+    endsAt: concert.ends_at,
+    status: concert.status,
+    coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
+    genre: "Live Music",
+    tags: [concert.venue.city, concert.status],
+    venue: {
+      id: concert.venue.id,
+      name: concert.venue.name,
+      address: "",
+      city: concert.venue.city,
+      capacity: 0,
+    },
+    ticketTypes:
+      minPrice === null
+        ? []
+        : [
+            {
+              id: `${concert.id}:price-range`,
+              seatZoneId: "",
+              zoneCode: "",
+              name: "Starting price",
+              price: minPrice,
+              maxPerUser: 1,
+              status: "ON_SALE",
+              availableQuantity: null,
+              soldPercent: 0,
+              color: zoneColors[0],
+            },
+          ],
+    seatZones: [],
+    minPrice,
+  };
+}
+
+export function mapDetailConcert(
+  concert: ConcertDetail,
+  metadata: ConcertMetadata,
+  inventory: Inventory,
+): UiConcert {
+  const zones = metadata.seat_zones.map(mapSeatZone);
+  const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  const inventoryByTicketType = new Map(
+    inventory.items.map((item) => [item.ticket_type_id, item]),
+  );
+  const ticketTypes = metadata.ticket_types.map((ticketType, index) => {
+    const item = inventoryByTicketType.get(ticketType.id);
+    const availableQuantity = item?.available_quantity ?? null;
+    const color = zoneById.get(ticketType.seat_zone_id)?.color ?? zoneColors[index % zoneColors.length];
+
+    return {
+      id: ticketType.id,
+      seatZoneId: ticketType.seat_zone_id,
+      zoneCode: ticketType.zone_code ?? item?.zone_code ?? "",
+      name: ticketType.name,
+      price: ticketType.price.amount,
+      maxPerUser: ticketType.max_per_user,
+      status: ticketType.status,
+      availableQuantity,
+      soldPercent: estimateSoldPercent(availableQuantity, ticketType.status),
+      color,
+    };
+  });
+
+  return {
+    id: concert.id,
+    slug: concert.id,
+    title: concert.title,
+    artistName: concert.artist_name,
+    description: concert.description ?? "Concert details are being updated.",
+    artistBio: metadata.artist_bio ?? concert.artist_bio ?? "",
+    artistBioImageUrl: concert.artist_bio_image_url ?? metadata.artist_bio_image_url ?? "",
+    startsAt: concert.starts_at,
+    endsAt: concert.ends_at,
+    status: concert.status,
+    coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
+    seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url ?? metadata.seat_map.fallback_image_url,
+    genre: "Live Music",
+    tags: [concert.venue.city, concert.status],
+    venue: {
+      id: concert.venue.id,
+      name: concert.venue.name,
+      address: concert.venue.address,
+      city: concert.venue.city,
+      capacity: concert.venue.capacity ?? zones.reduce((sum, zone) => sum + zone.capacity, 0),
+    },
+    ticketTypes,
+    seatZones: zones,
+    minPrice:
+      ticketTypes.length > 0
+        ? Math.min(...ticketTypes.map((ticketType) => ticketType.price))
+        : null,
+  };
+}
+
+export function formatCurrency(amount: number): string {
+  return `${new Intl.NumberFormat("en-US").format(amount)} VND`;
+}
+
+export function formatDate(dateStr: string): string {
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(dateStr));
+}
+
+export function formatTime(dateStr: string): string {
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(dateStr));
+}
+
+export function getAvailableQuantity(ticketType: UiTicketType): number {
+  return ticketType.availableQuantity ?? 0;
+}
+
+export function getSoldPercent(ticketType: UiTicketType): number {
+  return ticketType.soldPercent;
+}
+
+function mapSeatZone(zone: SeatZone, index: number): UiSeatZone {
+  return {
+    id: zone.id,
+    code: zone.code,
+    name: zone.name,
+    description: zone.description ?? `${zone.code} zone`,
+    capacity: zone.capacity,
+    color: zoneColors[index % zoneColors.length],
+  };
+}
+
+function estimateSoldPercent(availableQuantity: number | null, status: TicketType["status"]) {
+  if (status === "SOLD_OUT") return 100;
+  if (availableQuantity === null) return 0;
+  if (availableQuantity <= 0) return 100;
+  if (availableQuantity < 20) return 82;
+  if (availableQuantity < 100) return 62;
+  return 28;
+}
+
+function toDescriptionExcerpt(description?: string) {
+  const text = description?.trim();
+  if (!text) return "Thông tin sự kiện đang được cập nhật.";
+
+  const firstSentence = text.match(/^.+?[.!?](?:\s|$)/u)?.[0]?.trim() ?? text;
+  if (firstSentence.length <= 150) return firstSentence;
+
+  return `${firstSentence.slice(0, 147).trimEnd()}...`;
+}
