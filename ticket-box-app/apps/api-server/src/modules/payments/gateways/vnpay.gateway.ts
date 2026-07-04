@@ -17,9 +17,14 @@ interface VnpayQueryResponse {
 }
 
 // Chuyển Date sang định dạng yyyyMMddHHmmss mà VNPAY yêu cầu.
+// VNPAY hiểu createDate/expireDate theo giờ Việt Nam (GMT+7). Server production
+// (Render) chạy UTC nên KHÔNG được dùng getHours()/getDate() (giờ local) — sẽ lệch
+// 7 tiếng và làm giao dịch hết hạn ngay. Dịch instant sang +7h rồi đọc theo UTC để
+// luôn ra giờ VN bất kể timezone của máy chủ.
 function formatVnpDate(date: Date): string {
+  const vn = new Date(date.getTime() + 7 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `${vn.getUTCFullYear()}${pad(vn.getUTCMonth() + 1)}${pad(vn.getUTCDate())}${pad(vn.getUTCHours())}${pad(vn.getUTCMinutes())}${pad(vn.getUTCSeconds())}`;
 }
 
 // VNPAY encode value theo encodeURIComponent rồi đổi %20 -> + (giống demo chính thức).
@@ -59,6 +64,7 @@ export class VnpayGateway implements PaymentGateway {
       vnp_ExpireDate: formatVnpDate(expireDate),
     };
 
+
     // VNPAY yêu cầu sort key, rồi ký trên chính chuỗi đã encode (không phải giá trị thô).
     const sortedKeys = Object.keys(params).sort();
     const signData = sortedKeys.map((k) => `${k}=${encodeVnpValue(params[k])}`).join('&');
@@ -73,6 +79,7 @@ export class VnpayGateway implements PaymentGateway {
   // Gọi QueryDR của VNPAY để đối soát một giao dịch đã gửi sang provider.
   async queryStatus(input: StatusInput): Promise<StatusResult> {
     const { tmnCode, hashSecret, querydrUrl, timeout } = env.vnpay;
+
     const now = new Date();
     const requestId = `${Date.now()}`;
     const version = '2.1.0';

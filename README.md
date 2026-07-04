@@ -1,233 +1,226 @@
-# TicketBox Local Run Guide
+# TicketBox
 
-Các lệnh bên dưới chạy từ thư mục workspace npm:
+TicketBox is a concert ticketing system built for high-demand ticket sales, safe checkout, QR e-tickets, online/offline check-in, organizer workflows, guest-list import, notifications, and AI-assisted artist biography generation.
 
-```powershell
-cd ticket-box-app
+The project follows the blueprint in `blueprint/` and is implemented as an event-driven modular monolith in `ticket-box-app/`. The web application has been deployed to Vercel.
+
+## Problem
+
+Concert ticket sales often fail under burst traffic: the site becomes unavailable, users are charged without receiving tickets, bots buy large portions of the inventory, and check-in staff struggle when venue connectivity is weak.
+
+TicketBox addresses these risks with:
+
+- Inventory hold/release flows to prevent overselling.
+- Per-user ticket limits.
+- Idempotent checkout and payment webhook handling.
+- Redis caching for public catalog reads and inventory snapshots.
+- Rate limiting for public reads, checkout, and webhooks.
+- QR e-ticket issuance after successful payment.
+- Online and offline check-in with conflict detection.
+- Background workers for hold expiration, notifications, guest import, and AI artist bio generation.
+
+## User Roles
+
+| Role | Main capabilities |
+| --- | --- |
+| Audience | Browse concerts, select tickets, checkout, pay, view e-tickets and QR codes |
+| Organizer | Submit concert requests, configure ticket types/zones, manage concerts, upload press kits, configure guest-list folders |
+| Checker | Scan ticket/guest QR codes, preload data, work offline, sync queued scans later |
+| Admin | Approve organizer requests, manage users, review deletion requests, inspect guest imports and notifications |
+
+## Architecture
+
+The implementation is a TypeScript workspace with several apps and shared packages:
+
+```text
+ticket-box-app/
+├── apps/
+│   ├── api-server/       # Express modular monolith API
+│   ├── web/              # React/Vite web app
+│   ├── worker-server/    # BullMQ background workers and schedulers
+│   ├── payment-mocks/    # VNPAY/MoMo sandbox simulators
+│   └── mobile-checker/   # Expo mobile checker app
+├── packages/
+│   ├── database/         # Prisma schema, migrations, seed and shared DB helpers
+│   ├── redis/            # Redis client, cache, OTP and idempotency helpers
+│   ├── queue/            # BullMQ queues and job contracts
+│   └── storage/          # Google Drive / Supabase storage helpers
+├── tests/                # Vitest integration tests
+└── docker-compose.yml    # Local Postgres and Redis
 ```
 
-## 1. Cài dependencies
+Blueprint documents live at the repository root in `blueprint/`, including system design, database design, API design and feature specs.
 
-```powershell
-npm install
-```
+## Core Modules
 
-## 2. Kiểm tra `.env`
+| Module | Status in codebase |
+| --- | --- |
+| Auth & RBAC | JWT auth, refresh/logout, role guards, admin account operations |
+| Catalog | Public concert listing/detail, metadata, seat map, ticket types, inventory cache |
+| Orders & Inventory | Checkout, held orders, per-user counters, cancel/expire flows |
+| Payments | VNPAY/MoMo adapters, return handlers, idempotent webhooks, circuit breaker and bulkhead patterns |
+| Tickets | Ticket issuance, user ticket list/detail, signed QR payloads |
+| Check-in | Online scan, guest scan, gate/zone validation, offline batch sync |
+| Guest List | CSV/Drive import jobs, guest search, guest check-in |
+| Artist Bio AI | Worker-based press-kit extraction and AI bio generation |
+| Notifications | Notification records, queue worker, admin list/detail/retry, reminder scheduler |
+| Audit Logging | Schema and partial logging exist; a centralized audit module/API is still pending |
 
-File `.env` nằm tại `ticket-box-app/.env`.
+## Tech Stack
 
-Nếu dùng PostgreSQL local trên port `5432`, có thể giữ cấu hình:
+- TypeScript
+- Node.js and Express
+- React, Vite and React Router
+- Expo / React Native for the checker app
+- PostgreSQL with Prisma
+- Redis and BullMQ
+- VNPAY/MoMo payment mock services
+- Google Drive / Supabase storage integrations
+- Vitest integration tests
+- Vercel deployment for the web app
 
-```env
-DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5432/ticketbox?schema=public
-UPSTASH_REDIS_URL=redis://localhost:6379
-JWT_SECRET=ticketbox-local-access-secret
-JWT_REFRESH_SECRET=ticketbox-local-refresh-secret
-```
+## Prerequisites
 
-Nếu dùng database container từ `docker-compose.yml` của repo, PostgreSQL đang được expose ra `localhost:5433`, nên cần dùng:
+- Node.js 22+ recommended
+- npm 10+
+- Docker Desktop for local Postgres/Redis
+- A `.env` file in `ticket-box-app/`
+
+## Environment
+
+Create `ticket-box-app/.env` with values for local development. Do not commit production secrets.
+
+Minimum local variables:
 
 ```env
 DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5433/ticketbox?schema=public
 UPSTASH_REDIS_URL=redis://localhost:6379
-JWT_SECRET=ticketbox-local-access-secret
-JWT_REFRESH_SECRET=ticketbox-local-refresh-secret
+JWT_SECRET=replace-me
+JWT_REFRESH_SECRET=replace-me
+WEB_URL=http://localhost:3001
+API_URL=http://localhost:3000
+
+VNPAY_RETURN_URL=http://localhost:3000/v1/payment/return
+MOMO_REDIRECT_URL=http://localhost:3000/v1/payment/return/momo
 ```
 
-## 3. Start database và Redis
+Additional variables are needed for payment provider mocks, email, AI provider access, Google Drive and Supabase depending on which flows you run.
 
-```powershell
-docker compose up -d
+## Local Setup
+
+From the repository root:
+
+```bash
+cd ticket-box-app
+npm install
 ```
 
-Container trong repo:
+Start local infrastructure:
 
-- PostgreSQL: container port `5432`, host port `5433`
-- Redis: `localhost:6379`
-
-Kiểm tra container:
-
-```powershell
-docker compose ps
+```bash
+docker compose up -d postgres redis
 ```
 
-## 4. Validate, generate và build Prisma package
+Prepare the database:
 
-```powershell
-npm run db:validate
+```bash
 npm run db:generate
-npm run build:database
-```
-
-Các lệnh trên dùng để:
-
-- Validate Prisma schema.
-- Generate Prisma Client.
-- Build TypeScript của `@ticketbox/database`.
-
-## 5. Apply migration
-
-```powershell
 npm run db:migrate
-```
-
-Lệnh này apply các migration hiện có vào database được trỏ bởi `DATABASE_URL`.
-
-## 6. Seed database
-
-```powershell
 npm run db:seed
 ```
 
-Seed thực thi file: `packages/database/prisma/seed.mjs`
-
-Dữ liệu seed hiện tại đáp ứng Sprint 6 mới nhất.
-
-Xem database bằng Prisma Studio để có thể đổi role nhanh chóng: `http://localhost:5555`
-
-```powershell
-npm run db:studio
-```
-
-> Mở terminal khác để tiếp tục các lệnh dưới
-
-## 7. Build các package nền cho API
-
-API server import một số workspace package từ output `dist`, nên hãy build các package nền trước khi chạy API:
-
-```powershell
-npm run build:storage
-npm run build:redis
-npm run build:queue
-npm run build:database
-```
-
-## 8. Chạy API server
-
-Mở terminal 1 tại `ticket-box-app/`:
-
-```powershell
-npm run dev:api
-```
-
-API mặc định chạy tại: `http://localhost:3000`
-
-Catalog endpoints cần kiểm tra nhanh:
-
-```text
-http://localhost:3000/v1/health
-http://localhost:3000/v1/concerts
-```
-
-Nếu mở `http://localhost:3000` mà thấy lỗi hoặc không có nội dung HTML thì vẫn có thể bình thường, vì API server không phải web page. Hãy dùng `/v1/health` hoặc `/v1/concerts` để smoke test.
-
-## 9. Chạy Web UI
-
-Mở terminal 2 tại `ticket-box-app/`:
-
-```powershell
-npm run dev:web
-```
-
-Web UI chạy tại: `http://localhost:3001`
-
-Nếu port `3001` đang bận, có thể là `http://localhost:3002`
-
-## 10. Chạy Notification Worker
-
-Worker xử lý job nền (gửi email OTP, notification SENT/FAILED). **Auth OTP và notification sẽ không hoạt động nếu worker không chạy.**
-
-Mở terminal 3 tại `ticket-box-app/`:
-
-```powershell
-npm run build:redis
-npm run build:queue
-npm run dev:worker
-```
-
-Worker đọc job từ Redis (BullMQ). Khi đăng ký tài khoản, OTP được đẩy vào queue → worker gửi email (ở môi trường local, email được log ra console của worker — copy mã OTP từ đó).
-
-## 11. Auth & RBAC — luồng và endpoint (Sprint 6)
-
-Tất cả endpoint auth nằm dưới `http://localhost:3000/v1/auth`.
-
-| Method | Endpoint | Role | Ghi chú |
-| --- | --- | --- | --- |
-| `POST` | `/auth/otp/request` | Public | Gửi OTP 6 số tới email (xem console worker). |
-| `POST` | `/auth/register` | Public | Cần `otp` hợp lệ; tạo user `AUDIENCE`. |
-| `POST` | `/auth/login` | Public | Trả `access_token` + `redirect_to` theo role. |
-| `GET` | `/auth/me` | User | Thông tin user hiện tại. |
-| `PATCH` | `/auth/me` | User | Tự sửa `full_name` / `phone`. |
-| `POST` | `/auth/logout` | User | Thu hồi token (Redis denylist). |
-| `PATCH` | `/auth/admin/users/role-by-email` | ADMIN | Đổi role theo email (cấp `ORGANIZER`/`CHECKER`). |
-| `PATCH` | `/auth/admin/users/:user_id/role` | ADMIN | Đổi role theo id. |
-| `PATCH` | `/auth/admin/users/:user_id/status` | ADMIN | Khóa/mở/disable user. |
-
-**`redirect_to` trả về khi login** (client dùng để điều hướng workspace):
-
-| role | redirect_to |
-| --- | --- |
-| `AUDIENCE` | `/` |
-| `ADMIN` | `/admin` |
-| `ORGANIZER` | `/organizer` |
-| `CHECKER` | `/checker` |
-
-### Tài khoản demo (seed)
-
-Seed tạo sẵn 4 tài khoản chính, **tất cả dùng chung mật khẩu `Password@123`** (bcrypt hash thật 12 rounds — login được ngay sau `npm run db:seed`):
-
-| Email | Role | redirect_to |
-| --- | --- | --- |
-| `audience@ticketbox.test` | `AUDIENCE` | `/` |
-| `organizer@ticketbox.test` | `ORGANIZER` | `/organizer` |
-| `checker@ticketbox.test` | `CHECKER` | `/checker` |
-| `admin@ticketbox.test` | `ADMIN` | `/admin` |
-
-Ví dụ login admin (đổi role cho user khác qua `role-by-email` sau khi có token ADMIN):
+Run the main services:
 
 ```bash
-curl -X POST http://localhost:3000/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@ticketbox.test","password":"Password@123"}'
-# → 200 { access_token, redirect_to: "/admin", user, expires_in }
+npm run dev:api
+npm run dev:web
+npm run dev:worker
+npm run dev:payment
 ```
 
-> Mật khẩu demo là hằng `DEMO_PASSWORD` trong `packages/database/prisma/seed.mjs`; đổi rồi chạy lại `npm run db:seed`. Ngoài ra vẫn có thể đăng ký user `AUDIENCE` thật qua OTP: `POST /auth/otp/request` → lấy OTP ở console worker → `POST /auth/register`.
+Run the mobile checker app:
 
-Checker account do Admin **approve hồ sơ** sinh ra (mục 13) dùng bcrypt hash thật nên **login được ngay** bằng password trả về một lần ở response approve.
+```bash
+npm run dev:mobile
+```
 
-## 12. Redis dùng để làm gì
+Default local URLs:
 
-`UPSTASH_REDIS_URL` (local: `redis://localhost:6379`) phục vụ:
-
-- **OTP store**: mã OTP đăng ký (TTL ~5 phút) + cooldown chống spam resend.
-- **JWT denylist**: `jti` của token bị logout/thu hồi (TTL = thời gian sống còn lại của token).
-- **Catalog cache**: cache đọc concert/metadata/inventory; tự invalidate khi sửa concert.
-- **Queue (BullMQ)**: hàng đợi email/notification cho worker.
-
-Kiểm tra Redis sống: `docker compose ps` (service redis) hoặc `redis-cli ping` → `PONG`.
-
-## 13. Luồng Organizer → Admin duyệt (smoke test A5 + A6)
-
-1. **ORGANIZER** nộp hồ sơ: `POST /v1/organizer/requests` (cần token ORGANIZER) → trạng thái `PENDING`.
-2. **ADMIN** xem: `GET /v1/admin/organizer-requests?status=PENDING`.
-3. **ADMIN** duyệt: `POST /v1/admin/organizer-requests/:request_id/approve` → tạo trong **một transaction**: Concert `DRAFT` + seat zones + ticket types + `gate_count` cổng + `checker_count` tài khoản `CHECKER`. **Response trả password checker đúng một lần** — bàn giao ngay.
-4. Checker đăng nhập bằng email/password vừa nhận → `redirect_to: /checker`, check-in được.
-5. **ORGANIZER** xin xóa: `POST /v1/organizer/concerts/:concert_id/deletion-requests`.
-6. **ADMIN** duyệt xóa: `POST /v1/admin/concert-deletion-requests/:request_id/approve` → concert `CANCELLED`, checker của concert tự chuyển `DISABLED` (không login được nữa).
-7. Xem checker theo concert: `GET /v1/admin/concerts/:concert_id/checker-accounts` (không lộ password).
-
-Duyệt lại hồ sơ/yêu cầu đã xử lý → `409 ORGANIZER_REQUEST_NOT_PENDING` / `409 DELETION_REQUEST_NOT_PENDING`.
-
-## 14. Troubleshooting
-
-| Triệu chứng | Nguyên nhân & cách xử lý |
+| Service | URL |
 | --- | --- |
-| Build api đỏ: `Property 'organizerRequest' does not exist on type 'PrismaClient'` / `has no exported member 'ApprovalStatus'` | Prisma Client **chưa generate** sau khi đổi schema. Chạy `npm run db:generate` (hoặc `npm run prisma:generate -w @ticketbox/database`) **trước** khi build. |
-| `pnpm: command not found` | Repo dùng **npm workspaces**, không phải pnpm. Dùng `npm run build`, `npm run dev:api`, … |
-| Tài khoản seed login `401 INVALID_CREDENTIALS` | Chưa chạy lại `npm run db:seed` sau khi cập nhật seed. Mật khẩu demo là `Password@123` (mục 11) — re-seed rồi thử lại. |
-| `PATCH /auth/admin/users/role-by-email` trả `404 USER_NOT_FOUND_BY_EMAIL` | Email không tồn tại trong DB. Kiểm tra chính tả / đã seed chưa. |
-| Đăng ký không nhận được OTP | Worker chưa chạy (mục 10). OTP được log ở console worker, không trả trong response. |
-| `Can't reach database server` | Container Postgres chưa chạy (`docker compose up -d`) hoặc `DATABASE_URL` sai port (5432 vs 5433 — xem mục 2). |
-| Login OK nhưng `redirect_to` sai workspace | Role user chưa đúng — dùng `role-by-email` để cấp `ORGANIZER`/`CHECKER`. |
+| API | `http://localhost:3000/v1` |
+| Web | `http://localhost:3001` |
+| Payment mocks | `http://localhost:4100` |
+| Postgres | `localhost:5433` |
+| Redis | `localhost:6379` |
 
+## Build
+
+Generate Prisma Client before building if the schema changed:
+
+```bash
+npm run db:generate
+npm run build
+```
+
+Verified on 2026-07-04:
+
+- `npm run db:validate`: passed.
+- `npm run db:generate`: passed.
+- `npm run build`: passed after dependencies were synchronized.
+- Web build completed with a warning that the main JS chunk is larger than 500 kB.
+
+## Tests
+
+Run integration tests:
+
+```bash
+npm test -w @ticketbox/tests
+```
+
+The tests require Postgres on `localhost:5433` and Redis on `localhost:6379`.
+
+Current verification result on 2026-07-04:
+
+- Docker Postgres/Redis were running and database migrations/seed completed successfully.
+- `npm test -w @ticketbox/tests`: passed after test cleanup, 1 file / 7 tests.
+- The legacy `tests/inventory` folder was removed because it targeted a module path that no longer exists.
+- The legacy `tests/checkout` folder was removed because it targeted an older checkout flow. The current implementation creates a HELD order first and creates the payment attempt in a separate payment step, while the old tests still expected `createOrder` to return `payment_id` and `checkout_url`.
+- Rewrite checkout tests around the current flow: hold order -> create payment -> webhook success/failure -> ticket issuance or inventory release.
+
+## Deployment
+
+The web app is deployed on Vercel. For Vercel builds, point the project root to:
+
+```text
+ticket-box-app/apps/web
+```
+
+Use the web build command:
+
+```bash
+npm run build
+```
+
+For full-stack deployment, the API server, worker server, Redis, PostgreSQL, payment mocks or payment provider integrations, storage credentials and background workers must be provisioned separately.
+
+## Important Known Gaps
+
+- Notification delivery is still partially mocked/log-based for email, push and SMS providers.
+- Audit logging exists in the schema and in selected flows, but a centralized audit module and admin query API are still missing.
+- Anti-bot protection currently relies mostly on Redis fixed-window rate limiting; captcha, waiting room and bot scoring are not implemented yet.
+- Test coverage is concentrated on ticketing/check-in flows and needs to be expanded to auth, catalog, notification, guest import, AI bio, frontend and mobile.
+- The existing test suite needs environment setup and stale import fixes before it can be used as a reliable CI gate.
+- CI/CD, observability, queue dashboards, structured logs and operational alerts are not yet complete.
+
+## Documentation
+
+Key project documents:
+
+- `blueprint/proposal.md` - problem, goals, users, scope and risks.
+- `blueprint/structure.md` - target modular monolith structure.
+- `blueprint/database-design.md` - database design.
+- `blueprint/design.md` - architecture design.
+- `blueprint/specs/` - feature specs.
+- `blueprint/api-design/` - API contracts.
+- `PROCESS.md` - current progress assessment and recommended next tasks.

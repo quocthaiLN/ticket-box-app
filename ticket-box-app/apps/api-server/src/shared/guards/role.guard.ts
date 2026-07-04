@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { Errors } from "../http/problem-details.js";
 
 export type Role = "AUDIENCE" | "ORGANIZER" | "CHECKER" | "ADMIN";
 
@@ -7,13 +8,7 @@ export function requireRole(...roles: Role[]) {
     const currentRole = res.locals.auth?.role as Role | undefined;
 
     if (!currentRole || !roles.includes(currentRole)) {
-      res.status(403).type("application/problem+json").json({
-        title: "Forbidden",
-        status: 403,
-        code: "FORBIDDEN",
-        detail: "Role is not allowed to access this resource.",
-        request_id: _req.requestId,
-      });
+      next(Errors.forbidden("Role is not allowed to access this resource."));
       return;
     }
 

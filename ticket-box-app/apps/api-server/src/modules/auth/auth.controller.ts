@@ -16,6 +16,18 @@ import { z } from "zod";
 const REFRESH_COOKIE = "refresh_token";
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Production: frontend (Vercel) và API (Render) khác domain nên cookie phải
+// `sameSite: "none"` + `secure` thì browser mới gửi kèm request cross-site.
+// Dev (localhost) dùng `lax` + non-secure để chạy qua http. clearCookie phải
+// dùng đúng options này, nếu không browser sẽ không xóa được cookie.
+const isProd = process.env.NODE_ENV === "production";
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? ("none" as const) : ("lax" as const),
+  path: "/v1/auth",
+};
+
 export async function handleRequestOtp(
   req: Request,
   res: Response,
@@ -83,11 +95,8 @@ export async function handleLogin(
     const { user, tokens } = await authService.login(body);
 
     res.cookie(REFRESH_COOKIE, tokens.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      ...REFRESH_COOKIE_OPTIONS,
       maxAge: COOKIE_MAX_AGE_MS,
-      path: "/v1/auth",
     });
 
     res.status(200).json(
@@ -126,10 +135,10 @@ export async function handleLogout(
   try {
     const token = (req.headers.authorization ?? "").replace("Bearer ", "");
     await authService.logout(token);
-    res.clearCookie(REFRESH_COOKIE, { path: "/v1/auth" });
+    res.clearCookie(REFRESH_COOKIE, REFRESH_COOKIE_OPTIONS);
     res.status(204).send();
   } catch (err) {
-    res.clearCookie(REFRESH_COOKIE, { path: "/v1/auth" });
+    res.clearCookie(REFRESH_COOKIE, REFRESH_COOKIE_OPTIONS);
     next(err);
   }
 }
