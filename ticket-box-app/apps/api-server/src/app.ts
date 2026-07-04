@@ -1,3 +1,4 @@
+import { env } from "@ticketbox/config";
 import cors from "cors";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -28,11 +29,19 @@ export function createApp() {
   const app = express();
   const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 
+  // Origin của frontend production (Vercel) lấy từ WEB_URL để redirect/CORS khớp nhau.
+  const webOrigin = env.web.url.replace(/\/+$/, "");
   app.use(
     cors({
       credentials: true,
       origin(origin, callback) {
-        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+        if (
+          !origin ||
+          origin === webOrigin ||
+          /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) ||
+          /^https:\/\/[a-z0-9-]+\.ngrok-free\.(dev|app)$/.test(origin) ||
+          /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)
+        ) {
           callback(null, true);
           return;
         }
