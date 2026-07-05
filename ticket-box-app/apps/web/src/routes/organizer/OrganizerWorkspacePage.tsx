@@ -424,7 +424,7 @@ function OrganizerDashboardView({
                   </p>
                 </div>
                 <StatusBadge status={concert.status} />
-                <Link to={`/concerts/${concert.id}`} className="shrink-0 rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trang public">
+                <Link to={`/organizer/concerts/${concert.id}/preview`} className="shrink-0 rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
                   <Eye className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -2098,7 +2098,7 @@ function OrganizerConcertCard({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Link to={`/concerts/${concert.id}`} className="rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem public">
+              <Link to={`/organizer/concerts/${concert.id}/preview`} className="rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
                 <Eye className="h-4 w-4" />
               </Link>
               {canEdit && (
@@ -2395,7 +2395,7 @@ function ConcertCard({
           </div>
         </div>
         <div className="flex items-start justify-end gap-2">
-          <Link to={`/concerts/${concert.id}`} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]" title="Mở trang công khai">
+          <Link to={`/organizer/concerts/${concert.id}/preview`} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
             <Eye className="h-4 w-4" />
           </Link>
           {concert.status === "DRAFT" && (

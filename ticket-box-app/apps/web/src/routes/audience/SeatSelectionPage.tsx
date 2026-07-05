@@ -99,7 +99,7 @@ export function SeatSelectionPage() {
 
   if (status === "loading") return <CenteredState text="Đang tải khu vé..." />;
   if (status === "error" || !concert) return <CenteredState text="Không thể tải khu vé." actionLabel="Về danh sách sự kiện" />;
-  if (timeLeft <= 0) return <ExpiredState concertId={concert.id} />;
+  if (timeLeft <= 0) return <ExpiredState concertId={concert.slug} />;
 
   return (
     <main className="min-h-screen bg-[#08080E] pt-16 text-[#F0EDEB]">

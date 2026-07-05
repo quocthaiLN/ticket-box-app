@@ -30,7 +30,8 @@ export type CreateConcertInput = {
   venue_id: string;
   organizer_id?: string;
   title: string;
-  slug: string;
+  // Tùy chọn: nếu bỏ trống, slug sinh từ title; server luôn thêm suffix 5 ký tự cuối concert id.
+  slug?: string;
   description?: string;
   artist_name: string;
   artist_bio?: string;
@@ -139,7 +140,7 @@ export function parseCreateConcertBody(body: unknown): CreateConcertInput {
     venue_id: requiredString(value.venue_id, "venue_id"),
     organizer_id: asOptionalString(value.organizer_id),
     title: requiredString(value.title, "title"),
-    slug: requiredString(value.slug, "slug"),
+    slug: asOptionalString(value.slug),
     description: asOptionalString(value.description),
     artist_name: requiredString(value.artist_name, "artist_name"),
     artist_bio: asOptionalString(value.artist_bio),

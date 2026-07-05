@@ -240,9 +240,9 @@ export function AdminHomePage() {
                   </div>
                   <StatusChip status={concert.status} />
                   <Link
-                    to={`/concerts/${concert.id}`}
+                    to={`/admin/concerts/${concert.id}/preview`}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]"
-                    title="Mở trang công khai"
+                    title="Xem trước"
                   >
                     <Eye className="h-4 w-4" />
                   </Link>

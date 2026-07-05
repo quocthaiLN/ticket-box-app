@@ -255,6 +255,7 @@ async function seedUsers() {
     ["audience", "audience@gmail.com", "Khán giả 1", "+84900000001", "AUDIENCE"],
     ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
     ["organizerTwo", "organizer2@gmail.com", "BTC 2", "+84900000007", "ORGANIZER"],
+    ["checker", "checker@gmail.com", "Nhân viên soát vé Demo", "+84900000003", "CHECKER"],
     ["admin", "admin@gmail.com", "Quản trị viên Demo", "+84900000004", "ADMIN"],
     ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],

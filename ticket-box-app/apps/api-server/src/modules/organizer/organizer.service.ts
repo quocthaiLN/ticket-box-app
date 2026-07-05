@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
 import { extractDriveFolderId } from "../../shared/utils/drive.js";
+import { buildConcertSlug } from "../../shared/utils/slug.js";
 import {
   OrganizerRepository,
   toConcertUpdateData,
@@ -132,7 +133,13 @@ export class OrganizerService {
       throw venueNotFound(input.venue_id);
     }
 
-    return this.repository.updateDraftConcert(concertId, toConcertUpdateData(input));
+    // Đổi tên khi DRAFT: slug sinh lại theo title mới + suffix id, không cần redirect.
+    const data = toConcertUpdateData(input);
+    if (input.title) {
+      data.slug = buildConcertSlug(input.title, concertId);
+    }
+
+    return this.repository.updateDraftConcert(concertId, data);
   }
 
   // Gán/sửa thư mục Drive khách mời. Cho phép mọi trạng thái concert, nhưng chỉ

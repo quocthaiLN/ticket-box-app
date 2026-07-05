@@ -17,6 +17,7 @@ import { SeatSelectionPage } from "./routes/audience/SeatSelectionPage";
 import { CheckerPage } from "./routes/checker/CheckerPage";
 import { PaymentResultPage } from "./routes/payment/PaymentResultPage";
 import { OrganizerWorkspacePage } from "./routes/organizer/OrganizerWorkspacePage";
+import { ConcertPreviewPage } from "./routes/preview/ConcertPreviewPage";
 import "./styles/globals.css";
 
 const router = createBrowserRouter([
@@ -75,6 +76,14 @@ const router = createBrowserRouter([
       {
         path: "admin/guest-list",
         element: <AdminGuestListPage />
+      },
+      {
+        path: "admin/concerts/:concertId/preview",
+        element: <ConcertPreviewPage role="admin" />
+      },
+      {
+        path: "organizer/concerts/:concertId/preview",
+        element: <ConcertPreviewPage role="organizer" />
       },
       {
         path: "organizer",

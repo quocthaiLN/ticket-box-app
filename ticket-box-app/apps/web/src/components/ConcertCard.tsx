@@ -20,7 +20,7 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
 
   return (
     <Link
-      to={`/concerts/${concert.id}`}
+      to={`/concerts/${concert.slug}`}
       className="group block overflow-hidden rounded-2xl bg-[#111118] transition-all duration-300 hover:-translate-y-1 hover:border-amber-300/30 hover:shadow-2xl hover:shadow-black/40"
       style={{ border: "1px solid rgba(255,255,255,0.07)" }}
     >

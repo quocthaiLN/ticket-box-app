@@ -91,6 +91,23 @@ export class CatalogRepository {
     return concert ? mapConcertMetadata(concert) : null;
   }
 
+  // Admin preview: không lọc status để xem được cả concert DRAFT.
+  async getConcertMetadataAnyStatus(concertId: string): Promise<ConcertMetadataDto | null> {
+    const concert = await prisma.concert.findFirst({
+      where: buildConcertIdentityFilter(concertId),
+      include: {
+        venue: true,
+        seatZones: { orderBy: { sortOrder: "asc" } },
+        ticketTypes: {
+          include: { seatZone: true },
+          orderBy: { price: "asc" }
+        }
+      }
+    });
+
+    return concert ? mapConcertMetadata(concert) : null;
+  }
+
   async getSeatMap(concertId: string): Promise<SeatMapDto | null> {
     const concert = await prisma.concert.findFirst({
       where: {
@@ -243,6 +260,7 @@ export class CatalogRepository {
   }
 
   async createConcert(input: {
+    id?: string;
     venueId: string;
     organizerId: string;
     title: string;

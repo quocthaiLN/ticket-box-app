@@ -114,6 +114,15 @@ export class CatalogController {
     }
   };
 
+  // Admin preview: metadata đầy đủ (kể cả DRAFT), không cache public.
+  getAdminConcertMetadata = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json(ok(await this.service.getAdminMetadata(req.params.concert_id), req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
   // ── Admin write endpoints ──────────────────────────────────────────────────
 
   createVenue = async (req: Request, res: Response, next: NextFunction) => {

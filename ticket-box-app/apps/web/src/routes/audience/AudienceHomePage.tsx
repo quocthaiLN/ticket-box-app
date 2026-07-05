@@ -99,7 +99,7 @@ export function AudienceHomePage() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <Link
-                  to={`/concerts/${featured.id}`}
+                  to={`/concerts/${featured.slug}`}
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/30 transition-transform hover:scale-105"
                 >
                   Mua vé ngay
@@ -121,7 +121,7 @@ export function AudienceHomePage() {
                 {concerts.slice(1, 4).map((concert) => (
                   <Link
                     key={concert.id}
-                    to={`/concerts/${concert.id}`}
+                    to={`/concerts/${concert.slug}`}
                     className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#111118]/80 px-4 py-3 backdrop-blur transition-colors hover:bg-white/10"
                   >
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">

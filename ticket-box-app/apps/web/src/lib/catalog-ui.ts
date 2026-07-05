@@ -66,7 +66,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
 
   return {
     id: concert.id,
-    slug: concert.id,
+    slug: concert.slug || concert.id,
     title: concert.title,
     artistName: concert.artist_name,
     description: toDescriptionExcerpt(concert.description),
@@ -138,7 +138,7 @@ export function mapDetailConcert(
 
   return {
     id: concert.id,
-    slug: concert.id,
+    slug: concert.slug || concert.id,
     title: concert.title,
     artistName: concert.artist_name,
     description: concert.description ?? "Concert details are being updated.",

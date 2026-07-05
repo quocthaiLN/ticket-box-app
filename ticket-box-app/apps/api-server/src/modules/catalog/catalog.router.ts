@@ -16,6 +16,7 @@ catalogRouter.get("/concerts/:concert_id/ticket-types", controller.listTicketTyp
 catalogRouter.get("/concerts/:concert_id/inventory", controller.getInventory);
 
 catalogRouter.get("/admin/concerts", ...adminOnly, controller.listAdminConcerts);
+catalogRouter.get("/admin/concerts/:concert_id/metadata", ...adminOnly, controller.getAdminConcertMetadata);
 catalogRouter.patch("/admin/concerts/:concert_id", ...adminOnly, controller.updateConcert);
 catalogRouter.post("/admin/concerts/:concert_id/publish", ...adminOnly, controller.publishConcert);
 catalogRouter.post("/admin/concerts/:concert_id/cancel", ...adminOnly, controller.cancelConcert);

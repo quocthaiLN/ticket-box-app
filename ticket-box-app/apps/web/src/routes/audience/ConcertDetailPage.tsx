@@ -32,7 +32,6 @@ export function ConcertDetailPage() {
   const navigate = useNavigate();
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
-  const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
@@ -63,13 +62,6 @@ export function ConcertDetailPage() {
     return <CenteredState text="Không thể tải chi tiết concert." actionLabel="Về trang chủ" />;
   }
 
-  const hasAvailableTickets = concert.ticketTypes.some((ticketType) => {
-    const available = ticketType.availableQuantity;
-    return ticketType.status === "ON_SALE" && (available === null || available > 0);
-  });
-  const startTime = new Date(concert.startsAt);
-  const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
-
   function handleBuyTickets() {
     const currentConcert = concert;
     if (!currentConcert) return;
@@ -89,8 +81,42 @@ export function ConcertDetailPage() {
       venueName: currentConcert.venue.name,
       startsAt: currentConcert.startsAt,
     });
-    navigate(`/concerts/${currentConcert.id}/seats`);
+    // URL người dùng dùng slug; checkout nội bộ vẫn dùng concert.id đã resolve.
+    navigate(`/concerts/${currentConcert.slug}/seats`);
   }
+
+  return (
+    <>
+      <ConcertDetailView concert={concert} onBuyTickets={handleBuyTickets} />
+      {showLoginPrompt && (
+        <LoginPrompt concertSlug={concert.slug} onClose={() => setShowLoginPrompt(false)} />
+      )}
+    </>
+  );
+}
+
+type ConcertDetailViewProps = {
+  concert: UiConcert;
+  onBuyTickets?: () => void;
+  // Preview Admin/Organizer: khóa nút mua vé bất kể tồn kho.
+  buyDisabledOverride?: boolean;
+  buyLabel?: string;
+};
+
+export function ConcertDetailView({
+  concert,
+  onBuyTickets,
+  buyDisabledOverride = false,
+  buyLabel = "Mua vé",
+}: ConcertDetailViewProps) {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
+  const hasAvailableTickets = concert.ticketTypes.some((ticketType) => {
+    const available = ticketType.availableQuantity;
+    return ticketType.status === "ON_SALE" && (available === null || available > 0);
+  });
+  const startTime = new Date(concert.startsAt);
+  const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
 
   return (
     <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -329,11 +355,11 @@ export function ConcertDetailPage() {
             <div className="px-4 pb-4">
               <button
                 type="button"
-                disabled={!hasAvailableTickets}
-                onClick={handleBuyTickets}
+                disabled={buyDisabledOverride || !hasAvailableTickets}
+                onClick={onBuyTickets}
                 className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Mua vé
+                {buyLabel}
               </button>
             </div>
 
@@ -345,13 +371,6 @@ export function ConcertDetailPage() {
           </div>
         </aside>
       </div>
-
-      {showLoginPrompt && (
-        <LoginPrompt
-          concertId={concert.id}
-          onClose={() => setShowLoginPrompt(false)}
-        />
-      )}
     </div>
   );
 }
@@ -465,9 +484,9 @@ function SeatMapVisualization({ zones }: { zones: { id: string; name: string; co
   );
 }
 
-function LoginPrompt({ concertId, onClose }: { concertId: string; onClose: () => void }) {
+function LoginPrompt({ concertSlug, onClose }: { concertSlug: string; onClose: () => void }) {
   function rememberRedirect() {
-    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertId}`);
+    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertSlug}`);
   }
 
   return (

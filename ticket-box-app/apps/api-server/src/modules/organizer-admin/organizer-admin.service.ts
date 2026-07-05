@@ -1,5 +1,6 @@
-import { randomInt } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { Errors } from "../../shared/http/problem-details.js";
+import { buildConcertSlug } from "../../shared/utils/slug.js";
 import { hashPassword } from "../auth/auth.utils.js";
 import {
   OrganizerAdminRepository,
@@ -41,12 +42,14 @@ export class OrganizerAdminService {
 
     const ticketTypes = parseStoredTicketTypes(request.ticket_types);
     const zones = computeZones(ticketTypes);
-    const slug = `${slugify(request.title)}-${randomSuffix()}`;
+    const concertId = randomUUID();
+    const slug = buildConcertSlug(request.title, concertId);
     const checkers = await buildCheckers(request.checker_count, slug, request.title);
 
     return this.repository.approveRequest({
       requestId,
       adminId,
+      concertId,
       slug,
       zones,
       ticketTypes,
@@ -136,28 +139,6 @@ async function buildCheckers(
     });
   }
   return checkers;
-}
-
-function slugify(title: string): string {
-  const base = title
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return base.length > 0 ? base : "concert";
-}
-
-function randomSuffix(): string {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let suffix = "";
-  for (let i = 0; i < 4; i++) {
-    suffix += alphabet[randomInt(alphabet.length)];
-  }
-  return suffix;
 }
 
 /** Mật khẩu ngẫu nhiên mạnh — chỉ trả về một lần ở response approve. */

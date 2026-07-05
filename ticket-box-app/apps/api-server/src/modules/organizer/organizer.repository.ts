@@ -187,6 +187,7 @@ export type OrganizerGuestDto = {
 type UpdateConcertData = Partial<{
   venueId: string;
   title: string;
+  slug: string;
   description: string | null;
   artistName: string;
   artistBio: string | null;

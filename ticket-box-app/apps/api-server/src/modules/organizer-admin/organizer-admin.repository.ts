@@ -114,6 +114,8 @@ export type ProvisionChecker = {
 export type ApproveProvisionInput = {
   requestId: string;
   adminId: string;
+  // Id sinh trước ở service để slug mang suffix 5 ký tự cuối của id.
+  concertId: string;
   slug: string;
   zones: ProvisionZone[];
   ticketTypes: StoredTicketType[];
@@ -175,6 +177,7 @@ export class OrganizerAdminRepository {
 
       const concert = await tx.concert.create({
         data: {
+          id: input.concertId,
           venueId: request.venueId,
           organizerId: request.organizerId,
           title: request.title,
