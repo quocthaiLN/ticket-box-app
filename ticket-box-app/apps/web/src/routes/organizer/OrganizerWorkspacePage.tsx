@@ -45,9 +45,7 @@ import {
   listOrganizerVenues,
   normalizeTicketTypes,
   updateOrganizerConcert,
-  uploadOrganizerCoverImage,
   uploadOrganizerPressKit,
-  uploadOrganizerArtistImage,
   type ApprovalStatus,
   type CreateOrganizerRequestInput,
   type CreateOrganizerSeatZoneInput,
@@ -710,7 +708,6 @@ function NewRequestForm({
         </div>
       </div>
       <div className="p-5">
-      {error && <Message text={error} error />}
       <div className="grid gap-3 md:grid-cols-2">
         <Field name="title" label="Tên concert" required />
         <Field name="artist_name" label="Nghệ sĩ / lineup" required />
@@ -748,6 +745,8 @@ function NewRequestForm({
           Hủy
         </button>
       </div>
+      {/* Báo lỗi đặt ngay dưới nút nộp để thấy ngay khi submit thất bại. */}
+      {error && <div className="mt-4"><Message text={error} error /></div>}
       </div>
     </form>
   );
@@ -818,18 +817,12 @@ function TabbedNewRequestForm({
   ];
 
   // Giữ File đã chọn; CHỈ upload lên Supabase khi bấm "Nộp hồ sơ" (tránh tạo file rác).
+  // Ảnh concert + ảnh nghệ sĩ không upload riêng nữa — hệ thống tách từ press kit
+  // (quy ước: ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).
   const [pressKitFile, setPressKitFile] = useState<File | null>(null);
-  const [artistImageFile, setArtistImageFile] = useState<File | null>(null);
-  const [artistImagePreview, setArtistImagePreview] = useState("");
 
   function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
     setPressKitFile(event.target.files?.[0] ?? null);
-  }
-
-  function handleArtistImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setArtistImageFile(file);
-    setArtistImagePreview(file ? URL.createObjectURL(file) : "");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -875,12 +868,8 @@ function TabbedNewRequestForm({
 
       // Upload file MỘT LẦN tại đây (sau khi form đã hợp lệ) → mỗi lần nộp đúng 1 file.
       let pressKitUrl: string | undefined;
-      let artistBioImageUrl: string | undefined;
       if (pressKitFile) {
         pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
-      }
-      if (artistImageFile) {
-        artistBioImageUrl = (await uploadOrganizerArtistImage(artistImageFile)).url;
       }
 
       await onSubmit({
@@ -894,7 +883,6 @@ function TabbedNewRequestForm({
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
         press_kit_url: pressKitUrl,
-        artist_bio_image_url: artistBioImageUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -960,8 +948,6 @@ function TabbedNewRequestForm({
           </button>
         </div>
       </div>
-
-      {error && <Message text={error} error />}
 
       <div className="flex flex-wrap gap-1 border-b border-white/[0.08]">
         {sections.map((section) => (
@@ -1029,24 +1015,10 @@ function TabbedNewRequestForm({
                     <input type="file" accept="application/pdf" className="hidden" onChange={handlePressKitChange} />
                   </label>
                   {pressKitFile ? (
-                    <p className="text-xs text-[#2DBE6C]">✓ {pressKitFile.name} — sẽ tải lên khi nộp; AI tự sinh bio từ file này.</p>
+                    <p className="text-xs text-[#2DBE6C]">✓ {pressKitFile.name} — sẽ tải lên khi nộp; AI tự sinh giới thiệu concert + bio nghệ sĩ và tách ảnh từ file này.</p>
                   ) : (
-                    <p className="text-xs text-[#8585A0]">Tải PDF hồ sơ/press kit để hệ thống tự sinh bio nghệ sĩ (không bắt buộc).</p>
+                    <p className="text-xs text-[#8585A0]">Tải PDF press kit: hệ thống tự sinh giới thiệu concert + bio nghệ sĩ và tách ảnh (ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).</p>
                   )}
-                </div>
-              </EditorRow>
-              <EditorRow label="Ảnh nghệ sĩ (hiển thị cùng bio)">
-                <div className="flex items-center gap-3">
-                  {artistImagePreview ? (
-                    <img src={artistImagePreview} alt="Ảnh nghệ sĩ" className="h-16 w-16 rounded-lg object-cover" />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-white/15 text-xs text-[#8585A0]">Ảnh</div>
-                  )}
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
-                    <Upload className="h-4 w-4" />
-                    {artistImageFile ? "Đổi ảnh" : "Chọn ảnh"}
-                    <input type="file" accept="image/*" className="hidden" onChange={handleArtistImageChange} />
-                  </label>
                 </div>
               </EditorRow>
               <EditorRow label="Mô tả">
@@ -1135,6 +1107,9 @@ function TabbedNewRequestForm({
           Hủy
         </button>
       </div>
+
+      {/* Báo lỗi đặt NGAY DƯỚI nút nộp để người dùng thấy ngay, không phải cuộn lên đầu form. */}
+      {error && <Message text={error} error />}
     </form>
   );
 }
@@ -1479,8 +1454,6 @@ function OrganizerConcertEditor({
     concert.status === "PUBLISHED" ? "guests" : "basic",
   );
   const [submitting, setSubmitting] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [coverUploadError, setCoverUploadError] = useState("");
   const [zoneError, setZoneError] = useState("");
   const [ticketError, setTicketError] = useState("");
   const [form, setForm] = useState({
@@ -1552,23 +1525,6 @@ function OrganizerConcertEditor({
       });
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleCoverUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    setCoverUploadError("");
-    setCoverUploading(true);
-    try {
-      const upload = await uploadOrganizerCoverImage(file);
-      setForm((current) => ({ ...current, coverImageUrl: upload.url }));
-    } catch (err) {
-      setCoverUploadError(err instanceof Error ? err.message : "Không thể upload ảnh bìa.");
-    } finally {
-      setCoverUploading(false);
     }
   }
 
@@ -1784,26 +1740,8 @@ function OrganizerConcertEditor({
                 </select>
               </EditorRow>
               <EditorRow label="Ảnh bìa (URL)">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
-                  <label
-                    className="inline-flex min-h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#7B61FF]/25 bg-[#7B61FF]/10 text-[#B8AAFF] transition-colors hover:bg-[#7B61FF]/15"
-                    title={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
-                    aria-label={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
-                  >
-                    {coverUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      className="hidden"
-                      disabled={coverUploading}
-                      onChange={(event) => void handleCoverUpload(event)}
-                    />
-                  </label>
-                </div>
-                {coverUploadError && (
-                  <p className="mt-2 text-xs text-[#E8315B]">{coverUploadError}</p>
-                )}
+                {/* Ảnh bìa lấy tự động từ press kit (ảnh trang 1); ô URL chỉ là phương án chữa cháy. */}
+                <input className={editorInputClass} style={editorInputStyle} placeholder="Tự tách từ press kit — chỉ nhập URL khi cần thay thế" value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
                 {form.coverImageUrl && (
                   <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
                     <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />

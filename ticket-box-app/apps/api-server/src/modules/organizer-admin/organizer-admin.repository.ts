@@ -50,6 +50,7 @@ export type AdminRequestDetailDto = AdminRequestSummaryDto & {
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
+  artists?: Prisma.JsonValue | null;
   ticket_types: unknown;
   review_note?: string;
   reviewed_by?: string | null;
@@ -185,7 +186,12 @@ export class OrganizerAdminRepository {
           description: request.description ?? undefined,
           artistName: request.artistName,
           artistBio: request.artistBio ?? undefined, // mang bio AI (sinh từ press kit) vào concert
-          artistBioImageUrl: request.artistBioImageUrl ?? undefined, // ảnh nghệ sĩ BTC đã gắn ở hồ sơ
+          artistBioImageUrl: request.artistBioImageUrl ?? undefined, // ảnh nghệ sĩ tách từ press kit
+          coverImageUrl: request.coverImageUrl ?? undefined, // ảnh concert tách từ press kit (trang 1)
+          // Danh sách nghệ sĩ AI tách từ press kit — mang nguyên sang concert.
+          ...(request.artists !== null
+            ? { artists: request.artists as Prisma.InputJsonValue }
+            : {}),
           startsAt: request.startsAt,
           endsAt: request.endsAt,
           plannedPublishAt: request.plannedPublishAt ?? undefined,
@@ -539,6 +545,7 @@ function mapRequestDetail(
     artist_bio: request.artistBio ?? null,
     bio_status: request.bioStatus ?? null,
     artist_bio_image_url: request.artistBioImageUrl ?? null,
+    artists: request.artists ?? null,
     ticket_types: request.ticketTypes,
     review_note: request.reviewNote ?? undefined,
     reviewed_by: request.reviewedById,

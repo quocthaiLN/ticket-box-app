@@ -217,6 +217,11 @@ const concerts = [
 const fixedId = (number) =>
   `00000000-0000-0000-0000-${String(number).padStart(12, "0")}`;
 
+// Đồng bộ quy tắc slug với apps/api-server/src/shared/utils/slug.ts:
+// slug công khai luôn kèm 5 ký tự cuối của concert id để bảo đảm unique.
+const slugWithIdSuffix = (slug, concertId) =>
+  `${slug}-${concertId.replace(/-/g, "").slice(-5)}`;
+
 const zoneId = (concertIndex, zoneIndex) => fixedId(301 + concertIndex * 5 + zoneIndex);
 const gateId = (concertIndex, zoneIndex) => fixedId(401 + concertIndex * 5 + zoneIndex);
 const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex * 5 + ticketIndex);
@@ -298,7 +303,7 @@ async function seedCatalog() {
         venueId: concert.venueId,
         organizerId: userIds.organizer,
         title: concert.title,
-        slug: concert.slug,
+        slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
         artistName: concert.artistName,
         artistBio: concert.artistBio,
@@ -313,7 +318,7 @@ async function seedCatalog() {
         venueId: concert.venueId,
         organizerId: userIds.organizer,
         title: concert.title,
-        slug: concert.slug,
+        slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
         artistName: concert.artistName,
         artistBio: concert.artistBio,

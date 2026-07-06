@@ -3,9 +3,7 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   Clock,
   KeyRound,
   Loader2,
@@ -14,7 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   approveAdminOrganizerRequest,
@@ -44,12 +42,7 @@ export function AdminOrganizerRequestsPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [filter, setFilter] = useState<(typeof statuses)[number]>("all");
   const [requests, setRequests] = useState<AdminOrganizerRequestSummary[]>([]);
-  const [details, setDetails] = useState<Record<string, AdminOrganizerRequestDetail>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [reviewNote, setReviewNote] = useState("");
   const [message, setMessage] = useState("");
-  const [approveResult, setApproveResult] = useState<ApproveOrganizerRequestResult | null>(null);
 
   const canUseAdmin = session?.user.role === "ADMIN";
 
@@ -67,45 +60,6 @@ export function AdminOrganizerRequestsPage() {
     } catch (err) {
       setLoadState("error");
       setMessage(err instanceof Error ? err.message : "Không thể tải hồ sơ ban tổ chức.");
-    }
-  }
-
-  async function toggleRequest(requestId: string) {
-    setExpandedId((current) => (current === requestId ? null : requestId));
-    if (details[requestId]) return;
-    try {
-      const detail = await getAdminOrganizerRequest(requestId);
-      setDetails((current) => ({ ...current, [requestId]: detail }));
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Không thể tải chi tiết hồ sơ.");
-    }
-  }
-
-  async function approve(requestId: string) {
-    setMessage("");
-    setApproveResult(null);
-    try {
-      const result = await approveAdminOrganizerRequest(requestId);
-      setApproveResult(result);
-      setReviewingId(null);
-      setReviewNote("");
-      setMessage("Đã duyệt hồ sơ. Mật khẩu tài khoản soát vé chỉ hiển thị một lần bên dưới.");
-      await reload();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Không thể duyệt hồ sơ.");
-    }
-  }
-
-  async function reject(requestId: string) {
-    setMessage("");
-    try {
-      await rejectAdminOrganizerRequest(requestId, reviewNote);
-      setReviewingId(null);
-      setReviewNote("");
-      setMessage("Đã từ chối hồ sơ.");
-      await reload();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Không thể từ chối hồ sơ.");
     }
   }
 
@@ -136,7 +90,6 @@ export function AdminOrganizerRequestsPage() {
           </div>
 
           {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
-          {approveResult && <CheckerPasswords result={approveResult} />}
 
           <FilterTabs value={filter} pendingCount={pendingCount} onChange={setFilter} />
 
@@ -148,23 +101,7 @@ export function AdminOrganizerRequestsPage() {
               </div>
             )}
             {requests.map((request) => (
-              <RequestReviewCard
-                key={request.id}
-                request={request}
-                detail={details[request.id]}
-                expanded={expandedId === request.id}
-                reviewing={reviewingId === request.id}
-                reviewNote={reviewNote}
-                onToggle={() => toggleRequest(request.id)}
-                onStartReview={() => {
-                  setReviewingId(request.id);
-                  setReviewNote("");
-                }}
-                onCancelReview={() => setReviewingId(null)}
-                onReviewNote={setReviewNote}
-                onApprove={() => approve(request.id)}
-                onReject={() => reject(request.id)}
-              />
+              <RequestRow key={request.id} request={request} />
             ))}
           </section>
       </section>
@@ -172,48 +109,19 @@ export function AdminOrganizerRequestsPage() {
   );
 }
 
-function RequestReviewCard({
-  request,
-  detail,
-  expanded,
-  reviewing,
-  reviewNote,
-  onToggle,
-  onStartReview,
-  onCancelReview,
-  onReviewNote,
-  onApprove,
-  onReject,
-}: {
-  request: AdminOrganizerRequestSummary;
-  detail?: AdminOrganizerRequestDetail;
-  expanded: boolean;
-  reviewing: boolean;
-  reviewNote: string;
-  onToggle: () => void;
-  onStartReview: () => void;
-  onCancelReview: () => void;
-  onReviewNote: (value: string) => void;
-  onApprove: () => Promise<void>;
-  onReject: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+// Dòng hồ sơ: không còn dropdown — hồ sơ đã có concert mở trang concert,
+// còn lại mở trang xem xét hồ sơ riêng (tránh field bị giãn khi nội dung dài).
+function RequestRow({ request }: { request: AdminOrganizerRequestSummary }) {
+  const navigate = useNavigate();
   const requestView = toAdminOrganizerRequestView(request);
-  const detailView = detail ? toAdminOrganizerRequestDetailView(detail) : undefined;
-
-  async function run(action: "approve" | "reject") {
-    setBusy(action);
-    try {
-      await (action === "approve" ? onApprove() : onReject());
-    } finally {
-      setBusy(null);
-    }
-  }
+  const target = request.concert_id
+    ? `/admin/concerts/${request.concert_id}`
+    : `/admin/organizer-requests/${request.id}`;
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
+    <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118] transition-colors hover:border-white/[0.14]">
       <div className="flex items-center gap-4 px-5 py-4">
-        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
+        <button type="button" onClick={() => navigate(target)} className="min-w-0 flex-1 text-left">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <ApprovalBadge status={requestView.status} />
             <span className="text-xs text-[#8585A0]">#{requestView.id}</span>
@@ -227,113 +135,224 @@ function RequestReviewCard({
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {request.status === "PENDING" && (
-            <button
-              type="button"
-              onClick={onStartReview}
+            <Link
+              to={`/admin/organizer-requests/${request.id}`}
               className="rounded-lg bg-[#F5C842] px-3 py-1.5 text-xs font-semibold text-[#0D0D14] transition-transform hover:scale-105"
             >
               Xem xét
-            </button>
+            </Link>
           )}
-          <button type="button" onClick={onToggle} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10" aria-label={expanded ? "Ẩn chi tiết" : "Mở chi tiết"}>
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
+          <Link
+            to={target}
+            className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10"
+            aria-label={request.concert_id ? "Mở trang concert" : "Xem chi tiết hồ sơ"}
+            title={request.concert_id ? "Mở trang concert (Thông tin · Khách mời · Bio)" : "Xem chi tiết hồ sơ"}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
-
-      {expanded && (
-        <div className="border-t border-white/[0.07] px-5 pb-4">
-          {!detailView ? (
-            <p className="pt-4 text-sm text-[#8585A0]">Đang tải chi tiết...</p>
-          ) : (
-            <div className="grid gap-5 pt-4">
-              <section>
-                <div className="mb-5">
-                  <p className="mb-1 text-xs text-[#8585A0]">Mô tả</p>
-                  <p className="max-w-3xl text-sm leading-6 text-[#B0B0C0]">{detailView.description}</p>
-                </div>
-                <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
-                  <DetailItem label="Nghệ sĩ" value={detailView.artistName} />
-                  <DetailItem label="Số cổng check-in" value={`${detailView.gateCount} cổng`} />
-                  <DetailItem label="Số checker" value={`${detailView.checkerCount} người`} />
-                  <DetailItem label="Dự kiến publish" value={detailView.plannedPublishAt ? formatDate(detailView.plannedPublishAt) : "Chưa đặt"} />
-                  <DetailItem label="Press Kit" value={detailView.pressKitLabel} />
-                </div>
-              </section>
-
-              <section>
-                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Giới thiệu nghệ sĩ (AI)</p>
-                <div className="flex flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 sm:flex-row">
-                  {detailView.artistBioImageUrl && (
-                    <img src={detailView.artistBioImageUrl} alt="Ảnh nghệ sĩ" className="h-24 w-24 shrink-0 rounded-lg object-cover" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <BioStatusBadge status={detailView.bioStatus} />
-                    <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[#B0B0C0]">
-                      {detailView.artistBio || bioStatusHint(detailView.bioStatus)}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <p className="mb-2 text-xs font-semibold text-[#F0EDEB]">Loại vé đề xuất</p>
-                <div className="space-y-2">
-                {normalizeTicketTypes(detailView.ticketTypes).map((ticket) => (
-                  <div
-                    key={`${ticket.zone_code}-${ticket.name}`}
-                    className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
-                      <p className="mt-0.5 text-xs text-[#8585A0]">Capacity: {ticket.zone_capacity.toLocaleString("vi-VN")}</p>
-                    </div>
-                    <div className="shrink-0 text-left sm:text-right">
-                      <p className="text-xs font-semibold text-[#F5C842]">{formatMoney(ticket.price.amount)}</p>
-                      <p className="text-xs text-[#8585A0]">{ticket.total_quantity.toLocaleString("vi-VN")} vé - max {ticket.max_per_user}/người</p>
-                    </div>
-                  </div>
-                ))}
-                </div>
-              </section>
-
-              {detailView.reviewNote !== "Chưa có ghi chú" && (
-                <section className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
-                  <p className="mb-1 text-xs font-semibold text-[#8585A0]">Ghi chú review</p>
-                  <p className="text-xs text-[#B0B0C0]">{detailView.reviewNote}</p>
-                </section>
-              )}
-              </div>
-          )}
-        </div>
-      )}
-
-      {reviewing && (
-        <div className="border-t border-[#F5C842]/20 bg-[#F5C842]/[0.04] p-5">
-          <div className="mb-3 flex gap-3 rounded-xl border border-[#F5C842]/20 bg-[#F5C842]/[0.06] p-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#F5C842]" />
-            <p className="text-xs text-[#B0B0C0]">Duyệt hồ sơ sẽ tạo concert bản nháp, zone, loại vé, cổng và tài khoản soát vé trong một transaction.</p>
-          </div>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#8585A0]">
-            Ghi chú khi từ chối
-            <textarea value={reviewNote} onChange={(event) => onReviewNote(event.target.value)} className={inputClass} style={inputStyle} />
-          </label>
-          <div className="mt-3 flex flex-wrap gap-3">
-            <button type="button" disabled={busy !== null} onClick={() => run("approve")} className="inline-flex items-center gap-2 rounded-lg border border-[#2DBE6C]/30 bg-[#2DBE6C]/15 px-4 py-2.5 text-sm font-semibold text-[#2DBE6C]">
-              {busy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Duyệt
-            </button>
-            <button type="button" disabled={busy !== null} onClick={() => run("reject")} className="inline-flex items-center gap-2 rounded-lg border border-[#E8315B]/30 bg-[#E8315B]/15 px-4 py-2.5 text-sm font-semibold text-[#E8315B]">
-              {busy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-              Từ chối
-            </button>
-            <button type="button" onClick={onCancelReview} className="rounded-lg border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
-              Hủy
-            </button>
-          </div>
-        </div>
-      )}
     </article>
+  );
+}
+
+// Trang xem xét hồ sơ riêng: /admin/organizer-requests/:requestId
+export function AdminOrganizerRequestReviewPage() {
+  const { requestId } = useParams<{ requestId: string }>();
+  const session = getStoredAuthSession();
+  const canUseAdmin = session?.user.role === "ADMIN";
+
+  const [detail, setDetail] = useState<AdminOrganizerRequestDetail | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [reviewNote, setReviewNote] = useState("");
+  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const [message, setMessage] = useState("");
+  const [approveResult, setApproveResult] = useState<ApproveOrganizerRequestResult | null>(null);
+
+  useEffect(() => {
+    if (!canUseAdmin || !requestId) return;
+    let mounted = true;
+    setLoadState("loading");
+    getAdminOrganizerRequest(requestId)
+      .then((data) => {
+        if (!mounted) return;
+        setDetail(data);
+        setLoadState("ready");
+      })
+      .catch(() => {
+        if (mounted) setLoadState("error");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [canUseAdmin, requestId]);
+
+  if (!canUseAdmin) {
+    return <AdminAccessState role={session?.user.role} />;
+  }
+
+  async function run(action: "approve" | "reject") {
+    if (!requestId) return;
+    setBusy(action);
+    setMessage("");
+    try {
+      if (action === "approve") {
+        const result = await approveAdminOrganizerRequest(requestId);
+        setApproveResult(result);
+        setMessage("Đã duyệt hồ sơ. Mật khẩu tài khoản soát vé chỉ hiển thị một lần bên dưới.");
+      } else {
+        await rejectAdminOrganizerRequest(requestId, reviewNote);
+        setMessage("Đã từ chối hồ sơ.");
+      }
+      const refreshed = await getAdminOrganizerRequest(requestId);
+      setDetail(refreshed);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Thao tác thất bại.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const detailView = detail ? toAdminOrganizerRequestDetailView(detail) : undefined;
+
+  return (
+    <AdminShell>
+      <section className="mx-auto max-w-6xl">
+        <Link to="/admin/organizer-requests" className="mb-4 inline-flex items-center gap-1 text-sm text-[#8585A0] hover:text-[#F0EDEB]">
+          ← Về danh sách hồ sơ
+        </Link>
+
+        {loadState === "loading" && <LoadingState />}
+        {loadState === "error" && <Message text="Không tải được chi tiết hồ sơ." error />}
+
+        {detailView && (
+          <>
+            <div className="mb-6">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <ApprovalBadge status={detailView.status} />
+                <span className="text-xs text-[#8585A0]">#{detailView.id}</span>
+              </div>
+              <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                {detailView.title}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
+                <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{detailView.organizerLabel}</span>
+                <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{detailView.venueLabel}</span>
+                <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(detailView.startsAt)}</span>
+              </div>
+            </div>
+
+            {message && <Message text={message} error={message.includes("thất bại") || message.includes("Không")} />}
+            {approveResult && <CheckerPasswords result={approveResult} />}
+            {detailView.concertId && (
+              <Link
+                to={`/admin/concerts/${detailView.concertId}`}
+                className="mb-5 inline-flex w-fit items-center gap-2 rounded-lg border border-[#F5C842]/25 bg-[#F5C842]/10 px-3 py-2 text-xs font-semibold text-[#F5C842] hover:bg-[#F5C842]/15"
+              >
+                Mở trang concert (Thông tin · Khách mời · Bio) →
+              </Link>
+            )}
+
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              {/* Cột trái: thông tin hồ sơ + loại vé */}
+              <div className="space-y-5">
+                <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+                  <p className="mb-2 text-sm font-semibold text-[#F5C842]">Giới thiệu concert (mô tả / AI sinh từ press kit)</p>
+                  <p className="whitespace-pre-line text-sm leading-6 text-[#B0B0C0]">{detailView.description}</p>
+                  <div className="mt-5 grid gap-3 border-t border-white/[0.06] pt-4 sm:grid-cols-2">
+                    <DetailItem label="Nghệ sĩ" value={detailView.artistName} />
+                    <DetailItem label="Số cổng check-in" value={`${detailView.gateCount} cổng`} />
+                    <DetailItem label="Số checker" value={`${detailView.checkerCount} người`} />
+                    <DetailItem label="Dự kiến publish" value={detailView.plannedPublishAt ? formatDate(detailView.plannedPublishAt) : "Chưa đặt"} />
+                  </div>
+                  <div className="mt-3">
+                    <DetailItem label="Press Kit" value={detailView.pressKitLabel} />
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+                  <p className="mb-3 text-sm font-semibold text-[#F0EDEB]">Loại vé đề xuất</p>
+                  <div className="space-y-2">
+                    {normalizeTicketTypes(detailView.ticketTypes).map((ticket) => (
+                      <div
+                        key={`${ticket.zone_code}-${ticket.name}`}
+                        className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
+                          <p className="mt-0.5 text-xs text-[#8585A0]">Capacity: {ticket.zone_capacity.toLocaleString("vi-VN")}</p>
+                        </div>
+                        <div className="shrink-0 text-left sm:text-right">
+                          <p className="text-xs font-semibold text-[#F5C842]">{formatMoney(ticket.price.amount)}</p>
+                          <p className="text-xs text-[#8585A0]">{ticket.total_quantity.toLocaleString("vi-VN")} vé - max {ticket.max_per_user}/người</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {detailView.reviewNote !== "Chưa có ghi chú" && (
+                  <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+                    <p className="mb-1 text-xs font-semibold text-[#8585A0]">Ghi chú review</p>
+                    <p className="text-sm text-[#B0B0C0]">{detailView.reviewNote}</p>
+                  </section>
+                )}
+              </div>
+
+              {/* Cột phải: bio nghệ sĩ + hành động duyệt */}
+              <div className="space-y-5">
+                <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+                  <p className="mb-3 text-sm font-semibold text-[#F0EDEB]">
+                    Giới thiệu nghệ sĩ (AI){detailView.artists.length > 1 ? ` — ${detailView.artists.length} nghệ sĩ` : ""}
+                  </p>
+                  <BioStatusBadge status={detailView.bioStatus} />
+                  <div className="mt-3 space-y-4">
+                    {detailView.artists.map((artist, index) => (
+                      <div key={`${artist.name}-${index}`} className="border-t border-white/[0.06] pt-4 first:border-t-0 first:pt-0">
+                        {artist.imageUrl ? (
+                          <img src={artist.imageUrl} alt={artist.name} className="mb-2 h-28 w-28 rounded-lg object-cover" />
+                        ) : (
+                          <div className="mb-2 flex h-28 w-28 items-center justify-center rounded-lg border border-dashed border-white/15 text-xs text-[#8585A0]">
+                            Chưa có ảnh
+                          </div>
+                        )}
+                        <p className="text-xs font-semibold text-[#F0EDEB]">{artist.name}</p>
+                        <p className="mt-1 whitespace-pre-line text-xs leading-5 text-[#B0B0C0]">
+                          {artist.bio || bioStatusHint(detailView.bioStatus)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {detailView.status === "PENDING" && !approveResult && (
+                  <section className="rounded-2xl border border-[#F5C842]/20 bg-[#F5C842]/[0.04] p-5">
+                    <div className="mb-3 flex gap-3 rounded-xl border border-[#F5C842]/20 bg-[#F5C842]/[0.06] p-3">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#F5C842]" />
+                      <p className="text-xs text-[#B0B0C0]">Duyệt hồ sơ sẽ tạo concert bản nháp, zone, loại vé, cổng và tài khoản soát vé trong một transaction.</p>
+                    </div>
+                    <label className="grid gap-1.5 text-xs font-semibold text-[#8585A0]">
+                      Ghi chú khi từ chối
+                      <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} className={inputClass} style={inputStyle} />
+                    </label>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <button type="button" disabled={busy !== null} onClick={() => void run("approve")} className="inline-flex items-center gap-2 rounded-lg border border-[#2DBE6C]/30 bg-[#2DBE6C]/15 px-4 py-2.5 text-sm font-semibold text-[#2DBE6C]">
+                        {busy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        Duyệt
+                      </button>
+                      <button type="button" disabled={busy !== null} onClick={() => void run("reject")} className="inline-flex items-center gap-2 rounded-lg border border-[#E8315B]/30 bg-[#E8315B]/15 px-4 py-2.5 text-sm font-semibold text-[#E8315B]">
+                        {busy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                        Từ chối
+                      </button>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+    </AdminShell>
   );
 }
 

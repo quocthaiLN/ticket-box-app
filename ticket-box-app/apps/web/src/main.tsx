@@ -4,9 +4,9 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
 import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
-import { AdminGuestListPage } from "./routes/admin/AdminGuestListPage";
+import { AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
-import { AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
+import { AdminOrganizerRequestReviewPage, AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
 import { AuthPage } from "./routes/auth/AuthPage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
@@ -66,6 +66,10 @@ const router = createBrowserRouter([
         element: <AdminOrganizerRequestsPage />
       },
       {
+        path: "admin/organizer-requests/:requestId",
+        element: <AdminOrganizerRequestReviewPage />
+      },
+      {
         path: "admin/deletion-requests",
         element: <AdminDeletionRequestsPage />
       },
@@ -74,8 +78,8 @@ const router = createBrowserRouter([
         element: <AdminAccountsPage />
       },
       {
-        path: "admin/guest-list",
-        element: <AdminGuestListPage />
+        path: "admin/concerts/:concertId",
+        element: <AdminConcertDetailPage />
       },
       {
         path: "admin/concerts/:concertId/preview",

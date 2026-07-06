@@ -38,6 +38,12 @@ export type UiTicketType = {
   color: string;
 };
 
+export type UiArtist = {
+  name: string;
+  bio: string;
+  imageUrl: string;
+};
+
 export type UiConcert = {
   id: string;
   slug: string;
@@ -46,6 +52,8 @@ export type UiConcert = {
   description: string;
   artistBio: string;
   artistBioImageUrl: string;
+  // Lineup nghệ sĩ: từ cột artists mới; concert cũ → mảng 1 phần tử từ field đơn.
+  artists: UiArtist[];
   startsAt: string;
   endsAt: string;
   status: ConcertSummary["status"];
@@ -72,6 +80,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     description: toDescriptionExcerpt(concert.description),
     artistBio: "",
     artistBioImageUrl: "",
+    artists: [],
     startsAt: concert.starts_at,
     endsAt: concert.ends_at,
     status: concert.status,
@@ -136,14 +145,28 @@ export function mapDetailConcert(
     };
   });
 
+  const artistBio = metadata.artist_bio ?? concert.artist_bio ?? "";
+  const artistBioImageUrl = concert.artist_bio_image_url ?? metadata.artist_bio_image_url ?? "";
+  const rawArtists = concert.artists ?? metadata.artists;
+  // Concert cũ chưa có cột artists → dựng mảng 1 phần tử từ field đơn để UI chỉ render 1 kiểu.
+  const artists: UiArtist[] =
+    rawArtists && rawArtists.length > 0
+      ? rawArtists.map((artist) => ({
+          name: artist.name || concert.artist_name,
+          bio: artist.bio,
+          imageUrl: artist.image_url ?? "",
+        }))
+      : [{ name: concert.artist_name, bio: artistBio, imageUrl: artistBioImageUrl }];
+
   return {
     id: concert.id,
     slug: concert.slug || concert.id,
     title: concert.title,
     artistName: concert.artist_name,
     description: concert.description ?? "Concert details are being updated.",
-    artistBio: metadata.artist_bio ?? concert.artist_bio ?? "",
-    artistBioImageUrl: concert.artist_bio_image_url ?? metadata.artist_bio_image_url ?? "",
+    artistBio,
+    artistBioImageUrl,
+    artists,
     startsAt: concert.starts_at,
     endsAt: concert.ends_at,
     status: concert.status,

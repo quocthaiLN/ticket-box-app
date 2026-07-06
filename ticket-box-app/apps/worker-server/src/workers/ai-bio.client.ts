@@ -13,7 +13,7 @@ const BASE_URL = (process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1").r
 const MODEL = process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
 // Ngân sách token: tiếng Việt ~1 token ≈ 2.5–3.5 ký tự. Giữ vừa phải để hợp free tier.
 const MAX_SOURCE_CHARS = Number(process.env.AI_MAX_SOURCE_CHARS ?? 8000); // input ~2.5–3k token
-const MAX_OUTPUT_TOKENS = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 800); // output ~250–350 từ
+const MAX_OUTPUT_TOKENS = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 2000); // concert bio + n nghệ sĩ (~150-200 từ/người) + khung JSON
 
 export type GenerateBioInput = {
   artistName: string;
@@ -21,30 +21,92 @@ export type GenerateBioInput = {
   sourceText: string;
 };
 
-export async function generateArtistBio(
+export type GeneratedArtist = {
+  name: string;
+  bio: string;
+};
+
+export type GenerateBiosResult = {
+  // Danh sách nghệ sĩ theo ĐÚNG THỨ TỰ xuất hiện trong press kit — luôn có ≥1 phần tử.
+  artists: GeneratedArtist[];
+  // Giới thiệu concert (tab "Thông tin") — có thể rỗng nếu press kit không đủ dữ liệu.
+  concertBio: string;
+  model: string;
+};
+
+export async function generateBios(
   input: GenerateBioInput,
-): Promise<{ bio: string; model: string }> {
+): Promise<GenerateBiosResult> {
   const prioritized = prioritizeText(input.sourceText, MAX_SOURCE_CHARS);
-  return callChatCompletion(buildPrompt({ ...input, sourceText: prioritized }));
+  const { content, model } = await callChatCompletion(
+    buildPrompt({ ...input, sourceText: prioritized }),
+  );
+  const { artists, concertBio } = parseBios(content, input.artistName);
+  return { artists, concertBio, model };
 }
 
-// ── Prompt: phần giới thiệu nghệ sĩ cho trang chi tiết concert ──────────────
+// ── Prompt: press kit chứa thông tin concert + 1..n nghệ sĩ → tách từng phần ─
 function buildPrompt({ artistName, eventTitle, sourceText }: GenerateBioInput) {
-  return `Bạn là biên tập viên giới thiệu nghệ sĩ cho một nền tảng bán vé concert. Dựa CHỈ trên nội dung HỒ SƠ/PRESS KIT dưới đây, viết phần GIỚI THIỆU nghệ sĩ bằng tiếng Việt để hiển thị trên TRANG CHI TIẾT CONCERT.
+  return `Bạn là biên tập viên nội dung cho một nền tảng bán vé concert. HỒ SƠ/PRESS KIT dưới đây chứa thông tin về CONCERT và về MỘT HOẶC NHIỀU NGHỆ SĨ tham gia. Dựa CHỈ trên hồ sơ, viết bằng tiếng Việt:
 
-YÊU CẦU:
-- Độ dài khoảng 150–250 từ, 1–2 đoạn.
+1. "concert_bio": GIỚI THIỆU CONCERT cho tab "Thông tin" — chương trình có gì, chủ đề/không khí đêm diễn, điểm nhấn của sự kiện. Khoảng 100–200 từ. Nếu hồ sơ không có thông tin về concert thì trả chuỗi rỗng "".
+2. "artists": DANH SÁCH NGHỆ SĨ — mỗi nghệ sĩ xuất hiện trong hồ sơ là MỘT phần tử {"name": tên nghệ sĩ/ban nhạc, "bio": giới thiệu 100–200 từ gồm dòng nhạc – phong cách, 1–2 thành tựu nổi bật, điểm khiến khán giả nên xem trực tiếp}.
+
+YÊU CẦU CHUNG:
+- "artists" phải theo ĐÚNG THỨ TỰ nghệ sĩ xuất hiện trong hồ sơ; KHÔNG thêm nghệ sĩ không có trong hồ sơ, KHÔNG gộp nhiều nghệ sĩ vào một phần tử.
 - Giọng văn trang trọng, cuốn hút, hướng tới khán giả đang cân nhắc mua vé.
-- ƯU TIÊN (nếu hồ sơ có): nghệ danh/tên, dòng nhạc – phong cách, 1–2 thành tựu nổi bật (giải thưởng, ca khúc/album đình đám, dấu mốc sự nghiệp), điểm khiến khán giả nên xem trực tiếp.
 - TUYỆT ĐỐI KHÔNG bịa thông tin, số liệu hay giải thưởng không có trong hồ sơ. Thiếu dữ liệu thì viết tổng quát và ngắn hơn.
+- KHÔNG lặp nội dung: thành tựu/sự nghiệp nghệ sĩ để trong bio của nghệ sĩ đó, nội dung chương trình để trong concert_bio.
 - BỎ QUA thông tin hậu cần/liên hệ/tài trợ/điều khoản/giá vé nếu xuất hiện trong hồ sơ.
-- Chỉ trả về đúng đoạn văn giới thiệu (không tiêu đề, không markdown, không gạch đầu dòng).
+- Trả về DUY NHẤT một JSON object dạng {"concert_bio": "...", "artists": [{"name": "...", "bio": "..."}]} — không markdown, không giải thích.
 
-NGHỆ SĨ: ${artistName}
+NGHỆ SĨ/LINEUP THEO HỒ SƠ ĐĂNG KÝ: ${artistName}
 CONCERT: ${eventTitle}
 
 HỒ SƠ / PRESS KIT:
 ${sourceText}`;
+}
+
+// Parse phòng thủ: JSON chuẩn → JSON lồng trong text → format cũ {artist_bio}
+// → fallback cuối coi toàn bộ output là bio của 1 nghệ sĩ (tên theo hồ sơ).
+export function parseBios(
+  content: string,
+  fallbackArtistName: string,
+): { artists: GeneratedArtist[]; concertBio: string } {
+  const candidates = [content, content.match(/\{[\s\S]*\}/)?.[0]];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate) as {
+        concert_bio?: unknown;
+        artists?: unknown;
+        artist_bio?: unknown;
+      };
+      const concertBio = typeof parsed.concert_bio === "string" ? parsed.concert_bio.trim() : "";
+      if (Array.isArray(parsed.artists)) {
+        const artists = parsed.artists
+          .map((item) => {
+            const record = item as { name?: unknown; bio?: unknown };
+            return {
+              name: typeof record.name === "string" ? record.name.trim() : "",
+              bio: typeof record.bio === "string" ? record.bio.trim() : "",
+            };
+          })
+          .filter((artist) => artist.bio.length > 0)
+          .map((artist) => ({ ...artist, name: artist.name || fallbackArtistName }));
+        if (artists.length > 0) return { artists, concertBio };
+      }
+      if (typeof parsed.artist_bio === "string" && parsed.artist_bio.trim()) {
+        return {
+          artists: [{ name: fallbackArtistName, bio: parsed.artist_bio.trim() }],
+          concertBio,
+        };
+      }
+    } catch {
+      // thử candidate tiếp theo
+    }
+  }
+  return { artists: [{ name: fallbackArtistName, bio: content.trim() }], concertBio: "" };
 }
 
 // ── Làm sạch + ưu tiên thông tin quan trọng + cắt theo ngân sách token ───────
@@ -91,7 +153,7 @@ export function prioritizeText(raw: string, budget: number): string {
 }
 
 // ── Gọi API AI qua chuẩn OpenAI chat/completions (Groq mặc định) ─────────────
-async function callChatCompletion(prompt: string): Promise<{ bio: string; model: string }> {
+async function callChatCompletion(prompt: string): Promise<{ content: string; model: string }> {
   const key = process.env.AI_API_KEY;
   if (!key) throw new Error("AI_API_KEY chưa được cấu hình.");
 
@@ -103,6 +165,8 @@ async function callChatCompletion(prompt: string): Promise<{ bio: string; model:
       messages: [{ role: "user", content: prompt }],
       temperature: 0.6,
       max_tokens: MAX_OUTPUT_TOKENS,
+      // JSON mode: buộc model trả object JSON hợp lệ (Groq/OpenAI-compatible).
+      response_format: { type: "json_object" },
     }),
   });
   if (!res.ok) {
@@ -112,7 +176,7 @@ async function callChatCompletion(prompt: string): Promise<{ bio: string; model:
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
-  const bio = data.choices?.[0]?.message?.content?.trim();
-  if (!bio) throw new Error("AI trả về bio rỗng.");
-  return { bio, model: MODEL };
+  const content = data.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error("AI trả về nội dung rỗng.");
+  return { content, model: MODEL };
 }

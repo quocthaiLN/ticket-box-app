@@ -5,6 +5,7 @@ import {
   apiUploadFile,
   type ApiCollectionResponse,
   type ApiResponse,
+  type ConcertArtist,
   type Venue,
 } from "../lib/api-client";
 
@@ -45,6 +46,7 @@ export type OrganizerRequestDetail = OrganizerRequestSummary & {
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
+  artists?: ConcertArtist[] | null;
   ticket_types: OrganizerRequestTicketType[] | unknown;
   reviewed_by?: string | null;
   reviewed_at?: string;
@@ -60,6 +62,7 @@ export type OrganizerConcert = {
   artist_name: string;
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtist[] | null;
   guest_drive_folder_id?: string;
   status: OrganizerConcertStatus;
   starts_at: string;

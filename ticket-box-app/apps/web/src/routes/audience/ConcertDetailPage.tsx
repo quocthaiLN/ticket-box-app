@@ -256,21 +256,35 @@ export function ConcertDetailView({
             )}
 
             {activeTab === "lineup" && (
-              <Panel title="Nghệ sĩ chính" icon={<Music className="h-4 w-4 text-[#F5C842]" />}>
-                <div className="flex flex-col gap-4 sm:flex-row">
-                  {concert.artistBioImageUrl && (
-                    <img
-                      src={concert.artistBioImageUrl}
-                      alt={concert.artistName}
-                      className="h-40 w-40 shrink-0 rounded-xl object-cover"
-                    />
-                  )}
-                  <div>
-                    <p className="mb-2 font-semibold text-[#F0EDEB]">{concert.artistName}</p>
-                    <p className="text-sm leading-relaxed text-[#B0B0C0]">
-                      {concert.artistBio || "Thông tin nghệ sĩ đang được cập nhật."}
-                    </p>
-                  </div>
+              <Panel
+                title={concert.artists.length > 1 ? `Lineup nghệ sĩ (${concert.artists.length})` : "Nghệ sĩ chính"}
+                icon={<Music className="h-4 w-4 text-[#F5C842]" />}
+              >
+                <div className="space-y-6">
+                  {concert.artists.map((artist, index) => (
+                    <div
+                      key={`${artist.name}-${index}`}
+                      className="flex flex-col gap-4 border-t border-white/[0.06] pt-6 first:border-t-0 first:pt-0 sm:flex-row"
+                    >
+                      {artist.imageUrl ? (
+                        <img
+                          src={artist.imageUrl}
+                          alt={artist.name}
+                          className="h-40 w-40 shrink-0 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-40 w-40 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/15 text-xs text-[#8585A0]">
+                          Chưa có ảnh
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-2 font-semibold text-[#F0EDEB]">{artist.name}</p>
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-[#B0B0C0]">
+                          {artist.bio || "Thông tin nghệ sĩ đang được cập nhật."}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Panel>
             )}

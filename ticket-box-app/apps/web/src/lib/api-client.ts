@@ -46,10 +46,18 @@ export type ConcertSummary = {
   };
 };
 
+// Nghệ sĩ trong lineup (concert nhiều nghệ sĩ); vắng → fallback field đơn.
+export type ConcertArtist = {
+  name: string;
+  bio: string;
+  image_url: string | null;
+};
+
 export type ConcertDetail = ConcertSummary & {
   description?: string;
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtist[];
   seat_map_url?: string;
   venue: Venue;
 };
@@ -110,6 +118,7 @@ export type ConcertMetadata = {
   };
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtist[];
 };
 
 const apiBaseUrl =

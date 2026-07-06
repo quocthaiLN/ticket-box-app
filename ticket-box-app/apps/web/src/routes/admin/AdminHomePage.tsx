@@ -232,12 +232,12 @@ export function AdminHomePage() {
                       <Calendar className="h-5 w-5 text-[#8585A0]" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <Link to={`/admin/concerts/${concert.id}`} className="min-w-0 flex-1 hover:opacity-80">
                     <p className="truncate text-sm font-semibold">{concert.title}</p>
                     <p className="mt-1 truncate text-xs text-[#8585A0]">
                       {concert.venue.city} - {formatDate(concert.starts_at)}
                     </p>
-                  </div>
+                  </Link>
                   <StatusChip status={concert.status} />
                   <Link
                     to={`/admin/concerts/${concert.id}/preview`}

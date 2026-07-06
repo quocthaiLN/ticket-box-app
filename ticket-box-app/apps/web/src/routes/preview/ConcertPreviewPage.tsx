@@ -128,6 +128,7 @@ async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
     ends_at: concert.ends_at,
     status: concert.status,
     cover_image_url: concert.cover_image_url,
+    artists: concert.artists ?? undefined,
     venue: { ...concert.venue, address: "" },
   };
   const metadata: ConcertMetadata = {

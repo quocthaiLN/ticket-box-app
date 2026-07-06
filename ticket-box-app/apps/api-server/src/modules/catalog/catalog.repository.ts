@@ -7,6 +7,7 @@ import {
 } from "@ticketbox/database";
 import type { ListAdminQuery, ListConcertsQuery } from "./catalog.schema.js";
 import type {
+  ConcertArtistDto,
   ConcertDetailDto,
   ConcertMetadataDto,
   ConcertSummaryDto,
@@ -522,6 +523,23 @@ function mapConcertSummary(concert: ConcertWithVenueAndPrices): ConcertSummaryDt
   };
 }
 
+// Cột JSONB `artists` → DTO; dữ liệu bẩn/không đúng shape thì bỏ qua (fallback field đơn).
+function mapConcertArtists(value: Prisma.JsonValue | null): ConcertArtistDto[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const artists = value.flatMap((item) => {
+    const record = item as { name?: unknown; bio?: unknown; image_url?: unknown };
+    if (typeof record?.bio !== "string" || record.bio.length === 0) return [];
+    return [
+      {
+        name: typeof record.name === "string" ? record.name : "",
+        bio: record.bio,
+        image_url: typeof record.image_url === "string" ? record.image_url : null,
+      },
+    ];
+  });
+  return artists.length > 0 ? artists : undefined;
+}
+
 function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
   return {
     id: concert.id,
@@ -531,6 +549,7 @@ function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
     artist_name: concert.artistName,
     artist_bio: concert.artistBio ?? undefined,
     artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
+    artists: mapConcertArtists(concert.artists),
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
     status: concert.status,
@@ -562,7 +581,8 @@ function mapConcertMetadata(concert: ConcertMetadataRecord): ConcertMetadataDto 
       svg_url: concert.seatMapUrl ?? undefined
     },
     artist_bio: concert.artistBio ?? undefined,
-    artist_bio_image_url: concert.artistBioImageUrl ?? undefined
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
+    artists: mapConcertArtists(concert.artists)
   };
 }
 

@@ -53,6 +53,7 @@ export type OrganizerRequestDetailDto = OrganizerRequestSummaryDto & {
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
+  artists?: Prisma.JsonValue | null;
   ticket_types: unknown;
   reviewed_by?: string | null;
   reviewed_at?: string;
@@ -67,6 +68,8 @@ export type OrganizerConcertSummaryDto = {
   description?: string;
   artist_name: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
+  artists?: Prisma.JsonValue | null;
   status: string;
   starts_at: string;
   ends_at: string;
@@ -748,6 +751,7 @@ function mapRequestDetail(
     artist_bio: request.artistBio ?? null,
     bio_status: request.bioStatus ?? null,
     artist_bio_image_url: request.artistBioImageUrl ?? null,
+    artists: request.artists ?? null,
     ticket_types: request.ticketTypes,
     reviewed_by: request.reviewedById,
     reviewed_at: request.reviewedAt?.toISOString(),
@@ -772,6 +776,8 @@ function mapConcertSummary(
     description: concert.description ?? undefined,
     artist_name: concert.artistName,
     artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
+    artists: concert.artists ?? null,
     status: concert.status,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
