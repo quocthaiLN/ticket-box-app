@@ -14,6 +14,7 @@ import { organizerAdminRouter } from "./modules/organizer-admin/organizer-admin.
 import paymentRouter from "./modules/payments/payment.router.js";
 import ticketRouter from "./modules/tickets/ticket.router.js";
 import { notificationsRouter } from "./modules/notifications/notifications.router.js";
+import { auditRouter } from "./modules/audit/audit.router.js";
 import { errorMiddleware } from "./shared/middleware/error.middleware.js";
 import { requestIdMiddleware } from "./shared/middleware/request-id.middleware.js";
 import {
@@ -74,6 +75,7 @@ export function createApp() {
 
   // ── Notifications (admin + internal) ───────────────────────────────────────
   app.use("/v1", notificationsRouter);
+  app.use("/v1", auditRouter);
 
   // ── Organizer workspace + Admin duyệt hồ sơ ────────────────────────────────
   app.use("/v1", organizerRouter);

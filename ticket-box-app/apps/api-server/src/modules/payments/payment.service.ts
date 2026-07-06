@@ -293,6 +293,7 @@ async function enqueueIssuedTicketNotifications(
         notification_id: n.id,
         channel: n.channel as 'EMAIL' | 'PUSH' | 'IN_APP',
         recipient_user_id: n.userId,
+        subject: n.payload.subject as string | undefined,
         body: (n.payload.body as string | undefined) ?? '',
       }).catch((err: unknown) =>
         console.error(`[payment] Failed to enqueue notification ${n.id}:`, err),
