@@ -196,6 +196,11 @@ export type ConfirmOrderPaymentResult = {
     channel: string;
     payload: Record<string, unknown>;
   }>;
+  issuedTickets: Array<{
+    id: string;
+    userId: string;
+    concertId: string;
+  }>;
 };
 
 // Xác nhận payment, chuyển hold thành vé đã bán, phát hành ticket và notification.
@@ -205,6 +210,7 @@ export async function confirmOrderPayment(
 ): Promise<ConfirmOrderPaymentResult> {
   // Thu thập dữ liệu sau transaction để xóa cache và gửi notification.
   let affectedTicketTypeIds: string[] = [];
+  let issuedTickets: ConfirmOrderPaymentResult["issuedTickets"] = [];
   let issuedNotifications: ConfirmOrderPaymentResult["issuedNotifications"] =
     [];
 
@@ -303,7 +309,7 @@ export async function confirmOrderPayment(
       // Lưu các ticket phát hành để tạo notification trước khi commit.
       // Danh sách này được dùng để tạo notification ngay trong transaction,
       // bảo đảm không có ticket phát hành mà thiếu bản ghi notification.
-      const issuedTickets: Array<{ id: string; userId: string; concertId: string }> = [];
+      const createdTickets: ConfirmOrderPaymentResult["issuedTickets"] = [];
 
       // Cập nhật số lượng vé held và sold của một ticket_types
       // Mỗi order item có thể đại diện cho nhiều vé cùng một ticket type.
@@ -360,7 +366,7 @@ export async function confirmOrderPayment(
           });
 
           // Thu thập ticket vừa phát hành cho bước tạo notification trong transaction.
-          issuedTickets.push({
+          createdTickets.push({
             id: ticket.id,
             userId: item.userId,
             concertId: item.concertId,
@@ -371,7 +377,7 @@ export async function confirmOrderPayment(
       // Tạo notification trong cùng transaction với việc phát hành ticket.
       // Notification là outbox record; email chỉ được enqueue sau khi transaction commit.
       const createdNotifications: typeof issuedNotifications = [];
-      for (const t of issuedTickets) {
+      for (const t of createdTickets) {
         // Payload chỉ mang định danh; worker đọc thêm dữ liệu khi cần render email.
         const notifPayload = {
           ticket_id: t.id,
@@ -396,6 +402,7 @@ export async function confirmOrderPayment(
           payload: { ticket_id: t.id, order_id: orderId },
         });
       }
+      issuedTickets = createdTickets;
       issuedNotifications = createdNotifications;
       // Ghi nhận các loại vé bị thay đổi để xóa cache sau khi commit.
       affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
@@ -415,7 +422,7 @@ export async function confirmOrderPayment(
     affectedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
   );
 
-  return { issuedNotifications };
+  return { issuedNotifications, issuedTickets };
 }
 
 // Đánh dấu payment thất bại và giải phóng hold/tồn kho nếu order chưa được xác nhận.

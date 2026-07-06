@@ -72,12 +72,28 @@ export async function getMyTicketQr(userId: string, ticketId: string): Promise<T
   };
 }
 
-export async function voidTicket(ticketId: string): Promise<VoidTicketResponse> {
+export async function voidTicket(ticketId: string): Promise<{
+  data: VoidTicketResponse;
+  audit: {
+    ticket_id: string;
+    previous_status: string;
+    new_status: string;
+    changed: boolean;
+  };
+}> {
   const result = await voidTicketById(ticketId);
 
   return {
-    ticket_id: result.id,
-    status: result.status,
-    voided_at: result.voidedAt.toISOString(),
+    data: {
+      ticket_id: result.id,
+      status: result.status,
+      voided_at: result.voidedAt.toISOString(),
+    },
+    audit: {
+      ticket_id: result.id,
+      previous_status: result.previousStatus,
+      new_status: result.status,
+      changed: result.changed,
+    },
   };
 }

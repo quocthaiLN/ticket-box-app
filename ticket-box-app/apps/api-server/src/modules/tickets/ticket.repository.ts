@@ -151,11 +151,23 @@ export async function voidTicketById(ticketId: string) {
     if (!row) throw new ApiError({ title: 'TICKET_NOT_FOUND', status: 404, code: 'TICKET_NOT_FOUND', detail: 'Ticket not found' });
 
     if (row.status === 'CANCELLED' || row.status === 'REFUNDED') {
-      return { id: row.id, status: row.status, voidedAt: new Date() };
+      return {
+        id: row.id,
+        status: row.status,
+        previousStatus: row.status,
+        changed: false,
+        voidedAt: new Date(),
+      };
     }
 
     const now = new Date();
     await tx.ticket.update({ where: { id: ticketId }, data: { status: TicketStatus.CANCELLED } });
-    return { id: row.id, status: 'CANCELLED', voidedAt: now };
+    return {
+      id: row.id,
+      status: 'CANCELLED',
+      previousStatus: row.status,
+      changed: true,
+      voidedAt: now,
+    };
   });
 }
