@@ -5,7 +5,7 @@ import {
   QUEUE_NAMES,
   type AiBioJobData,
 } from "@ticketbox/queue";
-import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import { invalidateConcertCache } from "@ticketbox/redis";
 import { downloadPressKit } from "@ticketbox/storage";
 import { generateBios, type GeneratedArtist } from "./ai-bio.client.js";
 import { extractAndUploadPressKitImages, type PressKitImages } from "./press-kit-images.js";
@@ -304,10 +304,3 @@ function cleanExtractedText(value: string | undefined) {
   return cleaned.length >= 20 ? cleaned : undefined;
 }
 
-async function invalidateConcertCache(concertId: string) {
-  await Promise.allSettled([
-    cacheDelete(`catalog:concert:${concertId}`),
-    cacheDelete(`catalog:metadata:${concertId}`),
-    cacheDeletePattern("catalog:list:*"),
-  ]);
-}

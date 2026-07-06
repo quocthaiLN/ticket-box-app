@@ -13,6 +13,7 @@ import { createGuestImportWorker } from "./workers/guest-import.worker.js";
 import { createNotificationWorker } from "./workers/notification.worker.js";
 import { startReminderScheduler } from "./schedulers/reminder.scheduler.js";
 import { registerNightlyGuestImportSchedule } from "./schedulers/nightly-guest-import.scheduler.js";
+import { startAutoPublishScheduler } from "./schedulers/auto-publish.scheduler.js";
 
 // ---------------------------------------------------------------------------
 // Unhandled rejection safety net — worker errors must not crash the process
@@ -54,6 +55,7 @@ const notificationQueue = getNotificationsQueue();
 const expireHoldsQueue = getExpireHoldsQueue();
 
 const reminderTimer = startReminderScheduler(notificationQueue);
+const autoPublishTimer = startAutoPublishScheduler();
 
 // Lịch quét Google Drive nhập khách mời VIP — chạy đúng 0h (giờ Việt Nam).
 void registerNightlyGuestImportSchedule(getGuestImportQueue()).catch((err) =>
@@ -87,6 +89,7 @@ async function shutdown(signal: string): Promise<void> {
   );
 
   clearInterval(reminderTimer);
+  clearInterval(autoPublishTimer);
   clearInterval(expireHoldsTimer);
 
   // Close workers first (drain in-flight jobs)
