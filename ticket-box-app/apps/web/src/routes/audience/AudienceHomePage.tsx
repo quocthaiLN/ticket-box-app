@@ -128,7 +128,7 @@ export function AudienceHomePage() {
                       <ImageWithFallback src={concert.coverImageUrl} alt={concert.title} className="h-full w-full object-cover" />
                     </div>
                     <div>
-                      <p className="line-clamp-1 text-xs font-medium text-[#F0EDEB]">{concert.title}</p>
+                      <p className="break-words text-xs font-medium text-[#F0EDEB]">{concert.title}</p>
                       <p className="text-xs text-[#8585A0]">{concert.artistName}</p>
                     </div>
                   </Link>

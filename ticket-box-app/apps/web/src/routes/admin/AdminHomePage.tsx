@@ -203,8 +203,8 @@ export function AdminHomePage() {
                     <Clock className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{request.title}</span>
-                    <span className="mt-1 block truncate text-xs text-[#8585A0]">
+                    <span className="block break-words text-sm font-semibold">{request.title}</span>
+                    <span className="mt-1 block break-words text-xs text-[#8585A0]">
                       {request.artist_name} - {formatDate(request.starts_at)}
                     </span>
                   </span>
@@ -233,8 +233,8 @@ export function AdminHomePage() {
                     )}
                   </div>
                   <Link to={`/admin/concerts/${concert.id}`} className="min-w-0 flex-1 hover:opacity-80">
-                    <p className="truncate text-sm font-semibold">{concert.title}</p>
-                    <p className="mt-1 truncate text-xs text-[#8585A0]">
+                    <p className="break-words text-sm font-semibold">{concert.title}</p>
+                    <p className="mt-1 break-words text-xs text-[#8585A0]">
                       {concert.venue.city} - {formatDate(concert.starts_at)}
                     </p>
                   </Link>

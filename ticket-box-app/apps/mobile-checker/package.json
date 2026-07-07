@@ -4,7 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@react-native-community/netinfo": "11.4.1",
-    "expo": "^56.0.12",
+    "expo": "^57.0.2",
     "expo-camera": "~17.0.10",
     "expo-crypto": "~15.0.9",
     "expo-haptics": "~15.0.8",

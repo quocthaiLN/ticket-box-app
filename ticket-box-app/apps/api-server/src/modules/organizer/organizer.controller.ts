@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import { invalidateConcertCache } from "@ticketbox/redis";
 import {
   uploadPressKit as storePressKit,
   uploadArtistImage as storeArtistImage,
 } from "@ticketbox/storage";
 import { collection, ok } from "../../shared/http/response.js";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
-import { catalogCacheKeys } from "../catalog/catalog.cache.js";
 import {
   parseCreateDeletionRequestBody,
   parseCreateOrganizerSeatZoneBody,
@@ -360,14 +359,3 @@ function toCollection<T extends { id: string }>(
   });
 }
 
-async function invalidateConcertCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.concert(concertId)),
-    cacheDelete(catalogCacheKeys.metadata(concertId)),
-    cacheDelete(catalogCacheKeys.seatMap(concertId)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-    cacheDeletePattern("catalog:list:*"),
-  ]);
-}

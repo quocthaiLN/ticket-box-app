@@ -82,11 +82,11 @@ async function sendRemindersForConcert(
   let skipped = 0;
 
   for (const holder of ticketHolders) {
-    // Kiểm tra đã có notification CONCERT_REMINDER cho ticket này chưa
+    // Kiểm tra đã có notification CONCERT_REMINDER cho ticket này chưa.
     const existing = await prisma.notification.findFirst({
       where: {
         ticketId: holder.ticketId,
-        type: "CONCERT_UPDATED" as never, // dùng CONCERT_UPDATED cho reminder (không có enum riêng)
+        type: "CONCERT_REMINDER" as never,
         concertId: concert.id,
       },
       select: { id: true },
@@ -104,7 +104,7 @@ async function sendRemindersForConcert(
         concertId: concert.id,
         ticketId: holder.ticketId,
         channel: "EMAIL",
-        type: "CONCERT_UPDATED" as never,
+        type: "CONCERT_REMINDER" as never,
         payload: {
           concert_id: concert.id,
           concert_title: concert.title,

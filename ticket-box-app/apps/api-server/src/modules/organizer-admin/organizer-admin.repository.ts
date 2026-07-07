@@ -207,6 +207,7 @@ export class OrganizerAdminRepository {
       });
 
       const zoneIdByCode = new Map<string, string>();
+      const seatZoneIds: string[] = [];
       let sortOrder = 0;
       for (const zone of input.zones) {
         const created = await tx.seatZone.create({
@@ -220,6 +221,7 @@ export class OrganizerAdminRepository {
           select: { id: true },
         });
         zoneIdByCode.set(zone.code, created.id);
+        seatZoneIds.push(created.id);
       }
 
       for (const ticketType of input.ticketTypes) {
@@ -243,15 +245,32 @@ export class OrganizerAdminRepository {
         });
       }
 
+      const gateIds: string[] = [];
       for (let i = 1; i <= request.gateCount; i++) {
-        await tx.checkinGate.create({
+        const gate = await tx.checkinGate.create({
           data: {
             concertId: concert.id,
             code: `GATE-${i}`,
             name: `Cổng ${i}`,
             sortOrder: i - 1,
           },
+          select: { id: true },
         });
+        gateIds.push(gate.id);
+      }
+
+      // Hồ sơ organizer chỉ khai báo số cổng, chưa có UI gán zone cho từng cổng.
+      // Mặc định mỗi cổng phục vụ mọi zone để payment success luôn phát hành được ticket.
+      for (const gateId of gateIds) {
+        for (const seatZoneId of seatZoneIds) {
+          await tx.checkinGateZone.create({
+            data: {
+              gateId,
+              seatZoneId,
+              concertId: concert.id,
+            },
+          });
+        }
       }
 
       const checkerAccounts: ApprovedCheckerCredential[] = [];

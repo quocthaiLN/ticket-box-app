@@ -126,7 +126,7 @@ function TicketCard({ ticket, onViewQr }: { ticket: TicketListItem; onViewQr: ()
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-semibold">{ticket.concert_title}</h2>
+            <h2 className="break-words text-base font-semibold">{ticket.concert_title}</h2>
             <StatusBadge status={ticket.status} />
           </div>
           <div className="flex flex-wrap gap-3 text-xs text-[#8585A0]">
@@ -147,7 +147,7 @@ function TicketCard({ ticket, onViewQr }: { ticket: TicketListItem; onViewQr: ()
         </div>
       </div>
       <div className="flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-5 py-2.5">
-        <span className="truncate font-mono text-xs text-[#8585A0]">#{ticket.id}</span>
+        <span className="break-all font-mono text-xs text-[#8585A0]">#{ticket.id}</span>
       </div>
     </article>
   );

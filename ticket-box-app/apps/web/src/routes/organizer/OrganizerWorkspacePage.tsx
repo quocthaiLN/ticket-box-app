@@ -256,6 +256,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
                   requests={requests}
                   concerts={concerts}
                   orders={orders}
+                  checkers={checkers}
                   analytics={analytics}
                 />
               )}
@@ -305,12 +306,14 @@ function OrganizerDashboardView({
   requests,
   concerts,
   orders,
+  checkers,
   analytics,
 }: {
   stats: { revenue: number; sold: number; drafts: number; pending: number };
   requests: OrganizerRequestSummary[];
   concerts: OrganizerConcert[];
   orders: OrganizerOrder[];
+  checkers: OrganizerCheckerAccount[];
   analytics: Record<string, OrganizerAnalytics>;
 }) {
   const performance = concerts.map((concert) => toOrganizerConcertPerformanceView(concert, analytics[concert.id]));
@@ -318,6 +321,7 @@ function OrganizerDashboardView({
   const myConcerts = performance.slice(0, 4);
   const pendingRequests = requests.filter((request) => request.status === "PENDING").slice(0, 4);
   const monthlyRevenue = buildMonthlyRevenue(orders);
+  const visibleCheckers = checkers;
   const statCards = [
     { label: "Tổng doanh thu", value: formatMoney(stats.revenue), icon: <TrendingUp className="h-5 w-5" />, tone: "#F5C842" },
     { label: "Vé đã bán", value: stats.sold.toLocaleString("vi-VN"), icon: <Ticket className="h-5 w-5" />, tone: "#7B61FF" },
@@ -345,7 +349,7 @@ function OrganizerDashboardView({
             {topConcerts.map((concert, index) => (
               <div key={concert.id}>
                 <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="truncate text-xs text-[#F0EDEB]">{concert.title}</span>
+                  <span className="min-w-0 break-words text-xs text-[#F0EDEB]">{concert.title}</span>
                   <span className="shrink-0 text-xs text-[#F5C842]">{formatMoney(concert.revenue)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -384,7 +388,7 @@ function OrganizerDashboardView({
                   <Link key={view.id} to="/organizer/requests" className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.05]">
                     <Clock className="h-4 w-4 shrink-0 text-[#F5C842]" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[#F0EDEB]">{view.title}</p>
+                      <p className="break-words text-sm font-medium text-[#F0EDEB]">{view.title}</p>
                       <p className="mt-1 text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-[#F5C842]/10 px-2 py-0.5 text-xs text-[#F5C842]">Chờ duyệt</span>
@@ -416,7 +420,7 @@ function OrganizerDashboardView({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[#F0EDEB]">{concert.title}</p>
+                  <p className="break-words text-sm font-medium text-[#F0EDEB]">{concert.title}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">
                     {concert.ticketsSold.toLocaleString("vi-VN")}/{concert.ticketsTotal.toLocaleString("vi-VN")} vé bán
                   </p>
@@ -442,6 +446,39 @@ function OrganizerDashboardView({
             </div>
           </DashboardPanel>
         )}
+
+        <DashboardPanel className="xl:col-span-2">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#F0EDEB]">Tài khoản checker theo concert</h3>
+              <p className="mt-1 text-xs text-[#8585A0]">Mật khẩu chỉ hiện một lần lúc admin duyệt; dashboard này hiển thị đầy đủ email, tên và concert tương ứng.</p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#7B61FF]/10 px-2.5 py-1 text-xs font-semibold text-[#C9BCFF]">
+              <UserCheck className="h-3.5 w-3.5" />
+              {checkers.length.toLocaleString("vi-VN")} tài khoản
+            </span>
+          </div>
+          {visibleCheckers.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {visibleCheckers.map((checker) => (
+                <article key={checker.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#7B61FF]/10 px-2 py-0.5 text-xs font-semibold text-[#C9BCFF]">{checker.status}</span>
+                    <span className="text-xs text-[#8585A0]">{formatDate(checker.created_at)}</span>
+                  </div>
+                  <p className="break-words text-sm font-semibold text-[#F0EDEB]">{checker.full_name || "Checker chưa đặt tên"}</p>
+                  <p className="mt-1 break-all text-xs text-[#C9BCFF]">{checker.email}</p>
+                  <p className="mt-2 break-words text-xs text-[#8585A0]">
+                    Concert: <span className="text-[#F0EDEB]">{checker.concert_title}</span>
+                  </p>
+                  <p className="mt-1 break-all text-[11px] text-[#8585A0]">User ID: {checker.user_id}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="Chưa có tài khoản checker nào. Tài khoản sẽ được tạo sau khi admin duyệt hồ sơ BTC." />
+          )}
+        </DashboardPanel>
       </div>
     </div>
   );
@@ -499,7 +536,7 @@ function DashboardView({
                         title={`${concert.title}: ${formatMoney(concert.revenue)}`}
                       />
                     </div>
-                    <p className="w-full truncate text-center text-[11px] text-[#8585A0]">{concert.title}</p>
+                    <p className="w-full break-words text-center text-[11px] text-[#8585A0]">{concert.title}</p>
                   </div>
                 );
               })}
@@ -515,7 +552,7 @@ function DashboardView({
               <div key={concert.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{concert.title}</p>
+                    <p className="break-words text-sm font-semibold">{concert.title}</p>
                     <p className="mt-1 text-xs text-[#8585A0]">{concert.venueName} - {formatDate(concert.startsAt)}</p>
                   </div>
                   <span className="shrink-0 text-xs font-semibold text-[#F5C842]">{formatMoney(concert.revenue)}</span>
@@ -548,7 +585,7 @@ function DashboardView({
                 <Link key={view.id} to="/organizer/requests" className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 transition-colors hover:bg-white/[0.05]">
                   <Clock className="h-4 w-4 shrink-0 text-[#F5C842]" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{view.title}</p>
+                    <p className="break-words text-sm font-semibold">{view.title}</p>
                     <p className="mt-1 text-xs text-[#8585A0]">{view.artistName} - nộp {formatDate(view.submittedAt)}</p>
                   </div>
                   <ApprovalBadge status={view.status} />
@@ -1138,7 +1175,7 @@ function OrganizerRequestCard({
             <ApprovalBadge status={view.status} />
           </div>
           <h2 className="text-sm font-semibold text-[#F0EDEB]">{view.title}</h2>
-          <p className="mt-0.5 truncate text-xs text-[#8585A0]">
+          <p className="mt-0.5 break-words text-xs text-[#8585A0]">
             {view.artistName} · {venue?.name ?? "Chưa rõ địa điểm"} · {formatDate(view.startsAt)}
           </p>
         </div>
@@ -1253,8 +1290,8 @@ function RequestCard({
             <ApprovalBadge status={view.status} />
             <span className="text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</span>
           </div>
-          <h2 className="truncate text-sm font-semibold">{view.title}</h2>
-          <p className="mt-1 truncate text-xs text-[#8585A0]">{view.artistName} - {formatDate(view.startsAt)}</p>
+          <h2 className="break-words text-sm font-semibold">{view.title}</h2>
+          <p className="mt-1 break-words text-xs text-[#8585A0]">{view.artistName} - {formatDate(view.startsAt)}</p>
         </div>
         <p className="text-xs text-[#8585A0]">{view.gateCount} cổng / {view.checkerCount} nhân sự soát vé</p>
         <span className="text-[#8585A0]">{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
@@ -1815,7 +1852,7 @@ function OrganizerConcertEditor({
                       <div className="min-w-0">
                         <div className="mb-2 flex items-center gap-2">
                           <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
-                          <h4 className="truncate text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
+                          <h4 className="break-words text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
                         </div>
                         {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
                       </div>
@@ -1921,7 +1958,7 @@ function OrganizerConcertEditor({
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: ticketDotColor(index) }} />
-                          <span className="truncate text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
+                          <span className="break-words text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
                         </div>
                         <div className="flex shrink-0 gap-2 text-[#8585A0]">
                           <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
@@ -2220,9 +2257,9 @@ function GuestSection({ concert }: { concert: OrganizerConcert }) {
             <div className="space-y-1.5">
               {guests.map((guest) => (
                 <div key={guest.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs">
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 break-words">
                     <b className="text-[#F0EDEB]">{guest.full_name}</b>
-                    <span className="text-[#8585A0]"> · {guest.email}</span>
+                    <span className="break-all text-[#8585A0]"> · {guest.email}</span>
                   </span>
                   <span className="shrink-0 text-[#8585A0]">{guestStatusLabel(guest.status)}</span>
                 </div>
@@ -2315,7 +2352,7 @@ function ConcertCard({
             <StatusBadge status={view.status} />
             <span className="text-xs text-[#8585A0]">{formatDate(view.startsAt)} - {view.venueName}</span>
           </div>
-          <h2 className="truncate text-base font-semibold">{view.title}</h2>
+          <h2 className="break-words text-base font-semibold">{view.title}</h2>
           <p className="mt-1 text-sm text-[#8585A0]">{view.artistName}</p>
           <div className="mt-4 flex flex-wrap gap-4">
             <InlineMetric icon={<BarChart3 className="h-3.5 w-3.5" />} label={formatMoney(view.revenue)} tone="#2DBE6C" />
@@ -2683,7 +2720,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
       <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+      <p className="mt-1 break-words text-sm font-semibold">{value}</p>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 ﻿import { createHmac } from 'node:crypto';
 import { env } from '@ticketbox/config';
 import { enqueueNotification } from '@ticketbox/queue';
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '@ticketbox/database';
 import { getGateway } from './gateways/index.js';
 import { ApiError, Errors } from '../../shared/http/problem-details.js';
+import { auditService } from '../audit/audit.service.js';
 import {
   confirmOrderPayment,
   createPaymentRecord,
@@ -13,6 +15,7 @@ import {
   getOrderForRetry,
   saveWebhookRawPayload,
 } from './payment.repository.js';
+import type { ConfirmOrderPaymentResult } from './payment.repository.js';
 import { getBulkhead } from './bulkhead/payment.bulkhead.js';
 import { getCircuitBreaker } from './circuit-breaker/payment.circuit-breaker.js';
 import type { CreatePaymentResponse, MomoWebhookBody, VnpayWebhookBody } from './payment.type.js';
@@ -152,18 +155,28 @@ function verifyVnpaySignature(body: VnpayWebhookBody): boolean {
 // Xử lý webhook VNPAY: kiểm tra dữ liệu, chữ ký, số tiền rồi xác nhận/thất bại payment.
 export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspCode: string; Message: string }> {
   const orderId = body.vnp_TxnRef;
-  const providerTxnId = body.vnp_TransactionNo;
+  const rawProviderTxnId = body.vnp_TransactionNo;
   const vnpAmount = body.vnp_Amount;
   const responseCode = body.vnp_ResponseCode;
 
-  if (!orderId || !providerTxnId || !vnpAmount || !responseCode) {
+  if (!orderId || !vnpAmount || !responseCode) {
     return { RspCode: '99', Message: 'Missing required fields' };
   }
 
+  const providerTxnId = normalizeVnpayProviderTransactionId(
+    rawProviderTxnId,
+    responseCode,
+  );
+  if (responseCode === '00' && !providerTxnId) {
+    return { RspCode: '99', Message: 'Missing provider transaction id' };
+  }
+
   // Webhook trùng của giao dịch thành công được chấp nhận idempotent.
-  const existing = await findPaymentByProviderTxn('VNPAY', providerTxnId);
-  if (existing?.status === 'SUCCEEDED') {
-    return { RspCode: '00', Message: 'Confirm Success' };
+  if (providerTxnId) {
+    const existing = await findPaymentByProviderTxn('VNPAY', providerTxnId);
+    if (existing?.status === 'SUCCEEDED') {
+      return { RspCode: '00', Message: 'Confirm Success' };
+    }
   }
 
   // Luôn lưu payload nếu tìm được payment để phục vụ audit, kể cả chữ ký không hợp lệ.
@@ -175,6 +188,19 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
   }
 
   if (!signatureValid) {
+    if (payment) {
+      void recordPaymentWebhookAudit({
+        action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
+        paymentId: payment.id,
+        provider: 'VNPAY',
+        orderId,
+        providerTransactionId: providerTxnId,
+        rawProviderTransactionId: rawProviderTxnId,
+        reason: 'INVALID_SIGNATURE',
+        signatureValid,
+        responseCode,
+      });
+    }
     return { RspCode: '97', Message: 'Invalid signature' };
   }
 
@@ -182,6 +208,19 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
     // VNPAY biểu diễn số tiền theo đơn vị nhỏ nhất, nên nhân amount với 100 để so sánh.
     const expectedAmount = Math.round(parseFloat(payment.amount) * 100);
     if (parseInt(vnpAmount, 10) !== expectedAmount) {
+      void recordPaymentWebhookAudit({
+        action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
+        paymentId: payment.id,
+        provider: 'VNPAY',
+        orderId,
+        providerTransactionId: providerTxnId,
+        rawProviderTransactionId: rawProviderTxnId,
+        reason: 'INVALID_AMOUNT',
+        signatureValid,
+        responseCode,
+        amount: vnpAmount,
+        expectedAmount,
+      });
       return { RspCode: '04', Message: 'Invalid amount' };
     }
   }
@@ -190,13 +229,42 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
 
   // Webhook hợp lệ sẽ xác nhận payment hoặc giải phóng hold khi thất bại.
   if (isSuccess && payment) {
-    const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
+    const { issuedNotifications, issuedTickets } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('VNPAY').recordSuccess();
+    void recordPaymentWebhookAudit({
+      action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_SUCCEEDED,
+      paymentId: payment.id,
+      provider: 'VNPAY',
+      orderId,
+      providerTransactionId: providerTxnId,
+      rawProviderTransactionId: rawProviderTxnId,
+      signatureValid,
+      responseCode,
+      issuedTicketCount: issuedTickets.length,
+      notificationCount: issuedNotifications.length,
+    });
+    void recordTicketIssuedAudits({
+      provider: 'VNPAY',
+      paymentId: payment.id,
+      orderId,
+      issuedTickets,
+    });
     void enqueueIssuedTicketNotifications(issuedNotifications);
   } else if (!isSuccess && payment) {
     const failureReason = `VNPAY_${responseCode}`;
     await failPayment(payment.id, orderId, failureReason);
     getCircuitBreaker('VNPAY').recordFailure();
+    void recordPaymentWebhookAudit({
+      action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
+      paymentId: payment.id,
+      provider: 'VNPAY',
+      orderId,
+      providerTransactionId: providerTxnId,
+      rawProviderTransactionId: rawProviderTxnId,
+      reason: failureReason,
+      signatureValid,
+      responseCode,
+    });
   }
 
   return { RspCode: '00', Message: 'Confirm Success' };
@@ -256,6 +324,18 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
   }
 
   if (!signatureValid) {
+    if (payment) {
+      void recordPaymentWebhookAudit({
+        action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
+        paymentId: payment.id,
+        provider: 'MOMO',
+        orderId,
+        providerTransactionId: transId,
+        reason: 'INVALID_SIGNATURE',
+        signatureValid,
+        resultCode,
+      });
+    }
     return { status: 403, message: 'Invalid signature' };
   }
 
@@ -263,13 +343,40 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
 
   // Webhook hợp lệ sẽ xác nhận payment hoặc giải phóng hold khi thất bại.
   if (isSuccess && payment) {
-    const { issuedNotifications } = await confirmOrderPayment(payment.id, orderId);
+    const { issuedNotifications, issuedTickets } = await confirmOrderPayment(payment.id, orderId);
     getCircuitBreaker('MOMO').recordSuccess();
+    void recordPaymentWebhookAudit({
+      action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_SUCCEEDED,
+      paymentId: payment.id,
+      provider: 'MOMO',
+      orderId,
+      providerTransactionId: transId,
+      signatureValid,
+      resultCode,
+      issuedTicketCount: issuedTickets.length,
+      notificationCount: issuedNotifications.length,
+    });
+    void recordTicketIssuedAudits({
+      provider: 'MOMO',
+      paymentId: payment.id,
+      orderId,
+      issuedTickets,
+    });
     void enqueueIssuedTicketNotifications(issuedNotifications);
   } else if (!isSuccess && payment) {
     const failureReason = `MOMO_${resultCode}`;
     await failPayment(payment.id, orderId, failureReason);
     getCircuitBreaker('MOMO').recordFailure();
+    void recordPaymentWebhookAudit({
+      action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
+      paymentId: payment.id,
+      provider: 'MOMO',
+      orderId,
+      providerTransactionId: transId,
+      reason: failureReason,
+      signatureValid,
+      resultCode,
+    });
   }
 
   return { status: 200, message: 'success' };
@@ -282,6 +389,92 @@ type IssuedNotification = {
   payload: Record<string, unknown>;
 };
 
+function normalizeVnpayProviderTransactionId(
+  rawProviderTxnId: string | undefined,
+  responseCode: string,
+): string | null {
+  const trimmed = rawProviderTxnId?.trim();
+  if (!trimmed) return null;
+
+  // VNPAY returns transaction number "0" for failed/cancelled browser returns.
+  // Storing that placeholder violates the unique (provider, provider_transaction_id) key
+  // across multiple failed attempts, so only successful payments keep a real provider txn id.
+  if (trimmed === '0' && responseCode !== '00') return null;
+
+  return trimmed;
+}
+
+async function recordPaymentWebhookAudit(input: {
+  action:
+    | typeof AUDIT_ACTIONS.PAYMENT_WEBHOOK_SUCCEEDED
+    | typeof AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED;
+  paymentId: string;
+  provider: 'VNPAY' | 'MOMO';
+  orderId: string;
+  providerTransactionId?: string | null;
+  rawProviderTransactionId?: string;
+  reason?: string;
+  signatureValid: boolean;
+  responseCode?: string;
+  resultCode?: number;
+  amount?: string;
+  expectedAmount?: number;
+  issuedTicketCount?: number;
+  notificationCount?: number;
+}): Promise<void> {
+  await auditService.record(
+    {
+      actor_user_id: null,
+      action: input.action,
+      entity_type: AUDIT_ENTITY_TYPES.PAYMENT,
+      entity_id: input.paymentId,
+      metadata: {
+        provider: input.provider,
+        order_id: input.orderId,
+        provider_transaction_id: input.providerTransactionId,
+        raw_provider_transaction_id: input.rawProviderTransactionId,
+        reason: input.reason,
+        signature_valid: input.signatureValid,
+        response_code: input.responseCode,
+        result_code: input.resultCode,
+        amount: input.amount,
+        expected_amount: input.expectedAmount,
+        issued_ticket_count: input.issuedTicketCount,
+        notification_count: input.notificationCount,
+      },
+    },
+    { bestEffort: true },
+  );
+}
+
+async function recordTicketIssuedAudits(input: {
+  provider: 'VNPAY' | 'MOMO';
+  paymentId: string;
+  orderId: string;
+  issuedTickets: ConfirmOrderPaymentResult['issuedTickets'];
+}): Promise<void> {
+  await Promise.allSettled(
+    input.issuedTickets.map((ticket) =>
+      auditService.record(
+        {
+          actor_user_id: null,
+          action: AUDIT_ACTIONS.TICKET_ISSUED,
+          entity_type: AUDIT_ENTITY_TYPES.TICKET,
+          entity_id: ticket.id,
+          metadata: {
+            provider: input.provider,
+            payment_id: input.paymentId,
+            order_id: input.orderId,
+            user_id: ticket.userId,
+            concert_id: ticket.concertId,
+          },
+        },
+        { bestEffort: true },
+      ),
+    ),
+  );
+}
+
 // Đẩy notification phát hành vé sang queue sau khi transaction thanh toán đã commit.
 async function enqueueIssuedTicketNotifications(
   notifications: IssuedNotification[],
@@ -293,6 +486,7 @@ async function enqueueIssuedTicketNotifications(
         notification_id: n.id,
         channel: n.channel as 'EMAIL' | 'PUSH' | 'IN_APP',
         recipient_user_id: n.userId,
+        subject: n.payload.subject as string | undefined,
         body: (n.payload.body as string | undefined) ?? '',
       }).catch((err: unknown) =>
         console.error(`[payment] Failed to enqueue notification ${n.id}:`, err),

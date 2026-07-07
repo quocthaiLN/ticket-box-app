@@ -6,6 +6,7 @@ export type NotificationType =
   | "PAYMENT_FAILED"
   | "TICKET_ISSUED"
   | "CONCERT_UPDATED"
+  | "CONCERT_REMINDER"
   | "CHECKIN_ALERT"
   | "ARTIST_BIO_READY";
 

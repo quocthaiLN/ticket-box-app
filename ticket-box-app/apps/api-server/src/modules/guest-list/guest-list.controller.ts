@@ -1,14 +1,34 @@
 import type { NextFunction, Request, Response } from "express";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "@ticketbox/database";
 import { collection, ok } from "../../shared/http/response.js";
 import { parseImportErrorsQuery, parseGuestScanBody, parseGuestSearchQuery } from "./guest-list.schema.js";
 import { GuestListService } from "./guest-list.service.js";
+import { auditService } from "../audit/audit.service.js";
 
 const service = new GuestListService();
 
 // Admin chạy nhập thủ công cho 1 concert (enqueue job quét Drive ngoài lịch 0h).
 export async function triggerGuestImport(req: Request, res: Response, next: NextFunction) {
   try {
-    res.status(202).json(ok(await service.triggerImport(req.params.concert_id), req.requestId));
+    const result = await service.triggerImport(req.params.concert_id);
+    await auditService.record(
+      {
+        actor_user_id: res.locals.auth?.user_id ?? null,
+        action: AUDIT_ACTIONS.GUEST_IMPORT_TRIGGERED,
+        entity_type: AUDIT_ENTITY_TYPES.GUEST_IMPORT_JOB,
+        entity_id: result.queue_job_id || null,
+        metadata: {
+          concert_id: result.concert_id,
+          queue_job_id: result.queue_job_id,
+          source: "manual_admin_trigger",
+          status: result.status,
+        },
+        ip_address: req.ip,
+        user_agent: req.get("user-agent") ?? null,
+      },
+      { bestEffort: true },
+    );
+    res.status(202).json(ok(result, req.requestId));
   } catch (err) {
     next(err);
   }

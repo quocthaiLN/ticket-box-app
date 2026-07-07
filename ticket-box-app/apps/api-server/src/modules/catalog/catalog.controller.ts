@@ -1,5 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
-import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import {
+  invalidateConcertListCache,
+  invalidateConcertCache,
+  invalidateSeatMapCache,
+  invalidateTicketTypeCache,
+} from "@ticketbox/redis";
 import { collection, ok } from "../../shared/http/response.js";
 import {
   parseAdminConcertsQuery,
@@ -14,7 +19,6 @@ import {
   parseUpdateVenueBody
 } from "./catalog.schema.js";
 import { CatalogService } from "./catalog.service.js";
-import { catalogCacheKeys } from "./catalog.cache.js";
 
 export class CatalogController {
   constructor(private readonly service = new CatalogService()) {}
@@ -237,34 +241,3 @@ export class CatalogController {
 
 // ── Cache invalidation helpers ─────────────────────────────────────────────
 
-async function invalidateConcertListCache(): Promise<void> {
-  await cacheDeletePattern("catalog:list:*").catch((e) =>
-    console.error("[catalog] cache list invalidation error:", e),
-  );
-}
-
-async function invalidateConcertCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.concert(concertId)),
-    cacheDelete(catalogCacheKeys.metadata(concertId)),
-    cacheDelete(catalogCacheKeys.seatMap(concertId)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-    cacheDeletePattern("catalog:list:*"),
-  ]);
-}
-
-async function invalidateSeatMapCache(concertId: string): Promise<void> {
-  await cacheDelete(catalogCacheKeys.seatMap(concertId)).catch((e) =>
-    console.error("[catalog] cache seatmap invalidation error:", e),
-  );
-}
-
-async function invalidateTicketTypeCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-  ]);
-}

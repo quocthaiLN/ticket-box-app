@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "@ticketbox/database";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import { requireRole } from "../../shared/guards/role.guard.js";
 import { collection, ok } from "../../shared/http/response.js";
 import { Errors } from "../../shared/http/problem-details.js";
+import { auditService } from "../audit/audit.service.js";
 import { notificationsService } from "./notifications.service.js";
 import {
   AdminNotificationsQuerySchema,
@@ -92,6 +94,26 @@ notificationsRouter.post(
       const updated = await notificationsService.retry(
         req.params.notification_id,
       );
+      if (updated) {
+        await auditService.record(
+          {
+            actor_user_id: res.locals.auth?.user_id ?? null,
+            action: AUDIT_ACTIONS.RETRY_NOTIFICATION,
+            entity_type: AUDIT_ENTITY_TYPES.NOTIFICATION,
+            entity_id: updated.id,
+            metadata: {
+              previous_status: existing.status,
+              new_status: updated.status,
+              attempts: updated.attempts,
+              channel: updated.channel,
+              type: updated.type,
+            },
+            ip_address: req.ip,
+            user_agent: req.get("user-agent") ?? null,
+          },
+          { bestEffort: true },
+        );
+      }
       res.status(202).json(ok(updated, req.requestId));
     } catch (err) {
       next(err);
