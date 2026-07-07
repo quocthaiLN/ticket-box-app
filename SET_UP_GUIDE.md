@@ -148,6 +148,8 @@ http://localhost:3000/v1/concerts
 
 ## 5. Luồng demo cơ bản
 
+Kịch bản demo đầy đủ (sơ đồ hạng vé, preview, MoMo, check-in checker, khách mời Drive, audit log web): xem `DEMO_GUIDE.md`.
+
 1. Đăng nhập web bằng `organizer2@gmail.com` / `Password@123`.
 2. Vào dashboard BTC, tạo một hồ sơ concert mới.
 3. Điền `planned_publish_at` cách thời điểm hiện tại khoảng 5 phút để test auto-publish. `starts_at` phải sau `planned_publish_at`.

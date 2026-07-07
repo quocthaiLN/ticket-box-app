@@ -9,6 +9,7 @@ import {
   type OrderDetail,
   type PaymentProvider,
 } from "../../services/order.service";
+import { getApiErrorCode } from "../../lib/api-client";
 import {
   clearPendingCheckout,
   formatCountdown,
@@ -19,6 +20,23 @@ import {
 } from "./checkout-storage";
 
 type CheckoutStep = "review" | "payment" | "processing" | "success";
+
+// Thông báo tiếng Việt theo mã lỗi — không hiển thị detail thô của server
+// (tiếng Anh + UUID nội bộ) cho người dùng cuối.
+const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
+  SALE_WINDOW_CLOSED: "Vé chưa tới giờ mở bán hoặc đã hết thời gian bán. Vui lòng kiểm tra giờ mở bán trên trang sự kiện.",
+  TICKET_TYPE_NOT_ON_SALE: "Loại vé này hiện không mở bán. Vui lòng chọn lại vé trên trang sự kiện.",
+  TICKET_TYPE_NOT_FOUND: "Loại vé không còn tồn tại. Vui lòng chọn lại vé trên trang sự kiện.",
+  TICKET_SOLD_OUT: "Rất tiếc, loại vé này vừa hết. Vui lòng chọn loại vé khác.",
+  PER_USER_LIMIT_EXCEEDED: "Bạn đã đạt giới hạn số vé được mua cho loại vé này.",
+  ORDER_NOT_HELD: "Đơn hàng đã hết hạn giữ vé. Vui lòng chọn vé và tạo đơn mới.",
+};
+
+function checkoutErrorMessage(err: unknown, fallback: string): string {
+  const code = getApiErrorCode(err);
+  if (code && CHECKOUT_ERROR_MESSAGES[code]) return CHECKOUT_ERROR_MESSAGES[code];
+  return err instanceof Error && err.message ? err.message : fallback;
+}
 
 export function CheckoutPage() {
   const navigate = useNavigate();
@@ -106,7 +124,7 @@ export function CheckoutPage() {
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo đơn hàng.");
+      setError(checkoutErrorMessage(err, "Không thể tạo đơn hàng."));
       setStep("payment");
     } finally {
       setBusy(false);
@@ -134,7 +152,7 @@ export function CheckoutPage() {
       // Redirect in the current tab so browser popup policies cannot block checkout.
       window.location.assign(result.checkout_url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo yêu cầu thanh toán.");
+      setError(checkoutErrorMessage(err, "Không thể tạo yêu cầu thanh toán."));
       setStep("payment");
     } finally {
       setBusy(false);

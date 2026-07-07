@@ -271,6 +271,7 @@ export class OrganizerRepository {
         checkerCount: input.checker_count,
         pressKitUrl: input.press_kit_url,
         artistBioImageUrl: input.artist_bio_image_url,
+        seatMapUrl: input.seat_map_url,
         ticketTypes: input.ticket_types as unknown as Prisma.InputJsonValue,
         status: ApprovalStatus.PENDING,
       },

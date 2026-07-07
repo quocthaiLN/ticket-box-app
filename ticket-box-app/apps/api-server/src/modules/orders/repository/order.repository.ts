@@ -110,11 +110,19 @@ function mapReservationErrorToApi(err: unknown): unknown {
         detail: err.message,
       });
     case "TICKET_TYPE_NOT_ON_SALE":
-    case "SALE_WINDOW_CLOSED":
       return new ApiError({
         title: "TICKET_TYPE_NOT_ON_SALE",
         status: 422,
         code: "TICKET_TYPE_NOT_ON_SALE",
+        detail: err.message,
+      });
+    // Tách khỏi NOT_ON_SALE: vé hợp lệ nhưng ngoài khung giờ bán (chưa mở/đã đóng)
+    // để FE hiển thị đúng "chưa tới giờ mở bán" thay vì "vé không mở bán".
+    case "SALE_WINDOW_CLOSED":
+      return new ApiError({
+        title: "SALE_WINDOW_CLOSED",
+        status: 422,
+        code: "SALE_WINDOW_CLOSED",
         detail: err.message,
       });
     case "INSUFFICIENT_INVENTORY":

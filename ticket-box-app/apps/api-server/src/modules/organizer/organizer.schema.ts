@@ -66,6 +66,8 @@ export type CreateOrganizerRequestInput = {
   checker_count: number;
   press_kit_url?: string;
   artist_bio_image_url?: string;
+  // Ảnh sơ đồ chỗ ngồi (upload qua /organizer/uploads/seat-map trước khi nộp hồ sơ).
+  seat_map_url?: string;
   ticket_types: OrganizerRequestTicketTypeInput[];
 };
 
@@ -121,6 +123,7 @@ export function parseCreateOrganizerRequestBody(body: unknown): CreateOrganizerR
     checker_count: requiredPositiveInt(value.checker_count, "checker_count"),
     press_kit_url: asOptionalString(value.press_kit_url),
     artist_bio_image_url: asOptionalString(value.artist_bio_image_url),
+    seat_map_url: asOptionalString(value.seat_map_url),
     ticket_types: ticketTypes,
   };
 }

@@ -133,7 +133,7 @@ export class CatalogRepository {
     return {
       concert_id: concert.id,
       svg_url: concert.seatMapUrl ?? undefined,
-      zones: concert.seatZones.map((zone) => ({
+      zones: concert.seatZones.filter(isAudienceZone).map((zone) => ({
         seat_zone_id: zone.id,
         code: zone.code,
         name: zone.name,
@@ -631,6 +631,12 @@ function mapConcertArtists(
   return artists.length > 0 ? artists : undefined;
 }
 
+// Khu khách mời (code GUEST, sinh từ guest-list import) không bán vé —
+// không đưa vào sơ đồ/danh sách zone phía audience; check-in/gate vẫn dùng bình thường.
+function isAudienceZone(zone: { code: string }): boolean {
+  return zone.code !== "GUEST";
+}
+
 function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
   return {
     id: concert.id,
@@ -668,7 +674,7 @@ function mapConcertMetadata(
       cover_image_url: detail.cover_image_url,
     },
     venue: mapVenue(concert.venue),
-    seat_zones: concert.seatZones.map(mapSeatZone),
+    seat_zones: concert.seatZones.filter(isAudienceZone).map(mapSeatZone),
     ticket_types: concert.ticketTypes.map(mapTicketType),
     seat_map: {
       svg_url: concert.seatMapUrl ?? undefined,

@@ -268,6 +268,16 @@ export function AdminOrganizerRequestReviewPage() {
                   <div className="mt-3">
                     <DetailItem label="Press Kit" value={detailView.pressKitLabel} />
                   </div>
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-xs font-semibold text-[#8585A0]">Sơ đồ chỗ ngồi</p>
+                    {detailView.seatMapUrl ? (
+                      <a href={detailView.seatMapUrl} target="_blank" rel="noreferrer" title="Mở ảnh gốc trong tab mới">
+                        <img src={detailView.seatMapUrl} alt="Sơ đồ chỗ ngồi" className="max-h-64 w-full rounded-lg border border-white/[0.07] object-contain" />
+                      </a>
+                    ) : (
+                      <p className="text-sm text-[#B0B0C0]">Chưa cung cấp</p>
+                    )}
+                  </div>
                 </section>
 
                 <section className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">

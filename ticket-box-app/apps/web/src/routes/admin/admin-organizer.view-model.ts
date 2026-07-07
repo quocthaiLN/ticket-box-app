@@ -26,6 +26,8 @@ export type AdminOrganizerRequestDetailView = AdminOrganizerRequestView & {
   venueId: string;
   plannedPublishAt?: string;
   pressKitLabel: string;
+  // Ảnh sơ đồ chỗ ngồi organizer đính kèm hồ sơ (null = chưa cung cấp).
+  seatMapUrl: string | null;
   bioStatus: string | null;
   artistBio: string | null;
   artistBioImageUrl: string | null;
@@ -58,6 +60,7 @@ export function toAdminOrganizerRequestDetailView(detail: AdminOrganizerRequestD
     venueId: detail.venue_id,
     plannedPublishAt: detail.planned_publish_at,
     pressKitLabel: detail.press_kit_url || "Chưa cung cấp",
+    seatMapUrl: detail.seat_map_url ?? null,
     bioStatus: detail.bio_status ?? null,
     artistBio: detail.artist_bio ?? null,
     artistBioImageUrl: detail.artist_bio_image_url ?? null,

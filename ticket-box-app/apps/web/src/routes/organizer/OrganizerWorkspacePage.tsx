@@ -963,9 +963,15 @@ function TabbedNewRequestForm({
   // Ảnh concert + ảnh nghệ sĩ không upload riêng nữa — hệ thống tách từ press kit
   // (quy ước: ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).
   const [pressKitFile, setPressKitFile] = useState<File | null>(null);
+  // Ảnh sơ đồ chỗ ngồi — cùng cơ chế: giữ File, upload khi nộp hồ sơ.
+  const [seatMapFile, setSeatMapFile] = useState<File | null>(null);
 
   function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
     setPressKitFile(event.target.files?.[0] ?? null);
+  }
+
+  function handleSeatMapFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeatMapFile(event.target.files?.[0] ?? null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1014,6 +1020,10 @@ function TabbedNewRequestForm({
       if (pressKitFile) {
         pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
       }
+      let seatMapUrl: string | undefined;
+      if (seatMapFile) {
+        seatMapUrl = (await uploadOrganizerSeatMapImage(seatMapFile)).url;
+      }
 
       await onSubmit({
         venue_id: form.venueId,
@@ -1026,6 +1036,7 @@ function TabbedNewRequestForm({
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
         press_kit_url: pressKitUrl,
+        seat_map_url: seatMapUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -1173,6 +1184,23 @@ function TabbedNewRequestForm({
 
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
+            <div className="mb-4 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Sơ đồ chỗ ngồi (ảnh)</p>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                <Upload className="h-4 w-4" />
+                {seatMapFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleSeatMapFileChange} />
+              </label>
+              {seatMapFile ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
+                  <img src={URL.createObjectURL(seatMapFile)} alt="Xem trước sơ đồ chỗ ngồi" className="max-h-56 w-full rounded-lg object-contain" />
+                  <button type="button" onClick={() => setSeatMapFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ ảnh</button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[#8585A0]">JPEG/PNG/WebP/GIF ≤ 10MB. Ảnh nên chú thích rõ màu và tên từng hạng vé — khán giả sẽ đối chiếu khi chọn vé.</p>
+              )}
+            </div>
             <div className="space-y-3">
               {zones.map((zone) => (
                 <div key={zone.id} className="rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">

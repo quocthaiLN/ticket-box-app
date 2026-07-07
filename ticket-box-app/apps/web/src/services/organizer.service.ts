@@ -43,6 +43,7 @@ export type OrganizerRequestSummary = {
 export type OrganizerRequestDetail = OrganizerRequestSummary & {
   description?: string;
   press_kit_url?: string;
+  seat_map_url?: string;
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
@@ -143,6 +144,8 @@ export type CreateOrganizerRequestInput = {
   checker_count: number;
   press_kit_url?: string;
   artist_bio_image_url?: string;
+  // Ảnh sơ đồ chỗ ngồi upload lúc nộp hồ sơ; copy sang concert khi admin approve.
+  seat_map_url?: string;
   ticket_types: OrganizerRequestTicketType[];
 };
 

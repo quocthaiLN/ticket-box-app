@@ -36,6 +36,9 @@ export type UiTicketType = {
   availableQuantity: number | null;
   soldPercent: number;
   color: string;
+  // Khung giờ bán — dùng để chặn mua trước giờ mở bán ngay trên UI.
+  saleStartAt?: string;
+  saleEndAt?: string;
 };
 
 export type UiArtist = {
@@ -142,6 +145,8 @@ export function mapDetailConcert(
       availableQuantity,
       soldPercent: estimateSoldPercent(availableQuantity, ticketType.status),
       color,
+      saleStartAt: ticketType.sale_start_at,
+      saleEndAt: ticketType.sale_end_at,
     };
   });
 
