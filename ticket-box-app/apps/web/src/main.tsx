@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
 import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
+import { AdminAuditLogPage } from "./routes/admin/AdminAuditLogPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
 import { AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
@@ -76,6 +77,10 @@ const router = createBrowserRouter([
       {
         path: "admin/accounts",
         element: <AdminAccountsPage />
+      },
+      {
+        path: "admin/audit-logs",
+        element: <AdminAuditLogPage />
       },
       {
         path: "admin/concerts/:concertId",
