@@ -72,6 +72,43 @@ Trong payment flow, giai đoạn 4 đã thêm audit:
 
 Audit chạy best-effort sau transaction, không nên làm fail checkout/payment.
 
+### Ghi chú lỗi VNPAY cancel/fail đã gặp ngày 2026-07-07
+
+Triệu chứng thực tế:
+
+- User tạo payment attempt thành công qua `POST /v1/orders/:order_id/payments`, API trả `201`.
+- Khi browser quay về `GET /v1/payment/return` với `vnp_ResponseCode=24`, `vnp_TransactionStatus=02`, `vnp_TransactionNo=0`, backend trả `500`.
+- Prisma báo lỗi unique constraint trên `payments(provider, provider_transaction_id)` tại `payment.repository.ts`, hàm `saveWebhookRawPayload`.
+
+Nguyên nhân:
+
+- VNPAY có thể gửi `vnp_TransactionNo=0` cho giao dịch bị hủy/thất bại.
+- Code cũ xem `"0"` như mã giao dịch provider thật và lưu vào `provider_transaction_id`.
+- Vì DB có unique key `(provider, provider_transaction_id)`, nhiều giao dịch VNPAY fail/cancel cùng lưu `"0"` sẽ đụng unique constraint.
+
+Cách xử lý đã áp dụng trong `ticket-box-app/apps/api-server/src/modules/payments/payment.service.ts`:
+
+- Thêm helper normalize `vnp_TransactionNo`.
+- Nếu `vnp_TransactionNo` rỗng hoặc bằng `"0"` trong case `vnp_ResponseCode != "00"`, không lưu vào `provider_transaction_id`.
+- Với payment thành công `vnp_ResponseCode = "00"`, vẫn bắt buộc phải có provider transaction id thật để giữ idempotency webhook.
+- Raw payload VNPAY vẫn được lưu vào `payments.webhook_payload`.
+- Audit payment webhook vẫn ghi thêm `raw_provider_transaction_id` để đối soát được provider đã gửi giá trị gốc là `"0"`.
+
+Kỳ vọng sau fix:
+
+- Return/IPN fail hoặc cancel của VNPAY không còn làm API trả `500` vì unique constraint.
+- Payment attempt bị fail/cancel vẫn được cập nhật trạng thái đúng và có raw payload để audit.
+- Payment success vẫn idempotent theo provider transaction id thật.
+
+Test regression Thái nên thêm khi viết lại checkout/payment tests:
+
+1. Tạo 2 order/payment VNPAY khác nhau.
+2. Gửi return/webhook fail cho cả 2 với `vnp_ResponseCode=24`, `vnp_TransactionStatus=02`, `vnp_TransactionNo=0`.
+3. Assert cả 2 request không trả `500`.
+4. Assert `payments.provider_transaction_id` của các payment fail/cancel không bị set thành `"0"`.
+5. Assert `payments.webhook_payload` vẫn còn `vnp_TransactionNo: "0"`.
+6. Assert audit log có `raw_provider_transaction_id = "0"` nếu audit được bật trong test.
+
 ## 5. File Thái nên đọc
 
 - `ticket-box-app/apps/worker-server/src/schedulers/auto-publish.scheduler.ts`
