@@ -287,7 +287,8 @@ async function apiRequest<TData>(
   });
 
   if (!response.ok) {
-    throw new Error(await errorMessage(response));
+    const { message, code } = await parseErrorResponse(response);
+    throw new ApiClientError(message, code, response.status);
   }
 
   if (response.status === 204) {
@@ -322,21 +323,39 @@ function queryString(params: Record<string, string>) {
   return text ? `?${text}` : "";
 }
 
-async function errorMessage(response: Response) {
+// Lỗi API kèm `code` từ ProblemDetails để UI map sang thông báo thân thiện
+// (message thô của server có thể chứa UUID/tiếng Anh — không nên hiển thị thẳng).
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public status?: number,
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
+
+export function getApiErrorCode(err: unknown): string | undefined {
+  return err instanceof ApiClientError ? err.code : undefined;
+}
+
+async function parseErrorResponse(response: Response): Promise<{ message: string; code?: string }> {
   const fallback = `TicketBox API request failed: ${response.status}`;
   const text = await response.text();
-  if (!text) return fallback;
+  if (!text) return { message: fallback };
 
   try {
     const problem = JSON.parse(text) as {
       detail?: string;
       title?: string;
+      code?: string;
       errors?: Array<{ field?: string; message?: string }>;
     };
     const firstFieldError = problem.errors?.find((item) => item.message);
-    if (firstFieldError?.message) return firstFieldError.message;
-    return problem.detail ?? problem.title ?? fallback;
+    const message = firstFieldError?.message ?? problem.detail ?? problem.title ?? fallback;
+    return { message, code: problem.code };
   } catch {
-    return text;
+    return { message: text };
   }
 }

@@ -2,6 +2,7 @@ import {
   ChevronRight,
   FileText,
   LayoutDashboard,
+  ScrollText,
   ShieldCheck,
   Trash2,
   UserCog,
@@ -18,6 +19,7 @@ const navItems: Array<{ to: string; label: string; icon: LucideIcon }> = [
   { to: "/admin/organizer-requests", label: "Hồ sơ BTC", icon: FileText },
   { to: "/admin/deletion-requests", label: "Yêu cầu hủy", icon: Trash2 },
   { to: "/admin/accounts", label: "Account", icon: UserCog },
+  { to: "/admin/audit-logs", label: "Audit log", icon: ScrollText },
 ];
 
 export function AdminShell({ children }: AdminShellProps) {

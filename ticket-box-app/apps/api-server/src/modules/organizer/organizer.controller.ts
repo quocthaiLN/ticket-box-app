@@ -114,6 +114,34 @@ export class OrganizerController {
     }
   };
 
+  uploadSeatMapImage = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const upload = await this.service.uploadSeatMapImage(
+        currentUserId(res),
+        Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        {
+          contentType: req.headers["content-type"],
+          fileName:
+            typeof req.headers["x-file-name"] === "string"
+              ? req.headers["x-file-name"]
+              : undefined,
+        },
+      );
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res
+        .status(201)
+        .json(
+          ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId),
+        );
+    } catch (err) {
+      next(err);
+    }
+  };
+
   uploadCoverImage = async (
     req: Request,
     res: Response,

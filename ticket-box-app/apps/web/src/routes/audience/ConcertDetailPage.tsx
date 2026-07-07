@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { SeatMapPanel } from "../../components/SeatMapPanel";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   formatCurrency,
@@ -292,9 +293,11 @@ export function ConcertDetailView({
             {activeTab === "map" && (
               <div className="space-y-4">
                 {concert.seatMapUrl ? (
-                  <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111118]">
-                    <ImageWithFallback src={concert.seatMapUrl} alt="Sơ đồ ghế" className="max-h-[420px] w-full object-contain" />
-                  </div>
+                  <SeatMapPanel
+                    seatMapUrl={concert.seatMapUrl}
+                    zones={concert.seatZones}
+                    ticketTypes={concert.ticketTypes}
+                  />
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-[#111118] p-6">
                     <SeatMapVisualization zones={concert.seatZones} />
@@ -322,7 +325,7 @@ export function ConcertDetailView({
           <div id="ticket-list" className="sticky top-20 overflow-hidden rounded-2xl border border-white/10 bg-[#111118]">
             <div className="border-b border-white/10 px-5 py-4">
               <h2 className="text-sm font-semibold text-[#F0EDEB]">Giá vé</h2>
-              <p className="mt-0.5 text-xs text-[#8585A0]">Dữ liệu lấy từ Ticket Types và Inventory API.</p>
+              <p className="mt-0.5 text-xs text-[#8585A0]">Số lượng vé được cập nhật theo thời gian thực.</p>
             </div>
 
             <div className="space-y-2 p-4">
@@ -493,7 +496,7 @@ function SeatMapVisualization({ zones }: { zones: { id: string; name: string; co
           );
         })}
       </div>
-      <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ mô phỏng từ Seat Zone API.</p>
+      <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ minh họa các khu vực chỗ ngồi.</p>
     </div>
   );
 }

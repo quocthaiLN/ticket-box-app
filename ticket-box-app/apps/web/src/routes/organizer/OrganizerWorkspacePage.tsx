@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ClipboardCopy,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -28,6 +29,7 @@ import {
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
+import { LongText } from "../../components/LongText";
 import type { Venue } from "../../lib/api-client";
 import {
   createOrganizerDeletionRequest,
@@ -41,6 +43,7 @@ import {
   listOrganizerConcertGuests,
   listOrganizerOrders,
   setOrganizerConcertDriveFolder,
+  uploadOrganizerSeatMapImage,
   listOrganizerRequests,
   listOrganizerVenues,
   normalizeTicketTypes,
@@ -321,7 +324,34 @@ function OrganizerDashboardView({
   const myConcerts = performance.slice(0, 4);
   const pendingRequests = requests.filter((request) => request.status === "PENDING").slice(0, 4);
   const monthlyRevenue = buildMonthlyRevenue(orders);
-  const visibleCheckers = checkers;
+  const [checkerConcertId, setCheckerConcertId] = useState<string>("all");
+  // Concert lấy từ chính danh sách checker để dropdown không hiện concert chưa có tài khoản.
+  const checkerConcerts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const checker of checkers) map.set(checker.concert_id, checker.concert_title);
+    return [...map.entries()].map(([id, title]) => ({ id, title }));
+  }, [checkers]);
+  const visibleCheckers =
+    checkerConcertId === "all"
+      ? checkers
+      : checkers.filter((checker) => checker.concert_id === checkerConcertId);
+  const checkerGroups = useMemo(() => groupCheckersByConcert(visibleCheckers), [visibleCheckers]);
+  // null = trạng thái mặc định (chỉ mở nhóm đầu); reset khi đổi bộ lọc concert.
+  const [openGroupIds, setOpenGroupIds] = useState<string[] | null>(null);
+
+  function changeCheckerFilter(concertId: string) {
+    setCheckerConcertId(concertId);
+    setOpenGroupIds(null);
+  }
+
+  function toggleCheckerGroup(concertId: string) {
+    setOpenGroupIds((current) => {
+      const base = current ?? (checkerGroups[0] ? [checkerGroups[0].concertId] : []);
+      return base.includes(concertId)
+        ? base.filter((id) => id !== concertId)
+        : [...base, concertId];
+    });
+  }
   const statCards = [
     { label: "Tổng doanh thu", value: formatMoney(stats.revenue), icon: <TrendingUp className="h-5 w-5" />, tone: "#F5C842" },
     { label: "Vé đã bán", value: stats.sold.toLocaleString("vi-VN"), icon: <Ticket className="h-5 w-5" />, tone: "#7B61FF" },
@@ -371,7 +401,7 @@ function OrganizerDashboardView({
         </DashboardPanel>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         {pendingRequests.length > 0 && (
           <DashboardPanel>
             <div className="mb-4 flex items-center justify-between">
@@ -446,34 +476,70 @@ function OrganizerDashboardView({
             </div>
           </DashboardPanel>
         )}
+      </div>
 
-        <DashboardPanel className="xl:col-span-2">
+      <div className="mt-6">
+        <DashboardPanel>
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-[#F0EDEB]">Tài khoản checker theo concert</h3>
               <p className="mt-1 text-xs text-[#8585A0]">Mật khẩu chỉ hiện một lần lúc admin duyệt; dashboard này hiển thị đầy đủ email, tên và concert tương ứng.</p>
             </div>
-            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#7B61FF]/10 px-2.5 py-1 text-xs font-semibold text-[#C9BCFF]">
-              <UserCheck className="h-3.5 w-3.5" />
-              {checkers.length.toLocaleString("vi-VN")} tài khoản
-            </span>
+            <div className="flex items-center gap-2">
+              <select
+                value={checkerConcertId}
+                onChange={(event) => changeCheckerFilter(event.target.value)}
+                className="rounded-lg border border-white/[0.08] bg-[#0D0D15] px-2.5 py-1.5 text-xs text-[#F0EDEB] outline-none"
+              >
+                <option value="all">Tất cả concert</option>
+                {checkerConcerts.map((concert) => (
+                  <option key={concert.id} value={concert.id}>{concert.title}</option>
+                ))}
+              </select>
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#7B61FF]/10 px-2.5 py-1 text-xs font-semibold text-[#C9BCFF]">
+                <UserCheck className="h-3.5 w-3.5" />
+                {visibleCheckers.length.toLocaleString("vi-VN")} tài khoản
+              </span>
+            </div>
           </div>
           {visibleCheckers.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {visibleCheckers.map((checker) => (
-                <article key={checker.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[#7B61FF]/10 px-2 py-0.5 text-xs font-semibold text-[#C9BCFF]">{checker.status}</span>
-                    <span className="text-xs text-[#8585A0]">{formatDate(checker.created_at)}</span>
+            <div className="max-h-[480px] space-y-2 overflow-y-auto pr-1">
+              {checkerGroups.map((group, index) => {
+                // Chọn concert cụ thể → mở luôn; "Tất cả" → mặc định chỉ mở nhóm đầu.
+                const open =
+                  checkerConcertId !== "all" ||
+                  (openGroupIds === null ? index === 0 : openGroupIds.includes(group.concertId));
+                return (
+                  <div key={group.concertId} className="overflow-hidden rounded-xl border border-white/[0.07]">
+                    <button
+                      type="button"
+                      onClick={() => toggleCheckerGroup(group.concertId)}
+                      className="flex w-full items-center justify-between gap-3 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
+                    >
+                      <span className="min-w-0 break-words text-sm font-medium text-[#F0EDEB]">{group.concertTitle}</span>
+                      <span className="flex shrink-0 items-center gap-2 text-xs text-[#8585A0]">
+                        {group.checkers.length} tài khoản
+                        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="divide-y divide-white/[0.05]">
+                        {group.checkers.map((checker) => (
+                          <div key={checker.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                            <span className="text-sm font-medium text-[#F0EDEB]">{checker.full_name || "Checker chưa đặt tên"}</span>
+                            <LongText value={checker.email} copyable className="min-w-0 text-xs text-[#C9BCFF]" />
+                            <span className="ml-auto flex shrink-0 items-center gap-2">
+                              <span className="rounded-full bg-[#7B61FF]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C9BCFF]">{checker.status}</span>
+                              <span className="text-[11px] text-[#8585A0]">{formatDate(checker.created_at)}</span>
+                              <CopyIdButton value={checker.user_id} />
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <p className="break-words text-sm font-semibold text-[#F0EDEB]">{checker.full_name || "Checker chưa đặt tên"}</p>
-                  <p className="mt-1 break-all text-xs text-[#C9BCFF]">{checker.email}</p>
-                  <p className="mt-2 break-words text-xs text-[#8585A0]">
-                    Concert: <span className="text-[#F0EDEB]">{checker.concert_title}</span>
-                  </p>
-                  <p className="mt-1 break-all text-[11px] text-[#8585A0]">User ID: {checker.user_id}</p>
-                </article>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <EmptyState text="Chưa có tài khoản checker nào. Tài khoản sẽ được tạo sau khi admin duyệt hồ sơ BTC." />
@@ -482,6 +548,46 @@ function OrganizerDashboardView({
       </div>
     </div>
   );
+}
+
+// Nút copy User ID gọn cho hàng checker — ID dài không cần hiển thị trên dashboard.
+function CopyIdButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard bị chặn → bỏ qua
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy User ID: ${value}`}
+      className="rounded p-1 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]"
+    >
+      {copied ? <CheckCircle2 className="h-3 w-3 text-[#2DBE6C]" /> : <ClipboardCopy className="h-3 w-3" />}
+    </button>
+  );
+}
+
+function groupCheckersByConcert(checkers: OrganizerCheckerAccount[]) {
+  const groups = new Map<string, { concertId: string; concertTitle: string; checkers: OrganizerCheckerAccount[] }>();
+  for (const checker of checkers) {
+    const group = groups.get(checker.concert_id) ?? {
+      concertId: checker.concert_id,
+      concertTitle: checker.concert_title,
+      checkers: [],
+    };
+    group.checkers.push(checker);
+    groups.set(checker.concert_id, group);
+  }
+  return [...groups.values()];
 }
 
 function DashboardView({
@@ -857,9 +963,15 @@ function TabbedNewRequestForm({
   // Ảnh concert + ảnh nghệ sĩ không upload riêng nữa — hệ thống tách từ press kit
   // (quy ước: ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).
   const [pressKitFile, setPressKitFile] = useState<File | null>(null);
+  // Ảnh sơ đồ chỗ ngồi — cùng cơ chế: giữ File, upload khi nộp hồ sơ.
+  const [seatMapFile, setSeatMapFile] = useState<File | null>(null);
 
   function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
     setPressKitFile(event.target.files?.[0] ?? null);
+  }
+
+  function handleSeatMapFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeatMapFile(event.target.files?.[0] ?? null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -908,6 +1020,10 @@ function TabbedNewRequestForm({
       if (pressKitFile) {
         pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
       }
+      let seatMapUrl: string | undefined;
+      if (seatMapFile) {
+        seatMapUrl = (await uploadOrganizerSeatMapImage(seatMapFile)).url;
+      }
 
       await onSubmit({
         venue_id: form.venueId,
@@ -920,6 +1036,7 @@ function TabbedNewRequestForm({
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
         press_kit_url: pressKitUrl,
+        seat_map_url: seatMapUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -1067,6 +1184,23 @@ function TabbedNewRequestForm({
 
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
+            <div className="mb-4 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Sơ đồ chỗ ngồi (ảnh)</p>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                <Upload className="h-4 w-4" />
+                {seatMapFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleSeatMapFileChange} />
+              </label>
+              {seatMapFile ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
+                  <img src={URL.createObjectURL(seatMapFile)} alt="Xem trước sơ đồ chỗ ngồi" className="max-h-56 w-full rounded-lg object-contain" />
+                  <button type="button" onClick={() => setSeatMapFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ ảnh</button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[#8585A0]">JPEG/PNG/WebP/GIF ≤ 10MB. Ảnh nên chú thích rõ màu và tên từng hạng vé — khán giả sẽ đối chiếu khi chọn vé.</p>
+              )}
+            </div>
             <div className="space-y-3">
               {zones.map((zone) => (
                 <div key={zone.id} className="rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
@@ -1502,7 +1636,10 @@ function OrganizerConcertEditor({
     endsAt: toDateTimeLocal(concert.ends_at),
     venueId: concert.venue.id,
     coverImageUrl: concert.cover_image_url ?? "",
+    seatMapUrl: concert.seat_map_url ?? "",
   });
+  const [seatMapUploading, setSeatMapUploading] = useState(false);
+  const [seatMapError, setSeatMapError] = useState("");
   const [tickets, setTickets] = useState<EditableTicketType[]>(
     (concert.ticket_types ?? []).map((ticket) => ({
       id: ticket.id,
@@ -1562,6 +1699,39 @@ function OrganizerConcertEditor({
       });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Upload xong lưu seat_map_url vào concert luôn (gọi API trực tiếp, không đi qua
+  // nút "Lưu thay đổi" của tab Thông tin cơ bản — luồng đó lọc bỏ chuỗi rỗng nên
+  // không thể dùng để gỡ ảnh).
+  async function handleSeatMapUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setSeatMapError("");
+    setSeatMapUploading(true);
+    try {
+      const upload = await uploadOrganizerSeatMapImage(file);
+      await updateOrganizerConcert(concert.id, { seat_map_url: upload.url });
+      setForm((current) => ({ ...current, seatMapUrl: upload.url }));
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : "Không thể upload ảnh sơ đồ.");
+    } finally {
+      setSeatMapUploading(false);
+    }
+  }
+
+  async function handleSeatMapRemove() {
+    setSeatMapError("");
+    setSeatMapUploading(true);
+    try {
+      await updateOrganizerConcert(concert.id, { seat_map_url: null });
+      setForm((current) => ({ ...current, seatMapUrl: "" }));
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ ảnh sơ đồ.");
+    } finally {
+      setSeatMapUploading(false);
     }
   }
 
@@ -1799,6 +1969,34 @@ function OrganizerConcertEditor({
 
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
+            <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-[#F0EDEB]">Sơ đồ hạng vé (ảnh)</h4>
+                {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
+              </div>
+              <p className="mb-3 text-xs text-[#8585A0]">
+                Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
+                  <Upload className="h-4 w-4" />
+                  {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapUpload} />
+                </label>
+                {form.seatMapUrl && (
+                  <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                    Gỡ ảnh
+                  </button>
+                )}
+              </div>
+              {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
+              {form.seatMapUrl && (
+                <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
+                  <img src={form.seatMapUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
+                </div>
+              )}
+            </div>
+
             {zoneError && (
               <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
                 {zoneError}

@@ -10,3 +10,4 @@ ticket-box-app/apps/api-server/public/uploads/
 ticket-box-app/apps/*/tsconfig.tsbuildinfo
 z-doc-cua-thai
 scripts/
+temp-docs/

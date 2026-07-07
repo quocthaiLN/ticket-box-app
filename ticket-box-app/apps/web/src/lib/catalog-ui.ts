@@ -36,6 +36,9 @@ export type UiTicketType = {
   availableQuantity: number | null;
   soldPercent: number;
   color: string;
+  // Khung giờ bán — dùng để chặn mua trước giờ mở bán ngay trên UI.
+  saleStartAt?: string;
+  saleEndAt?: string;
 };
 
 export type UiArtist = {
@@ -86,7 +89,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     status: concert.status,
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
     genre: "Live Music",
-    tags: [concert.venue.city, concert.status],
+    tags: [concert.venue.city],
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,
@@ -142,6 +145,8 @@ export function mapDetailConcert(
       availableQuantity,
       soldPercent: estimateSoldPercent(availableQuantity, ticketType.status),
       color,
+      saleStartAt: ticketType.sale_start_at,
+      saleEndAt: ticketType.sale_end_at,
     };
   });
 
@@ -173,7 +178,7 @@ export function mapDetailConcert(
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
     seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url ?? metadata.seat_map.fallback_image_url,
     genre: "Live Music",
-    tags: [concert.venue.city, concert.status],
+    tags: [concert.venue.city],
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,
