@@ -47,7 +47,9 @@ export class CatalogController {
 
   getMetadata = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600");
+      // TTL ngắn ở browser: metadata đổi ngay sau publish/duyệt bio — cache 1h từng
+      // làm audience thấy vé DRAFT cũ ("hết vé") dù DB đã mở bán. CDN vẫn giữ s-maxage.
+      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=300, stale-while-revalidate=60");
       res.json(ok(await this.service.getMetadata(req.params.concert_id), req.requestId));
     } catch (err) {
       next(err);
