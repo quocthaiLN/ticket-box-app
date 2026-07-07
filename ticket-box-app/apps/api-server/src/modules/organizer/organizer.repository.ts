@@ -75,6 +75,7 @@ export type OrganizerConcertSummaryDto = {
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
+  seat_map_url?: string;
   guest_drive_folder_id?: string;
   venue: {
     id: string;
@@ -783,6 +784,7 @@ function mapConcertSummary(
     ends_at: concert.endsAt.toISOString(),
     planned_publish_at: concert.plannedPublishAt?.toISOString(),
     cover_image_url: concert.coverImageUrl ?? undefined,
+    seat_map_url: concert.seatMapUrl ?? undefined,
     guest_drive_folder_id: concert.guestDriveFolderId ?? undefined,
     venue: {
       id: concert.venue.id,
@@ -857,6 +859,6 @@ export function toConcertUpdateData(
   };
 }
 
-function nullable(value: string | undefined): string | null | undefined {
+function nullable(value: string | null | undefined): string | null | undefined {
   return value === undefined ? undefined : value;
 }

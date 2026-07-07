@@ -20,6 +20,15 @@ organizerRouter.post(
 );
 
 organizerRouter.post(
+  "/organizer/uploads/seat-map",
+  express.raw({
+    type: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+    limit: "5mb",
+  }),
+  controller.uploadSeatMapImage,
+);
+
+organizerRouter.post(
   "/organizer/uploads/press-kit",
   express.raw({ type: ["application/pdf"], limit: "50mb" }),
   controller.uploadPressKit,

@@ -86,7 +86,7 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     status: concert.status,
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
     genre: "Live Music",
-    tags: [concert.venue.city, concert.status],
+    tags: [concert.venue.city],
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,
@@ -173,7 +173,7 @@ export function mapDetailConcert(
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
     seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url ?? metadata.seat_map.fallback_image_url,
     genre: "Live Music",
-    tags: [concert.venue.city, concert.status],
+    tags: [concert.venue.city],
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,

@@ -80,7 +80,7 @@ export type UpdateOrganizerConcertInput = {
   ends_at?: string;
   planned_publish_at?: string;
   cover_image_url?: string;
-  seat_map_url?: string;
+  seat_map_url?: string | null;
   guest_drive_folder_id?: string;
 };
 
@@ -173,7 +173,8 @@ export function parseUpdateOrganizerConcertBody(body: unknown): UpdateOrganizerC
     ends_at: optionalDateString(value.ends_at, "ends_at"),
     planned_publish_at: optionalDateString(value.planned_publish_at, "planned_publish_at"),
     cover_image_url: asOptionalString(value.cover_image_url),
-    seat_map_url: asOptionalString(value.seat_map_url),
+    // null = organizer gỡ ảnh sơ đồ (xóa hẳn), khác với undefined = không đổi.
+    seat_map_url: value.seat_map_url === null ? null : asOptionalString(value.seat_map_url),
     guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }

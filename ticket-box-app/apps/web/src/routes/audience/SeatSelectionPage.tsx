@@ -2,6 +2,7 @@ import { AlertCircle, ChevronLeft, Clock, Minus, Plus, Ticket } from "lucide-rea
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { SeatMapPanel } from "../../components/SeatMapPanel";
 import { formatCurrency, formatDate, type UiConcert, type UiTicketType } from "../../lib/catalog-ui";
 import { getCatalogConcertDetail } from "../../services/catalog.service";
 import {
@@ -20,6 +21,14 @@ export function SeatSelectionPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(600);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+
+  // Click khu trên sơ đồ → cuộn tới và highlight card hạng vé của khu đó.
+  function selectZone(zoneId: string) {
+    setSelectedZoneId(zoneId);
+    const target = document.querySelector(`[data-zone-id="${zoneId}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   useEffect(() => {
     if (!concertId) return;
@@ -135,6 +144,18 @@ export function SeatSelectionPage() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#111118] p-5">
+            <h2 className="mb-1 text-sm font-semibold">Sơ đồ chỗ ngồi</h2>
+            <p className="mb-4 text-xs text-[#8585A0]">Đối chiếu khu vực trên sơ đồ và bấm chip hạng vé để chọn nhanh.</p>
+            <SeatMapPanel
+              seatMapUrl={concert.seatMapUrl}
+              zones={concert.seatZones}
+              ticketTypes={concert.ticketTypes}
+              selectedZoneId={selectedZoneId}
+              onSelectZone={selectZone}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold">Loại vé đang mở bán</h2>
@@ -149,8 +170,19 @@ export function SeatSelectionPage() {
                 const available = ticketType.availableQuantity;
                 const max = Math.max(0, Math.min(ticketType.maxPerUser, available ?? ticketType.maxPerUser));
                 const soldOut = ticketType.status === "SOLD_OUT" || available === 0 || max === 0;
+                const zoneSelected = selectedZoneId !== null && ticketType.seatZoneId === selectedZoneId;
                 return (
-                  <article key={ticketType.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4" style={{ opacity: soldOut ? 0.55 : 1 }}>
+                  <article
+                    key={ticketType.id}
+                    data-zone-id={ticketType.seatZoneId}
+                    onClick={() => setSelectedZoneId(ticketType.seatZoneId)}
+                    className="rounded-xl border bg-white/[0.03] p-4 transition-colors"
+                    style={{
+                      opacity: soldOut ? 0.55 : 1,
+                      borderColor: zoneSelected ? ticketType.color : "rgba(255,255,255,0.07)",
+                      boxShadow: zoneSelected ? `0 0 0 1px ${ticketType.color}` : "none",
+                    }}
+                  >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <div className="mb-2 flex items-center gap-2">
