@@ -257,7 +257,7 @@ export function CheckoutPage() {
                   disabled={Boolean(pending.orderId)}
                   icon={<Smartphone className="h-5 w-5" />}
                   label="MoMo"
-                  sublabel="Ví điện tử MoMo sandbox"
+                  sublabel="Thanh toán qua ví điện tử MoMo"
                   tone="#A50064"
                   onClick={() => updateProvider("MOMO")}
                 />
