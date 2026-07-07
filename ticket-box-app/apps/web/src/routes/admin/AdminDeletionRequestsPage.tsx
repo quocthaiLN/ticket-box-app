@@ -185,9 +185,9 @@ function DeletionRequestCard({
             <ApprovalBadge status={request.status} />
             <span className="text-xs text-[#8585A0]">#{request.id}</span>
           </div>
-          <h2 className="truncate text-sm font-semibold">{concertTitle}</h2>
+          <h2 className="break-words text-sm font-semibold">{concertTitle}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
-            <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" />{organizerLabel}</span>
+            <span className="inline-flex min-w-0 items-center gap-1 break-words"><Trash2 className="h-3 w-3 shrink-0" />{organizerLabel}</span>
             <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(request.created_at)}</span>
           </div>
         </button>

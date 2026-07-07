@@ -52,7 +52,7 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
 
       <div className="p-4">
         <h3
-          className="mb-1 line-clamp-2 font-semibold leading-snug text-[#F0EDEB] transition-colors group-hover:text-amber-400"
+          className="mb-1 break-words font-semibold leading-snug text-[#F0EDEB] transition-colors group-hover:text-amber-400"
           style={{
             fontFamily: "'Cormorant Garamond', Georgia, serif",
             fontSize: featured ? "1.35rem" : "1.1rem",
@@ -71,7 +71,7 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-[#8585A0]">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-[#F5C842]" />
-            <span className="truncate">
+            <span className="min-w-0 break-words">
               {concert.venue.name}, {concert.venue.city}
             </span>
           </div>

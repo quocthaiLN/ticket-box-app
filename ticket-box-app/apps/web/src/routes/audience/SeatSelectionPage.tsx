@@ -111,7 +111,7 @@ export function SeatSelectionPage() {
             </button>
             <div className="min-w-0">
               <p className="text-xs text-[#8585A0]">Chọn loại vé</p>
-              <p className="truncate text-sm font-semibold">{concert.title}</p>
+              <p className="break-words text-sm font-semibold">{concert.title}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-[#F5C842]/25 bg-[#F5C842]/10 px-3 py-1.5 text-sm font-semibold text-[#F5C842]">
@@ -199,7 +199,7 @@ export function SeatSelectionPage() {
                 selectedItems.map((item) => (
                   <div key={item.ticketTypeId} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.ticketTypeName}</p>
+                      <p className="break-words text-sm font-medium">{item.ticketTypeName}</p>
                       <p className="text-xs text-[#8585A0]">{item.zoneName} x {item.quantity}</p>
                     </div>
                     <p className="text-sm font-semibold text-[#F5C842]">{formatCurrency(item.quantity * item.unitPrice)}</p>

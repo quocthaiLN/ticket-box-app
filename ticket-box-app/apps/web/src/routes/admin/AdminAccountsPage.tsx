@@ -171,11 +171,11 @@ function AccountRow({
 
   return (
     <tr className="border-b border-white/[0.04] transition-colors last:border-b-0 hover:bg-white/[0.03]">
-      <td className="max-w-[220px] px-4 py-3 text-sm font-medium text-[#F0EDEB]">
-        <span className="block truncate">{user.full_name || "Chưa đặt tên"}</span>
+      <td className="px-4 py-3 text-sm font-medium text-[#F0EDEB]">
+        <span className="block max-w-[260px] break-words">{user.full_name || "Chưa đặt tên"}</span>
       </td>
-      <td className="max-w-[260px] px-4 py-3 text-xs text-[#8585A0]">
-        <span className="block truncate">{user.email}</span>
+      <td className="px-4 py-3 text-xs text-[#8585A0]">
+        <span className="block max-w-[320px] break-all">{user.email}</span>
       </td>
       <td className="px-4 py-3">
         <span className="rounded-full px-2 py-1 text-xs font-semibold" style={{ background: roleStyle.bg, color: roleStyle.color }}>

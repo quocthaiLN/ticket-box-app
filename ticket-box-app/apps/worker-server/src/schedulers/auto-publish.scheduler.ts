@@ -57,7 +57,7 @@ export function startAutoPublishScheduler(
   return timer;
 }
 
-async function runAutoPublishTick(batchSize: number): Promise<void> {
+export async function runAutoPublishTick(batchSize = 25): Promise<void> {
   const now = new Date();
   const candidates = await prisma.concert.findMany({
     where: {

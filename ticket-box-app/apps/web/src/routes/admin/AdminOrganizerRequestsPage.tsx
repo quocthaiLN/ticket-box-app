@@ -126,10 +126,10 @@ function RequestRow({ request }: { request: AdminOrganizerRequestSummary }) {
             <ApprovalBadge status={requestView.status} />
             <span className="text-xs text-[#8585A0]">#{requestView.id}</span>
           </div>
-          <h2 className="truncate text-sm font-semibold">{requestView.title}</h2>
+          <h2 className="break-words text-sm font-semibold">{requestView.title}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
-            <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{requestView.organizerLabel}</span>
-            <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{requestView.venueLabel}</span>
+            <span className="inline-flex min-w-0 items-center gap-1 break-words"><Users className="h-3 w-3 shrink-0" />{requestView.organizerLabel}</span>
+            <span className="inline-flex min-w-0 items-center gap-1 break-words"><Building2 className="h-3 w-3 shrink-0" />{requestView.venueLabel}</span>
             <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(requestView.startsAt)}</span>
           </div>
         </button>
@@ -236,8 +236,8 @@ export function AdminOrganizerRequestReviewPage() {
                 {detailView.title}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#8585A0]">
-                <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{detailView.organizerLabel}</span>
-                <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{detailView.venueLabel}</span>
+                <span className="inline-flex min-w-0 items-center gap-1 break-words"><Users className="h-3 w-3 shrink-0" />{detailView.organizerLabel}</span>
+                <span className="inline-flex min-w-0 items-center gap-1 break-words"><Building2 className="h-3 w-3 shrink-0" />{detailView.venueLabel}</span>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(detailView.startsAt)}</span>
               </div>
             </div>
@@ -279,7 +279,7 @@ export function AdminOrganizerRequestReviewPage() {
                         className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
+                          <p className="break-words text-xs font-semibold text-[#F0EDEB]">{ticket.zone_name} - {ticket.name}</p>
                           <p className="mt-0.5 text-xs text-[#8585A0]">Capacity: {ticket.zone_capacity.toLocaleString("vi-VN")}</p>
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
@@ -372,10 +372,10 @@ function CheckerPasswords({ result }: { result: ApproveOrganizerRequestResult })
         {result.checker_accounts.map((account) => (
           <div key={account.user_id} className="grid gap-2 rounded-xl border border-white/[0.08] bg-[#111118] p-3 md:grid-cols-[minmax(0,1fr)_220px]">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{account.email}</p>
-              <p className="mt-1 text-xs text-[#8585A0]">Mã người dùng: {account.user_id}</p>
+              <p className="break-all text-sm font-semibold">{account.email}</p>
+              <p className="mt-1 break-all text-xs text-[#8585A0]">Mã người dùng: {account.user_id}</p>
             </div>
-            <code className="rounded-lg bg-black/30 px-3 py-2 text-sm text-[#F5C842]">{account.password}</code>
+            <code className="whitespace-pre-wrap break-all rounded-lg bg-black/30 px-3 py-2 text-sm text-[#F5C842]">{account.password}</code>
           </div>
         ))}
       </div>

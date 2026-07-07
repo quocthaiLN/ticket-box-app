@@ -94,7 +94,7 @@ export function Navbar() {
                   className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-[#F0EDEB]"
                 >
                   <User className="h-4 w-4 text-[#F5C842]" />
-                  <span className="max-w-28 truncate">{session.user.full_name || session.user.email}</span>
+                  <span className="max-w-52 break-words text-left leading-tight">{session.user.full_name || session.user.email}</span>
                 </Link>
                 <button
                   type="button"

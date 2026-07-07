@@ -215,7 +215,7 @@ export function CheckoutPage() {
               <div className="flex items-center gap-3">
                 {pending.coverImageUrl && <img src={pending.coverImageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />}
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{pending.concertTitle}</p>
+                  <p className="break-words text-sm font-semibold">{pending.concertTitle}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">{pending.artistName}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">{pending.venueName}</p>
                 </div>
@@ -228,7 +228,7 @@ export function CheckoutPage() {
                   <div key={item.ticketTypeId} className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2.5 w-2.5 rounded-sm" style={{ background: item.zoneColor }} />
-                      <span className="truncate text-sm">{item.ticketTypeName}</span>
+                      <span className="break-words text-sm">{item.ticketTypeName}</span>
                       <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-xs text-[#8585A0]">x{item.quantity}</span>
                     </div>
                     <span className="text-sm">{formatMoney(item.quantity * item.unitPrice)}</span>
@@ -269,7 +269,7 @@ export function CheckoutPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <StatusTile label="Đơn hàng" value={orderStatus ?? "HELD"} tone={statusTone(orderStatus)} />
                   <StatusTile label="Thanh toán" value={paymentStatus ?? "PENDING"} tone={statusTone(paymentStatus)} />
-                  <StatusTile label="Mã đơn" value={pending.orderId.slice(0, 8)} tone="#7B61FF" />
+                  <StatusTile label="Mã đơn" value={pending.orderId} tone="#7B61FF" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
                   {pending.checkoutUrl && (
@@ -415,7 +415,7 @@ function StatusTile({ label, value, tone }: { label: string; value: string; tone
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold" style={{ color: tone }}>{statusLabel(value)}</p>
+      <p className="mt-1 break-all text-sm font-semibold" style={{ color: tone }}>{statusLabel(value)}</p>
     </div>
   );
 }
