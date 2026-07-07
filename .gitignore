@@ -11,3 +11,4 @@ ticket-box-app/apps/*/tsconfig.tsbuildinfo
 z-doc-cua-thai
 scripts/
 temp-docs/
+ticket-box-app/tests/order/tokens_client_*
