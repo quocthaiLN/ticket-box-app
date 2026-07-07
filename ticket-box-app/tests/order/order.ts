@@ -2,6 +2,12 @@ import http, { type RefinedResponse, type ResponseType } from "k6/http";
 import { check, fail } from "k6";
 import exec from "k6/execution";
 import { Counter, Rate, Trend } from "k6/metrics";
+import { SharedArray } from "k6/data";
+
+// Đọc toàn bộ danh sách JWT token đã được sinh sẵn từ file JSON
+const allTokens = new SharedArray("loadtest_tokens", function () {
+  return JSON.parse(open("./tokens.json"));
+});
 
 const BASE_URL = (__ENV.BASE_URL ?? "http://host.docker.internal:3000/v1").replace(
   /\/$/,
@@ -229,41 +235,12 @@ export function setup(): SetupData {
     fail(`API health check thất bại: HTTP ${health.status} tại ${BASE_URL}/health`);
   }
 
-  const tokens: string[] = [];
-  const batchSize = 20;
-
-  // Đăng nhập 1.000 user seed theo từng batch để tạo 1.000 access token thật.
-  const lastUser = USER_START + USER_COUNT - 1;
-  for (let start = USER_START; start <= lastUser; start += batchSize) {
-    const end = Math.min(start + batchSize - 1, lastUser);
-    const requests = [];
-
-    for (let index = start; index <= end; index += 1) {
-      requests.push({
-        method: "POST",
-        url: `${BASE_URL}/auth/login`,
-        body: JSON.stringify({ email: emailForUser(index), password: PASSWORD }),
-        params: {
-          headers: { "Content-Type": "application/json" },
-          tags: { name: "POST /v1/auth/login (setup)" },
-        },
-      });
-    }
-
-    const responses = http.batch(requests);
-    responses.forEach((response, offset) => {
-      const token = accessTokenFrom(response);
-      if (response.status !== 200 || !token) {
-        fail(
-          `Đăng nhập thất bại cho ${emailForUser(start + offset)}: HTTP ${response.status}`,
-        );
-      }
-      tokens.push(token);
-    });
-  }
+  const tokens = allTokens
+    .slice(USER_START - 1, USER_START - 1 + USER_COUNT)
+    .map((t) => t.token);
 
   if (tokens.length !== USER_COUNT) {
-    fail(`Chỉ tạo được ${tokens.length}/${USER_COUNT} access token.`);
+    fail(`Chỉ lấy được ${tokens.length}/${USER_COUNT} access token từ file tokens.json.`);
   }
 
   return { tokens };
