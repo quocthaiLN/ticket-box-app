@@ -71,12 +71,13 @@ Port local:
 
 ## 3. Chuẩn bị database
 
-Validate schema, generate Prisma client, migrate và seed:
+Validate schema, generate Prisma client, migrate, reset/clean database, và seed:
 
 ```powershell
 npm run db:validate
 npm run db:generate
 npm run db:migrate
+npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 npm run db:seed
 ```
 

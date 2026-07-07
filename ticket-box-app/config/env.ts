@@ -85,6 +85,12 @@ export const env = {
     holdDurationSeconds: Number(
       process.env["ORDER_HOLD_DURATION_SECONDS"] ?? 900,
     ),
+    rateLimitWhitelistEnabled:
+      process.env["ORDER_RATE_LIMIT_WHITELIST_ENABLED"] === "true",
+    rateLimitWhitelist: (process.env["ORDER_RATE_LIMIT_WHITELIST"] ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean),
   },
 
   // Worker — job dọn dẹp đơn giữ chỗ hết hạn (expire-holds)

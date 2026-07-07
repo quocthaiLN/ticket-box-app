@@ -19,6 +19,20 @@ services:
     volumes:
       - redis_data:/data
 
+  k6:
+    image: grafana/k6:latest
+    container_name: ticketbox-k6
+    profiles: ["test"]
+    env_file:
+      - ./tests/.env
+    volumes:
+      - ./tests:/tests
+    environment:
+      - BASE_URL=http://host.docker.internal:3000/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: ["k6"]
+
 volumes:
   postgres_data:
   redis_data:

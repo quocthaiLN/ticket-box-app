@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { getRedisClient } from "@ticketbox/redis";
+import { env } from "@ticketbox/config";
 import { Errors } from "../http/problem-details.js";
 
 export type TokenBucketOptions = {
@@ -14,7 +15,25 @@ export type TokenBucketOptions = {
    * Mặc định: user_id (nếu đã xác thực) hoặc IP.
    */
   keyFn?: (req: Request, res: Response) => string;
+  /** Bỏ qua policy cho request nội bộ/load-test đã được xác minh. */
+  skipFn?: (req: Request, res: Response) => boolean;
 };
+
+function normalizeIp(ip: string | undefined): string {
+  return (ip ?? "").trim().replace(/^::ffff:/, "");
+}
+
+function isOrderRateLimitWhitelisted(req: Request): boolean {
+  if (!env.order.rateLimitWhitelistEnabled) return false;
+
+  // Chỉ tin địa chỉ của TCP peer. Không dùng X-Forwarded-For do client có thể
+  // tự giả header này. Nếu API đứng sau proxy, whitelist phải được xử lý tại
+  // proxy hoặc proxy phải chuyển tiếp tới một cổng load-test riêng được bảo vệ.
+  const sourceIp = normalizeIp(req.socket.remoteAddress);
+  return env.order.rateLimitWhitelist.some(
+    (allowedIp) => normalizeIp(allowedIp) === sourceIp,
+  );
+}
 
 /**
  * Tạo middleware rate-limit dùng thuật toán Fixed Window Counter trong Redis.
@@ -23,7 +42,7 @@ export type TokenBucketOptions = {
  * - Khi vượt ngưỡng: trả 429 với header Retry-After.
  */
 export function rateLimit(opts: TokenBucketOptions) {
-  const { name, limit, windowSec, keyFn } = opts;
+  const { name, limit, windowSec, keyFn, skipFn } = opts;
 
   const defaultKeyFn = (req: Request, res: Response): string => {
     const userId = res.locals.auth?.user_id as string | undefined;
@@ -42,6 +61,11 @@ export function rateLimit(opts: TokenBucketOptions) {
     res: Response,
     next: NextFunction,
   ): Promise<void> {
+    if (skipFn?.(req, res)) {
+      next();
+      return;
+    }
+
     const client = getRedisClient();
 
     if (!client) {
@@ -103,6 +127,7 @@ export const orderRateLimit = rateLimit({
   name: "orders",
   limit: 10,
   windowSec: 60,
+  skipFn: (req) => isOrderRateLimitWhitelisted(req),
 });
 
 /** Giới hạn webhook: 60 req / 60s per IP — chống webhook flood */

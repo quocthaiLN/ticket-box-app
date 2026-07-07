@@ -861,8 +861,39 @@ async function seedOperations() {
   }
 }
 
+async function seedLoadTestUsers() {
+  // 1.000 user AUDIENCE cho k6 load test.
+  // Email: loadtest0001@ticketbox.test … loadtest1000@ticketbox.test
+  // Mật khẩu chung: Password@123 (10 rounds để seed nhanh hơn).
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 10);
+
+  const data = [];
+  for (let i = 1; i <= 100000; i++) {
+    const index = String(i).padStart(4, "0");
+    data.push({
+      email: `loadtest${index}@ticketbox.test`,
+      passwordHash,
+      fullName: `Load Test User ${index}`,
+      phone: null,
+      role: "AUDIENCE",
+      status: "ACTIVE",
+    });
+  }
+
+  // createMany với skipDuplicates idempotent — chạy lại không sinh lỗi.
+  const result = await prisma.user.createMany({ data, skipDuplicates: true });
+  console.log(`seedLoadTestUsers: ${result.count} user mới được tạo (${1000 - result.count} đã tồn tại).`);
+
+  // Đảm bảo mật khẩu luôn đúng cho những user đã có (phòng trường hợp hash cũ).
+  await prisma.user.updateMany({
+    where: { email: { startsWith: "loadtest", endsWith: "@ticketbox.test" } },
+    data: { passwordHash, status: "ACTIVE" },
+  });
+}
+
 async function main() {
   await seedUsers();
+  await seedLoadTestUsers();
   await seedCatalog();
   await seedOrganizerWorkflow();
   await seedDemoTickets();
