@@ -1,4 +1,8 @@
-# Hướng Dẫn Chạy Load Test (Đặt Vé GA)
+# HƯỚNG DẪN CHẠY KIỂM THỬ TẢI & KHẢ NĂNG CHỊU LỖI (RESILIENCE)
+
+---
+
+# PHẦN I: LOAD TEST ĐẶT VÉ (GA TICKET)
 
 ---
 
@@ -122,4 +126,64 @@ Trên cả 3 máy Client, đồng thời chạy câu lệnh:
 docker compose run --rm k6 run /tests/order/order.ts
 ```
 Lúc này, tải trọng 1.000 VUs sẽ được chia đều ra 3 máy gửi tới máy chủ của bạn qua VPN Tailscale một cách mượt mà và thực tế!
+
+---
+
+# PHẦN II: RESILIENCE TEST (PAYMENT BULKHEAD & CIRCUIT BREAKER)
+
+Phần này hướng dẫn kiểm thử các cơ chế chịu lỗi đã được cài đặt cho hệ thống thanh toán (VNPay & MoMo) khi các cổng thanh toán này gặp sự cố (chậm phản hồi hoặc bị sập).
+
+## 1. Chuẩn Bị Trước Khi Chạy Test
+1. **Khởi động Mock Payment Server**:
+   Để mô phỏng các cổng thanh toán bên thứ ba, bạn cần chạy mock payment server:
+   ```bash
+   npm run dev:payment
+   ```
+   *(Mock server sẽ chạy ở cổng `4100`)*.
+2. **Khởi động API Server & Worker**:
+   Hãy tắt API server cũ đi và khởi chạy lại để nhận các cấu hình `.env` tối ưu cho test:
+   ```bash
+   npm run dev:api
+   npm run dev:worker
+   ```
+3. **Đảm bảo đã sinh sẵn Token**:
+   Hãy chắc chắn bạn đã chạy lệnh tạo file token ở Phần I bước 2 (`node --env-file=.env tests/order/generate-tokens.mjs`).
+
+---
+
+## 2. Kiểm Thử Cơ Chế Bulkhead (MoMo Nghẽn)
+
+Cơ chế **Bulkhead** giới hạn tối đa số lượng kết nối đồng thời đến mỗi cổng thanh toán (mặc định là 20 slot). Khi MoMo bị nghẽn (phản hồi rất chậm), 20 slot này sẽ bị lấp đầy. Các request thứ 21 trở đi sẽ lập tức bị từ chối nhanh (fail-fast) với lỗi `503 Service Unavailable`, tránh làm treo và cạn kiệt tài nguyên của API Server.
+
+### Cách chạy test:
+Chạy kịch bản test bulkhead bằng k6 (dùng 35 VUs gửi đồng thời 35 requests, vượt giới hạn 20):
+```bash
+docker compose run --rm k6 run /tests/payment/bulkhead.ts
+```
+
+### Kết quả kỳ vọng đạt được:
+* **20 requests đầu tiên** sẽ đi vào slots thành công và bị giữ lại (chờ phản hồi chậm 5 giây).
+* **15 requests tiếp theo** sẽ lập tức bị từ chối ngay lập tức (thời gian phản hồi cực nhanh `< 10ms`) với HTTP status `503` và mã code `PAYMENT_PROVIDER_UNAVAILABLE`.
+* Không có luồng xử lý nào của API Server bị treo hoặc sập.
+
+---
+
+## 3. Kiểm Thử Cơ Chế Circuit Breaker (VNPay Sập)
+
+Cơ chế **Circuit Breaker** (Cầu chì) theo dõi số lỗi liên tiếp từ cổng thanh toán. Khi VNPay bị sập hoàn toàn (trả về lỗi liên tục):
+1. **Trạng thái CLOSED**: Mạch đóng, cho phép gửi request. Khi số lỗi đạt ngưỡng `failureThreshold = 5`, mạch chuyển sang **OPEN**.
+2. **Trạng thái OPEN**: Mạch mở, tất cả các request tiếp theo tới VNPay đều bị chặn ngay lập tức và trả về lỗi `503` mà không thèm gọi tới VNPay (giúp bảo vệ hệ thống và giảm tải cho VNPay đang lỗi).
+3. **Trạng thái HALF_OPEN**: Sau thời gian cooldown (`resetTimeout = 5s`), mạch cho phép 1 request đi qua để thăm dò (probe). Nếu thành công, mạch đóng lại (**CLOSED**); nếu tiếp tục lỗi, mạch lại mở ra (**OPEN**).
+
+### Cách chạy test:
+Chạy kịch bản test circuit breaker (1 VU gửi liên tiếp 15 requests tuần tự để kiểm tra sự chuyển dịch trạng thái của mạch):
+```bash
+docker compose run --rm k6 run /tests/payment/circuit-breaker.ts
+```
+
+### Kết quả kỳ vọng đạt được (k6 sẽ in logs trạng thái chi tiết từng bước):
+* **Request 1 -> 5**: Trả về lỗi kết nối do VNPay sập. Circuit Breaker ở trạng thái `CLOSED`.
+* **Request 6 -> 10**: Bị chặn ngay từ API Server (trả về lỗi `503` lập tức). Circuit Breaker chuyển sang trạng thái `OPEN`.
+* **Request 11**: Xảy ra sau 6 giây cooldown. Mạch chuyển sang `HALF_OPEN` -> gửi request thăm dò -> thất bại vì VNPay vẫn hỏng -> mạch lập tức quay về `OPEN`.
+* **Request 12**: Xảy ra sau khi script tự động khôi phục VNPay hoạt động lại bình thường và cooldown 6 giây -> mạch chuyển `HALF_OPEN` -> gửi request thành công -> Circuit Breaker được khôi phục về trạng thái an toàn `CLOSED`.
 
