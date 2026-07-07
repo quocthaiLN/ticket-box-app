@@ -69,6 +69,7 @@ export type OrganizerConcert = {
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
+  seat_map_url?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
   seat_zones: OrganizerSeatZone[];
   ticket_types: Array<{
@@ -156,7 +157,7 @@ export type UpdateOrganizerConcertInput = Partial<{
   ends_at: string;
   planned_publish_at: string;
   cover_image_url: string;
-  seat_map_url: string;
+  seat_map_url: string | null;
   guest_drive_folder_id: string;
 }>;
 
@@ -230,6 +231,15 @@ export async function createOrganizerRequest(input: CreateOrganizerRequestInput)
 export async function uploadOrganizerCoverImage(file: File) {
   const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
     "/organizer/uploads/cover-image",
+    file,
+  );
+  return response.data;
+}
+
+// Upload ảnh sơ đồ hạng vé (public) → url để lưu vào seat_map_url của concert.
+export async function uploadOrganizerSeatMapImage(file: File) {
+  const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
+    "/organizer/uploads/seat-map",
     file,
   );
   return response.data;
@@ -335,9 +345,11 @@ export async function listOrganizerOrders() {
   return response.data;
 }
 
-export async function listOrganizerCheckerAccounts() {
+export async function listOrganizerCheckerAccounts(concertId?: string) {
+  const query = new URLSearchParams({ limit: "100" });
+  if (concertId) query.set("concert_id", concertId);
   const response = await apiGet<ApiCollectionResponse<OrganizerCheckerAccount>>(
-    "/organizer/checker-accounts?limit=100",
+    `/organizer/checker-accounts?${query.toString()}`,
   );
   return response.data;
 }
