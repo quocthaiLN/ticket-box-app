@@ -155,18 +155,28 @@ function verifyVnpaySignature(body: VnpayWebhookBody): boolean {
 // Xử lý webhook VNPAY: kiểm tra dữ liệu, chữ ký, số tiền rồi xác nhận/thất bại payment.
 export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspCode: string; Message: string }> {
   const orderId = body.vnp_TxnRef;
-  const providerTxnId = body.vnp_TransactionNo;
+  const rawProviderTxnId = body.vnp_TransactionNo;
   const vnpAmount = body.vnp_Amount;
   const responseCode = body.vnp_ResponseCode;
 
-  if (!orderId || !providerTxnId || !vnpAmount || !responseCode) {
+  if (!orderId || !vnpAmount || !responseCode) {
     return { RspCode: '99', Message: 'Missing required fields' };
   }
 
+  const providerTxnId = normalizeVnpayProviderTransactionId(
+    rawProviderTxnId,
+    responseCode,
+  );
+  if (responseCode === '00' && !providerTxnId) {
+    return { RspCode: '99', Message: 'Missing provider transaction id' };
+  }
+
   // Webhook trùng của giao dịch thành công được chấp nhận idempotent.
-  const existing = await findPaymentByProviderTxn('VNPAY', providerTxnId);
-  if (existing?.status === 'SUCCEEDED') {
-    return { RspCode: '00', Message: 'Confirm Success' };
+  if (providerTxnId) {
+    const existing = await findPaymentByProviderTxn('VNPAY', providerTxnId);
+    if (existing?.status === 'SUCCEEDED') {
+      return { RspCode: '00', Message: 'Confirm Success' };
+    }
   }
 
   // Luôn lưu payload nếu tìm được payment để phục vụ audit, kể cả chữ ký không hợp lệ.
@@ -185,6 +195,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
         provider: 'VNPAY',
         orderId,
         providerTransactionId: providerTxnId,
+        rawProviderTransactionId: rawProviderTxnId,
         reason: 'INVALID_SIGNATURE',
         signatureValid,
         responseCode,
@@ -203,6 +214,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
         provider: 'VNPAY',
         orderId,
         providerTransactionId: providerTxnId,
+        rawProviderTransactionId: rawProviderTxnId,
         reason: 'INVALID_AMOUNT',
         signatureValid,
         responseCode,
@@ -225,6 +237,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
       provider: 'VNPAY',
       orderId,
       providerTransactionId: providerTxnId,
+      rawProviderTransactionId: rawProviderTxnId,
       signatureValid,
       responseCode,
       issuedTicketCount: issuedTickets.length,
@@ -247,6 +260,7 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
       provider: 'VNPAY',
       orderId,
       providerTransactionId: providerTxnId,
+      rawProviderTransactionId: rawProviderTxnId,
       reason: failureReason,
       signatureValid,
       responseCode,
@@ -375,6 +389,21 @@ type IssuedNotification = {
   payload: Record<string, unknown>;
 };
 
+function normalizeVnpayProviderTransactionId(
+  rawProviderTxnId: string | undefined,
+  responseCode: string,
+): string | null {
+  const trimmed = rawProviderTxnId?.trim();
+  if (!trimmed) return null;
+
+  // VNPAY returns transaction number "0" for failed/cancelled browser returns.
+  // Storing that placeholder violates the unique (provider, provider_transaction_id) key
+  // across multiple failed attempts, so only successful payments keep a real provider txn id.
+  if (trimmed === '0' && responseCode !== '00') return null;
+
+  return trimmed;
+}
+
 async function recordPaymentWebhookAudit(input: {
   action:
     | typeof AUDIT_ACTIONS.PAYMENT_WEBHOOK_SUCCEEDED
@@ -382,7 +411,8 @@ async function recordPaymentWebhookAudit(input: {
   paymentId: string;
   provider: 'VNPAY' | 'MOMO';
   orderId: string;
-  providerTransactionId?: string;
+  providerTransactionId?: string | null;
+  rawProviderTransactionId?: string;
   reason?: string;
   signatureValid: boolean;
   responseCode?: string;
@@ -402,6 +432,7 @@ async function recordPaymentWebhookAudit(input: {
         provider: input.provider,
         order_id: input.orderId,
         provider_transaction_id: input.providerTransactionId,
+        raw_provider_transaction_id: input.rawProviderTransactionId,
         reason: input.reason,
         signature_valid: input.signatureValid,
         response_code: input.responseCode,
