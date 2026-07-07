@@ -1,78 +1,78 @@
-# Report cho Thai - Auto-publish va tac dong den Checkout/Inventory
+# Báo cáo cho Thái - Auto-publish và tác động đến Checkout/Inventory
 
-Ngay cap nhat: 2026-07-06
+Ngày cập nhật: 2026-07-07
 
-Pham vi: giai doan 5 phan Thanh vua implement, co anh huong den luong ban ve cua Thai.
+Phạm vi: phần Thanh đã triển khai ở giai đoạn 5, có ảnh hưởng trực tiếp đến luồng bán vé, checkout và inventory do Thái phụ trách.
 
-## 1. Tom tat thay doi quan trong
+## 1. Tóm tắt thay đổi quan trọng
 
-Da them auto-publish scheduler trong worker:
+Đã thêm scheduler auto-publish trong worker:
 
-- File moi: `ticket-box-app/apps/worker-server/src/schedulers/auto-publish.scheduler.ts`
-- Worker start scheduler trong: `ticket-box-app/apps/worker-server/src/server.ts`
-- Cache helper dung chung nam trong: `ticket-box-app/packages/redis/src/catalog-cache.ts`
+- File mới: `ticket-box-app/apps/worker-server/src/schedulers/auto-publish.scheduler.ts`
+- Worker khởi động scheduler trong: `ticket-box-app/apps/worker-server/src/server.ts`
+- Cache helper dùng chung nằm ở: `ticket-box-app/packages/redis/src/catalog-cache.ts`
 
-Scheduler se dinh ky tim concert:
+Scheduler định kỳ tìm concert:
 
 - `status = DRAFT`
 - `planned_publish_at IS NOT NULL`
 - `planned_publish_at <= now`
 
-Neu concert du dieu kien readiness, scheduler se:
+Khi concert đủ điều kiện, scheduler sẽ:
 
-1. Chuyen concert tu `DRAFT` sang `PUBLISHED`.
-2. Tu dong chuyen tat ca ticket type cua concert co `status = DRAFT` sang `ON_SALE`.
-3. Invalidate catalog/cache/inventory cache cua concert.
+1. Chuyển concert từ `DRAFT` sang `PUBLISHED`.
+2. Tự động chuyển tất cả ticket type của concert có `status = DRAFT` sang `ON_SALE`.
+3. Xóa cache catalog/detail/ticket-types/inventory liên quan.
 4. Ghi audit `CONCERT_AUTO_PUBLISHED`.
 
-## 2. Readiness auto-publish hien tai
+## 2. Điều kiện readiness hiện tại
 
-Concert chi duoc auto-publish khi thoa cac dieu kien toi thieu:
+Concert chỉ được auto-publish khi thỏa các điều kiện tối thiểu:
 
-- Concert van la `DRAFT`.
+- Concert vẫn là `DRAFT`.
 - `planned_publish_at <= now`.
 - `ends_at > starts_at`.
-- Co it nhat 1 `seat_zone`.
-- Co it nhat 1 `ticket_type`.
+- Có ít nhất 1 `seat_zone`.
+- Có ít nhất 1 `ticket_type`.
 
-Neu thieu du lieu, scheduler chi log skip va khong doi trang thai.
+Nếu thiếu dữ liệu, scheduler chỉ log skip và không đổi trạng thái.
 
-## 3. Diem anh huong truc tiep den Checkout/Inventory
+## 3. Tác động trực tiếp đến Checkout/Inventory
 
-Truoc thay doi nay, ticket type co the duoc tao o `DRAFT` va chi len `ON_SALE` theo thao tac admin/organizer hoac update rieng.
+Trước thay đổi này, ticket type có thể được tạo ở `DRAFT` và chỉ lên `ON_SALE` qua thao tác admin/organizer hoặc update riêng.
 
-Sau thay doi nay, khi concert auto-publish:
+Sau thay đổi này, khi concert auto-publish:
 
-- Ticket type `DRAFT` se tu dong thanh `ON_SALE`.
-- Checkout co the bat dau accept ticket type do ngay sau tick auto-publish.
-- Public catalog/detail/ticket-types se hien concert va ve sau khi cache invalidation chay xong.
+- Ticket type `DRAFT` sẽ tự động thành `ON_SALE`.
+- Checkout có thể bắt đầu nhận ticket type đó ngay sau tick auto-publish.
+- Public catalog/detail/ticket-types sẽ thấy concert và vé sau khi cache invalidation chạy xong.
 
-Dieu nay quan trong voi cac test checkout/inventory cua Thai:
+Điều này quan trọng với test checkout/inventory:
 
-- Test tao order nen tinh den case ticket type ban dau la `DRAFT`, sau auto-publish thanh `ON_SALE`.
-- Test `ticketTypeNotOnSale` can dam bao dung ngu canh: truoc publish hoac ticket type van `DRAFT/CLOSED`, checkout phai reject.
-- Test success checkout nen co seed ticket type `ON_SALE`, hoac seed concert `DRAFT + planned_publish_at <= now` roi cho worker auto-publish truoc khi checkout.
+- Test tạo order cần tính đến case ticket type ban đầu là `DRAFT`, sau auto-publish thành `ON_SALE`.
+- Test `ticketTypeNotOnSale` phải đặt đúng ngữ cảnh: trước publish hoặc ticket type vẫn `DRAFT/CLOSED`, checkout phải reject.
+- Test success checkout nên seed ticket type `ON_SALE`, hoặc seed concert `DRAFT + planned_publish_at <= now` rồi cho worker auto-publish trước khi checkout.
 
-## 4. Nhung thu KHONG bi thay doi
+## 4. Những phần không bị thay đổi
 
-Phan auto-publish khong doi cac luong core sau:
+Auto-publish không đổi các luồng core sau:
 
-- Khong doi `orders/repository/hold.ts`.
-- Khong doi transaction hold/release inventory.
-- Khong doi payment confirm/release.
-- Khong doi QR/ticket issuance logic.
-- Khong doi `maxPerUser`.
-- Khong doi public slug/preview route.
+- Không đổi `orders/repository/hold.ts`.
+- Không đổi transaction hold/release inventory.
+- Không đổi payment confirm/release.
+- Không đổi QR/ticket issuance logic.
+- Không đổi `maxPerUser`.
+- Không đổi public slug/preview route.
 
-Trong payment flow, giai doan 4 truoc do da them audit:
+Trong payment flow, giai đoạn 4 đã thêm audit:
 
 - `PAYMENT_WEBHOOK_SUCCEEDED`
 - `PAYMENT_WEBHOOK_FAILED`
 - `TICKET_ISSUED`
 
-Audit nay chay best-effort sau transaction, khong nen lam fail checkout/payment.
+Audit chạy best-effort sau transaction, không nên làm fail checkout/payment.
 
-## 5. File Thai nen doc
+## 5. File Thái nên đọc
 
 - `ticket-box-app/apps/worker-server/src/schedulers/auto-publish.scheduler.ts`
 - `ticket-box-app/packages/redis/src/catalog-cache.ts`
@@ -80,59 +80,54 @@ Audit nay chay best-effort sau transaction, khong nen lam fail checkout/payment.
 - `ticket-box-app/apps/api-server/src/modules/payments/payment.service.ts`
 - `ticket-box-app/apps/api-server/src/modules/orders/repository/hold.ts`
 
-## 6. Goi y test cho AI Agent cua Thai
+## 6. Gợi ý test cho AI Agent của Thái
 
-Nen them hoac cap nhat test theo cac nhom sau:
+Nên thêm hoặc cập nhật test theo các nhóm sau:
 
 1. Pre-publish rejection
    - Concert `DRAFT`, ticket type `DRAFT`.
-   - Goi checkout/create order phai reject vi ticket type chua `ON_SALE`.
+   - Gọi checkout/create order phải reject vì ticket type chưa `ON_SALE`.
 
 2. Auto-publish unlock sale
-   - Seed concert `DRAFT`, `planned_publish_at` trong qua khu, co seat zone va ticket type `DRAFT`.
-   - Chay auto-publish scheduler/tick hoac goi helper tu test neu expose duoc.
-   - Assert concert thanh `PUBLISHED`.
-   - Assert ticket type thanh `ON_SALE`.
-   - Sau do checkout hold thanh cong.
+   - Seed concert `DRAFT`, `planned_publish_at` trong quá khứ, có seat zone và ticket type `DRAFT`.
+   - Chạy auto-publish scheduler/tick hoặc gọi helper test nếu sau này expose được.
+   - Assert concert thành `PUBLISHED`.
+   - Assert ticket type thành `ON_SALE`.
+   - Sau đó checkout hold thành công.
 
 3. Skip invalid readiness
-   - Concert `DRAFT`, due publish, nhung thieu seat zone hoac ticket type.
-   - Assert concert van `DRAFT`.
-   - Assert checkout van reject.
+   - Concert `DRAFT`, due publish, nhưng thiếu seat zone hoặc ticket type.
+   - Assert concert vẫn `DRAFT`.
+   - Assert checkout vẫn reject.
 
 4. Idempotency
-   - Chay auto-publish 2 lan.
-   - Assert ticket type khong bi doi sai, khong duplicate sale side effect.
-   - Audit `CONCERT_AUTO_PUBLISHED` khong nen tang vo han cho cung mot lan publish thanh cong.
+   - Chạy auto-publish 2 lần.
+   - Assert ticket type không bị đổi sai, không duplicate sale side effect.
+   - Audit `CONCERT_AUTO_PUBLISHED` không tăng vô hạn cho cùng một lần publish thành công.
 
 5. Inventory cache
-   - Sau auto-publish, public inventory/ticket type endpoint phai doc du lieu moi.
-   - Neu test co Redis, can verify cache invalidation; neu khong co Redis, it nhat verify API tra `ON_SALE`.
+   - Sau auto-publish, public inventory/ticket type endpoint phải đọc dữ liệu mới.
+   - Nếu test có Redis, verify cache invalidation; nếu không có Redis, ít nhất verify API trả `ON_SALE`.
 
-## 7. Luu y khi seed demo
+## 7. Lưu ý khi seed demo
 
-Neu seed concert dung de checkout demo:
+Nếu seed concert dùng để checkout demo:
 
-- Nen set `planned_publish_at` som hon thoi diem demo neu muon worker tu publish.
-- Neu khong muon phu thuoc worker, seed thang `PUBLISHED` + ticket type `ON_SALE`.
-- Neu quay demo auto-publish, dat `planned_publish_at` cach hien tai 1-2 phut de thay ro worker tick.
+- Nên set `planned_publish_at` sớm hơn thời điểm demo nếu muốn worker tự publish.
+- Nếu không muốn phụ thuộc worker, seed thẳng `PUBLISHED` + ticket type `ON_SALE`.
+- Nếu quay demo auto-publish, đặt `planned_publish_at` cách hiện tại 1-2 phút để thấy rõ worker tick.
 
-## 8. Command da verify lien quan
+## 8. Checklist trước khi Thái kết luận
 
-Da chay:
+- Chạy `npm.cmd test -w @ticketbox/tests`.
+- Bổ sung checkout/inventory tests mới theo flow hold -> payment -> webhook -> issue ticket/release inventory.
+- Kiểm tra lại các case `ON_SALE`, `DRAFT`, `CLOSED`, `SOLD_OUT`.
+- Kiểm tra max-per-user sau auto-publish.
+- Kiểm tra audit không làm payment/checkout fail.
 
-- `npx.cmd tsc -p apps/api-server/tsconfig.json --noEmit`
-- `npx.cmd tsc -p apps/worker-server/tsconfig.json --noEmit`
-- `npm.cmd run build -w @ticketbox/redis`
+## 9. Rủi ro còn lại Thái cần để ý
 
-Can chay tiep truoc khi Thai ket luan:
-
-- `npm.cmd test -w @ticketbox/tests`
-- Checkout/inventory tests moi cua Thai sau khi bo sung.
-
-## 9. Risk con lai Thai can de y
-
-- Auto-publish hien tai chi check readiness toi thieu, chua check sale window cua tung ticket type.
-- Auto-publish chuyen moi ticket type `DRAFT` cua concert sang `ON_SALE`; neu co ticket type muon giu hidden sau publish, can them co che rieng sau MVP.
-- Scheduler chay trong worker process; neu worker khong chay thi concert khong tu publish.
-- Neu test can deterministic, nen goi logic scheduler bang helper/test hook sau nay hoac set interval ngan trong moi truong test.
+- Auto-publish hiện chỉ check readiness tối thiểu, chưa check sale window của từng ticket type.
+- Auto-publish chuyển mọi ticket type `DRAFT` của concert sang `ON_SALE`; nếu có ticket type cần giữ hidden sau publish, cần cơ chế riêng ở giai đoạn sau.
+- Scheduler chạy trong worker process; nếu worker không chạy thì concert không tự publish.
+- Nếu test cần deterministic, nên tạo test hook riêng cho auto-publish hoặc set interval ngắn trong môi trường test.
