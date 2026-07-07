@@ -1,7 +1,5 @@
 # TicketBox Setup Guide
 
-Hướng dẫn này dùng cho demo local. Chạy các lệnh từ thư mục workspace npm:
-
 ```powershell
 cd ticket-box-app
 ```
@@ -79,6 +77,7 @@ npm run db:generate
 npm run db:migrate
 npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 npm run db:seed
+npm run db:studio
 ```
 
 Tài khoản demo sau khi seed:

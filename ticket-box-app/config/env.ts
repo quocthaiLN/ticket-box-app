@@ -34,6 +34,11 @@ export const env = {
   server: {
     port: process.env["PORT"] ?? "3000",
     nodeEnv: process.env["NODE_ENV"] ?? "development",
+    instanceId: process.env["INSTANCE_ID"] ?? "api-local",
+    trustedGatewayIps: (process.env["TRUSTED_GATEWAY_IPS"] ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean),
   },
 
   // Web (frontend SPA) — backend redirect tới đây sau khi xử lý payment return.

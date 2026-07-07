@@ -54,6 +54,10 @@ export function createApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use(requestIdMiddleware);
+  app.use((_req, res, next) => {
+    res.setHeader("X-TicketBox-Instance", env.server.instanceId);
+    next();
+  });
   app.use(helmet());
   app.use(morgan("dev"));
 

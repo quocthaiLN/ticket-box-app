@@ -4,13 +4,13 @@
 
 ## 1. Chuẩn Bị Môi Trường
 
-### Bước 1: Seed Dữ Liệu
+### Bước 1: Seed Dữ Liệu - Nếu đã chạy SET_UP_GUIDE.md rồi thì thôi nhé
 Đảm bảo đã chạy seed để tạo 1.000 load test users (`loadtest0001` -> `loadtest100000`) và concert/ticket type GA:
 ```bash
 npm run db:seed
 ```
 
-### Bước 2: Bật Whitelist Rate Limit
+### Bước 2: Bật Whitelist Rate Limit trong .env của app chính (.env ở ticket-box-app/.env)
 ```env
 ORDER_RATE_LIMIT_WHITELIST_ENABLED=true
 ORDER_RATE_LIMIT_WHITELIST=127.0.0.1,::1,172.17.0.1
@@ -18,6 +18,7 @@ ORDER_RATE_LIMIT_WHITELIST=127.0.0.1,::1,172.17.0.1
 *(IP `172.17.0.1` là gateway mặc định của Docker để bypass khi chạy k6 container).*
 
 ### Bước 3: Khởi Động API Server
+Khởi chạy dịch vụ API đơn lẻ trên máy host:
 ```bash
 npm run dev:api
 ```
@@ -31,6 +32,7 @@ npm run dev:api
 ```bash
 npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 docker exec -i ticketbox-redis redis-cli flushall
+npm run db:seed
 ```
 
 ---

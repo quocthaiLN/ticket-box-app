@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: ticketbox
       POSTGRES_PASSWORD: ticketbox
       POSTGRES_DB: ticketbox
+    command: postgres -c max_connections=500
     ports:
       - "5433:5432"
     volumes:
@@ -22,7 +23,7 @@ services:
   k6:
     image: grafana/k6:latest
     container_name: ticketbox-k6
-    profiles: ["test"]
+    profiles: [ "test" ]
     env_file:
       - ./tests/.env
     volumes:
@@ -31,7 +32,7 @@ services:
       - BASE_URL=http://host.docker.internal:3000/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    entrypoint: ["k6"]
+    entrypoint: [ "k6" ]
 
 volumes:
   postgres_data:

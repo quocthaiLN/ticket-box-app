@@ -23,13 +23,26 @@ function normalizeIp(ip: string | undefined): string {
   return (ip ?? "").trim().replace(/^::ffff:/, "");
 }
 
+function getTrustedClientIp(req: Request): string {
+  const peerIp = normalizeIp(req.socket.remoteAddress);
+  const isTrustedGateway = env.server.trustedGatewayIps.some(
+    (gatewayIp) => normalizeIp(gatewayIp) === peerIp,
+  );
+
+  if (!isTrustedGateway) return peerIp || "unknown";
+
+  // Gateway cấu hình ghi đè X-Forwarded-For bằng $remote_addr. Chỉ đọc header
+  // sau khi TCP peer đã được xác minh, nên client không thể tự giả IP.
+  const forwardedIp = (req.headers["x-forwarded-for"] as string | undefined)
+    ?.split(",")[0]
+    ?.trim();
+  return normalizeIp(forwardedIp) || peerIp || "unknown";
+}
+
 function isOrderRateLimitWhitelisted(req: Request): boolean {
   if (!env.order.rateLimitWhitelistEnabled) return false;
 
-  // Chỉ tin địa chỉ của TCP peer. Không dùng X-Forwarded-For do client có thể
-  // tự giả header này. Nếu API đứng sau proxy, whitelist phải được xử lý tại
-  // proxy hoặc proxy phải chuyển tiếp tới một cổng load-test riêng được bảo vệ.
-  const sourceIp = normalizeIp(req.socket.remoteAddress);
+  const sourceIp = getTrustedClientIp(req);
   return env.order.rateLimitWhitelist.some(
     (allowedIp) => normalizeIp(allowedIp) === sourceIp,
   );
@@ -47,11 +60,7 @@ export function rateLimit(opts: TokenBucketOptions) {
   const defaultKeyFn = (req: Request, res: Response): string => {
     const userId = res.locals.auth?.user_id as string | undefined;
     if (userId) return `user:${userId}`;
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
-    return `ip:${ip}`;
+    return `ip:${getTrustedClientIp(req)}`;
   };
 
   const resolveKey = keyFn ?? defaultKeyFn;
@@ -136,11 +145,7 @@ export const webhookRateLimit = rateLimit({
   limit: 60,
   windowSec: 60,
   keyFn: (req) => {
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
-    return `ip:${ip}`;
+    return `ip:${getTrustedClientIp(req)}`;
   },
 });
 
@@ -150,10 +155,6 @@ export const publicReadRateLimit = rateLimit({
   limit: 200,
   windowSec: 60,
   keyFn: (req) => {
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
-    return `ip:${ip}`;
+    return `ip:${getTrustedClientIp(req)}`;
   },
 });
