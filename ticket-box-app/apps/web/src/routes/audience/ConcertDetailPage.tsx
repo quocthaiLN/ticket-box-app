@@ -24,7 +24,6 @@ import {
   type UiConcert,
 } from "../../lib/catalog-ui";
 import { getCatalogConcertDetail } from "../../services/catalog.service";
-import { createPendingCheckout, writePendingCheckout } from "./checkout-storage";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -73,16 +72,8 @@ export function ConcertDetailPage() {
       return;
     }
 
-    const pending = createPendingCheckout(currentConcert.id);
-    writePendingCheckout({
-      ...pending,
-      concertTitle: currentConcert.title,
-      artistName: currentConcert.artistName,
-      coverImageUrl: currentConcert.coverImageUrl,
-      venueName: currentConcert.venue.name,
-      startsAt: currentConcert.startsAt,
-    });
-    // URL người dùng dùng slug; checkout nội bộ vẫn dùng concert.id đã resolve.
+    // Chưa tạo checkout trong browser ở bước này. Draft chỉ được chuyển sang
+    // trang checkout sau khi user chọn vé; order chỉ được lưu sau khi API tạo thành công.
     navigate(`/concerts/${currentConcert.slug}/seats`);
   }
 

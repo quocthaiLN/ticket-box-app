@@ -49,12 +49,17 @@ function parseCheckout(raw: string | null): PendingCheckout | null {
 export function readPendingCheckout() {
   try {
     const active = parseCheckout(sessionStorage.getItem(pendingCheckoutKey));
-    if (active && active.expiresAt > Date.now()) return active;
+    // Draft chưa được server tạo order không còn được xem là checkout chờ.
+    // Điều này cũng bỏ qua draft cũ còn sót lại từ phiên bản frontend trước.
+    if (active?.orderId && active.expiresAt > Date.now()) return active;
 
     // If the active checkout was completed/cleared, keep the remaining held
     // orders reachable from /checkout instead of stranding them in storage.
     const held = readHeldCheckouts();
-    return held.find((checkout) => checkout.expiresAt > Date.now()) ?? active ?? held[0] ?? null;
+    return held.find((checkout) => checkout.expiresAt > Date.now())
+      ?? (active?.orderId ? active : null)
+      ?? held[0]
+      ?? null;
   } catch {
     return null;
   }

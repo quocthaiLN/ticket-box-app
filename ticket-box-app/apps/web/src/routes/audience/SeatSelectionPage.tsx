@@ -9,9 +9,8 @@ import { getCatalogConcertDetail, getCatalogTicketQuota } from "../../services/c
 import {
   createPendingCheckout,
   formatCountdown,
-  readPendingCheckout,
   remainingSeconds,
-  writePendingCheckout,
+  type PendingCheckout,
   type PendingCheckoutItem,
 } from "./checkout-storage";
 
@@ -24,6 +23,7 @@ export function SeatSelectionPage() {
   const [ticketQuotas, setTicketQuotas] = useState<Record<string, TicketQuotaItem>>({});
   const [timeLeft, setTimeLeft] = useState(600);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [checkoutDraft, setCheckoutDraft] = useState<PendingCheckout | null>(null);
 
   // Click khu trên sơ đồ → cuộn tới và highlight card hạng vé của khu đó.
   function selectZone(zoneId: string) {
@@ -45,14 +45,9 @@ export function SeatSelectionPage() {
         ) as Record<string, TicketQuotaItem>;
         setConcert(data);
         setTicketQuotas(quotaByTicketType);
-        // Một order đã HELD phải giữ nguyên items gắn với orderId của nó.
-        // Khi quay lại để chọn thêm vé, tạo draft mới; order cũ vẫn được lưu
-        // trong danh sách order đang giữ để người dùng có thể thanh toán sau.
-        const stored = readPendingCheckout();
-        const pending =
-          stored && !stored.orderId && stored.concertId === data.id
-            ? stored
-            : createPendingCheckout(data.id);
+        // Draft chọn vé chỉ nằm trong state của trang. Chưa ghi vào danh sách
+        // checkout chờ cho đến khi API tạo order HELD thành công.
+        const pending = createPendingCheckout(data.id);
         const nextPending = {
           ...pending,
           concertId: data.id,
@@ -62,15 +57,9 @@ export function SeatSelectionPage() {
           venueName: data.venue.name,
           startsAt: data.startsAt,
         };
-        writePendingCheckout(nextPending);
+        setCheckoutDraft(nextPending);
         setTimeLeft(remainingSeconds(nextPending.expiresAt));
-        setQuantities(Object.fromEntries(nextPending.items.map((item) => {
-          const ticketType = data.ticketTypes.find((type) => type.id === item.ticketTypeId);
-          const quotaItem = quotaByTicketType[item.ticketTypeId];
-          const remaining = quotaItem?.remaining_quantity ?? ticketType?.maxPerUser ?? 0;
-          const available = ticketType?.availableQuantity ?? remaining;
-          return [item.ticketTypeId, Math.min(item.quantity, remaining, available)];
-        })));
+        setQuantities({});
         setStatus("ready");
       })
       .catch(() => {
@@ -83,11 +72,11 @@ export function SeatSelectionPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const pending = readPendingCheckout();
-      if (!pending) return;
-      const remaining = remainingSeconds(pending.expiresAt);
-      setTimeLeft(remaining);
-      if (remaining <= 0) window.clearInterval(timer);
+      setTimeLeft((current) => {
+        const remaining = Math.max(0, current - 1);
+        if (remaining <= 0) window.clearInterval(timer);
+        return remaining;
+      });
     }, 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -111,9 +100,16 @@ export function SeatSelectionPage() {
   }
 
   function continueToCheckout() {
-    if (!concert || selectedItems.length === 0) return;
-    const pending = readPendingCheckout() ?? createPendingCheckout(concert.id);
-    writePendingCheckout({
+    if (!concert) return;
+
+    // Không chọn vé mới: mở checkout đang giữ hiện có, nếu có.
+    if (selectedItems.length === 0) {
+      navigate("/checkout");
+      return;
+    }
+
+    const pending = checkoutDraft ?? createPendingCheckout(concert.id);
+    const draft = {
       ...pending,
       concertId: concert.id,
       concertTitle: concert.title,
@@ -123,8 +119,8 @@ export function SeatSelectionPage() {
       startsAt: concert.startsAt,
       items: selectedItems,
       totalPrice,
-    });
-    navigate("/checkout");
+    };
+    navigate("/checkout", { state: { checkoutDraft: draft } });
   }
 
   if (status === "loading") return <CenteredState text="Đang tải khu vé..." />;
@@ -280,7 +276,7 @@ export function SeatSelectionPage() {
                 <span className="text-sm text-[#8585A0]">Tổng cộng</span>
                 <span className="text-lg font-bold text-[#F5C842]">{formatCurrency(totalPrice)}</span>
               </div>
-              <button type="button" disabled={selectedItems.length === 0} onClick={continueToCheckout} className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:cursor-not-allowed disabled:opacity-45">
+              <button type="button" onClick={continueToCheckout} className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25">
                 Tiếp tục thanh toán
               </button>
             </div>

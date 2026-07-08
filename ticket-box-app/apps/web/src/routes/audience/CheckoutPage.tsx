@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, ChevronLeft, Clock, CreditCard, ExternalLink, Loader2, QrCode, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   createOrder,
   createPayment,
@@ -41,9 +41,11 @@ function checkoutErrorMessage(err: unknown, fallback: string): string {
 
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const [pending, setPending] = useState<PendingCheckout | null>(() => readPendingCheckout());
+  const location = useLocation();
+  const checkoutDraft = (location.state as { checkoutDraft?: PendingCheckout } | null)?.checkoutDraft;
+  const [pending, setPending] = useState<PendingCheckout | null>(() => checkoutDraft ?? readPendingCheckout());
   const [step, setStep] = useState<CheckoutStep>("review");
-  const [timeLeft, setTimeLeft] = useState(() => remainingSeconds(readPendingCheckout()?.expiresAt ?? 0));
+  const [timeLeft, setTimeLeft] = useState(() => remainingSeconds((checkoutDraft ?? readPendingCheckout())?.expiresAt ?? 0));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [paymentError, setPaymentError] = useState("");
@@ -61,14 +63,13 @@ export function CheckoutPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const current = readPendingCheckout();
-      if (!current) return;
-      const remaining = remainingSeconds(current.expiresAt);
+      if (!pending) return;
+      const remaining = remainingSeconds(pending.expiresAt);
       setTimeLeft(remaining);
       if (remaining <= 0) window.clearInterval(timer);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [pending]);
 
   useEffect(() => {
     if (!pending?.orderId) return;
@@ -147,10 +148,24 @@ export function CheckoutPage() {
     setStep("processing");
     try {
       const paymentIdempotencyKey = pending.paymentIdempotencyKey ?? newIdempotencyKey();
-      const result = await createPayment(pending.orderId, pending.paymentProvider, paymentIdempotencyKey);
-      const nextPending = {
+      const pendingPayment = {
         ...pending,
         paymentIdempotencyKey,
+      };
+
+      // Persist before the request so a retry/reload reuses the same operation key
+      // even when the backend succeeds but its response never reaches the browser.
+      writePendingCheckout(pendingPayment);
+      setPending(pendingPayment);
+      setHeldCheckouts(readHeldCheckouts());
+
+      const result = await createPayment(
+        pending.orderId,
+        pendingPayment.paymentProvider,
+        paymentIdempotencyKey,
+      );
+      const nextPending = {
+        ...pendingPayment,
         checkoutUrl: result.checkout_url,
         expiresAt: new Date(result.hold_expires_at).getTime(),
       };
@@ -209,9 +224,9 @@ export function CheckoutPage() {
       paymentProvider: provider,
       paymentIdempotencyKey: undefined,
     };
-    writePendingCheckout(next);
+    if (next.orderId) writePendingCheckout(next);
     setPending(next);
-    setHeldCheckouts(readHeldCheckouts());
+    if (next.orderId) setHeldCheckouts(readHeldCheckouts());
     setError("");
     setPaymentError("");
   }
