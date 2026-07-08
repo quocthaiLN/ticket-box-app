@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { TicketStatus } from '@prisma/client';
+import { checkInTicketAtGate, GateZoneValidationError, assertGateAllowsZone } from '@ticketbox/database';
 import { CheckinRepository } from '../../apps/api-server/src/modules/checkin/checkin.repository.js';
 import { GuestListRepository } from '../../apps/api-server/src/modules/guest-list/guest-list.repository.js';
 import {
@@ -248,5 +249,113 @@ describe('check-in ticket, guest, and offline sync conflicts', () => {
     expect(response.results.map((item) => item.status)).toEqual(['SUCCESS', 'DUPLICATE_ITEM']);
     const updated = await db.guestList.findUnique({ where: { id: guest.guestId } });
     expect(updated?.status).toBe('CHECKED_IN');
+  });
+
+  it('rejects a CANCELLED ticket with EXPIRED_OR_CANCELLED and writes log', async () => {
+    const ticket = await issueTicket(fixture, TicketStatus.CANCELLED);
+
+    const response = await checkin.recordOnlineScan({
+      concert_id: fixture.concertId,
+      gate_id: fixture.gateId,
+      device_id: fixture.deviceId,
+      qr_token: ticket.qrTokenHash,
+      scanned_at: new Date().toISOString(),
+    });
+
+    expect(response.result).toBe('EXPIRED_OR_CANCELLED');
+    expect(response.log_id).toBeDefined();
+
+    const log = await db.checkinLog.findFirst({
+      where: {
+        scanTokenHash: ticket.qrTokenHash,
+        result: 'INVALID_TICKET',
+      },
+    });
+    expect(log).not.toBeNull();
+    expect(log?.reason).toBe(`TICKET_NOT_CHECKIN_READY:${TicketStatus.CANCELLED}`);
+  });
+
+  it('rejects a REFUNDED ticket with EXPIRED_OR_CANCELLED and writes log', async () => {
+    const ticket = await issueTicket(fixture, TicketStatus.REFUNDED);
+
+    const response = await checkin.recordOnlineScan({
+      concert_id: fixture.concertId,
+      gate_id: fixture.gateId,
+      device_id: fixture.deviceId,
+      qr_token: ticket.qrTokenHash,
+      scanned_at: new Date().toISOString(),
+    });
+
+    expect(response.result).toBe('EXPIRED_OR_CANCELLED');
+    expect(response.log_id).toBeDefined();
+
+    const log = await db.checkinLog.findFirst({
+      where: {
+        scanTokenHash: ticket.qrTokenHash,
+        result: 'INVALID_TICKET',
+      },
+    });
+    expect(log).not.toBeNull();
+    expect(log?.reason).toBe(`TICKET_NOT_CHECKIN_READY:${TicketStatus.REFUNDED}`);
+  });
+
+  it('throws deviceNotAssigned (DEVICE_NOT_ASSIGNED) when device status is REVOKED', async () => {
+    const ticket = await issueTicket(fixture);
+
+    await expect(
+      checkin.recordOnlineScan({
+        concert_id: fixture.concertId,
+        gate_id: fixture.gateId,
+        device_id: fixture.revokedDeviceId,
+        qr_token: ticket.qrTokenHash,
+        scanned_at: new Date().toISOString(),
+      })
+    ).rejects.toThrow();
+  });
+
+  it('throws deviceNotAssigned (DEVICE_NOT_ASSIGNED) when gate is inactive', async () => {
+    const ticket = await issueTicket(fixture);
+
+    await expect(
+      checkin.recordOnlineScan({
+        concert_id: fixture.concertId,
+        gate_id: fixture.inactiveGateId,
+        device_id: fixture.inactiveGateDeviceId,
+        qr_token: ticket.qrTokenHash,
+        scanned_at: new Date().toISOString(),
+      })
+    ).rejects.toThrow();
+  });
+
+  it('throws GateZoneValidationError with GATE_INACTIVE when checkInTicketAtGate is called on inactive gate', async () => {
+    const ticket = await issueTicket(fixture);
+
+    try {
+      await checkInTicketAtGate({
+        gateId: fixture.inactiveGateId,
+        ticketId: ticket.ticketId,
+        concertId: fixture.concertId,
+        deviceId: fixture.deviceId,
+        staffId: USER_IDS.checker,
+      });
+      expect.fail('Should have thrown GateZoneValidationError');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(GateZoneValidationError);
+      expect(error.code).toBe('GATE_INACTIVE');
+    }
+  });
+
+  it('throws GateZoneValidationError with GATE_CONCERT_MISMATCH when assertGateAllowsZone has mismatched input concert', async () => {
+    try {
+      await assertGateAllowsZone({
+        gateId: fixture.gateId,
+        seatZoneId: fixture.allowedZoneId,
+        concertId: fixture.otherConcertId,
+      });
+      expect.fail('Should have thrown GateZoneValidationError');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(GateZoneValidationError);
+      expect(error.code).toBe('GATE_CONCERT_MISMATCH');
+    }
   });
 });
