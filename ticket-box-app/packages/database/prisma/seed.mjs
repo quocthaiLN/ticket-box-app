@@ -256,6 +256,7 @@ async function seedUsers() {
     ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
     ["organizerTwo", "organizer2@gmail.com", "BTC 2", "+84900000007", "ORGANIZER"],
     ["admin", "admin@gmail.com", "Quản trị viên Demo", "+84900000004", "ADMIN"],
+    ["checker", "checker@ticketbox.test", "Checker Soát Vé Demo", "+84900000003", "CHECKER"],
     ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
   ];
@@ -724,13 +725,86 @@ async function seedDemoTickets() {
       },
     });
   }
+
+  // Bổ sung các ticket phụ cho concert 1 (anh-sang-man-dem) phục vụ demo
+  const asmConcert = publishedConcerts[0];
+  if (asmConcert) {
+    const sourceConcertIndex = concerts.findIndex((item) => item.id === asmConcert.id);
+    const ticketIndex = Math.min(1, asmConcert.tickets.length - 1);
+    const ticketSeed = asmConcert.tickets[ticketIndex];
+    const ticketType = ticketTypeId(sourceConcertIndex, ticketIndex);
+    const sourceZoneIndex = asmConcert.zones.findIndex((item) => item.code === ticketSeed.zoneCode);
+    const amount = ticketSeed.price;
+
+    const extraTickets = [
+      { id: fixedId(801), orderId: fixedId(811), orderItemId: fixedId(821), qrTokenHash: `qr-seed-${asmConcert.slug}-002`, status: "ISSUED" },
+      { id: fixedId(802), orderId: fixedId(812), orderItemId: fixedId(822), qrTokenHash: `qr-seed-${asmConcert.slug}-cancelled`, status: "CANCELLED" },
+      { id: fixedId(803), orderId: fixedId(813), orderItemId: fixedId(823), qrTokenHash: `qr-seed-${asmConcert.slug}-refunded`, status: "REFUNDED" },
+    ];
+
+    for (const ext of extraTickets) {
+      await prisma.order.upsert({
+        where: { id: ext.orderId },
+        create: {
+          id: ext.orderId,
+          userId: userIds.audience,
+          concertId: asmConcert.id,
+          idempotencyKey: `seed-order-${ext.id}`,
+          status: "CONFIRMED",
+          totalAmount: amount,
+          currency: "VND",
+          confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
+        },
+        update: {
+          status: "CONFIRMED",
+        },
+      });
+
+      await prisma.orderItem.upsert({
+        where: { id: ext.orderItemId },
+        create: {
+          id: ext.orderItemId,
+          orderId: ext.orderId,
+          ticketTypeId: ticketType,
+          quantity: 1,
+          unitPrice: amount,
+          lineTotal: amount,
+        },
+        update: {},
+      });
+
+      await prisma.ticket.upsert({
+        where: { id: ext.id },
+        create: {
+          id: ext.id,
+          orderId: ext.orderId,
+          orderItemId: ext.orderItemId,
+          userId: userIds.audience,
+          concertId: asmConcert.id,
+          ticketTypeId: ticketType,
+          seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+          gateId: gateId(sourceConcertIndex, sourceZoneIndex),
+          qrTokenHash: ext.qrTokenHash,
+          qrPayload: null,
+          qrSignature: null,
+          status: ext.status,
+          issuedAt: new Date("2026-06-08T10:05:00+07:00"),
+        },
+        update: {
+          status: ext.status,
+        },
+      });
+    }
+  }
 }
 
 async function seedOperations() {
   for (const [concertIndex, concert] of concerts.entries()) {
     if (concert.zones.length === 0) continue;
     const gateIndex = Math.max(0, concert.zones.findIndex((item) => item.code === "VIP"));
-    const staffId = concert.slug === "secret-show-2026" ? userIds.checkerSecretOne : userIds.checkerSecretTwo;
+    const staffId = concert.slug === "secret-show-2026"
+      ? userIds.checkerSecretOne
+      : (concert.slug === "anh-sang-man-dem" ? userIds.checker : userIds.checkerSecretTwo);
 
     await prisma.checkinDevice.upsert({
       where: { id: fixedId(641 + concertIndex) },
@@ -852,6 +926,39 @@ async function seedOperations() {
         generatedBio: concert.artistBio || null,
       },
     });
+  }
+
+  // Ghi đè/upsert guest list samples cho concert 1 (anh-sang-man-dem)
+  const asmConcert = concerts.find((concert) => concert.slug === "anh-sang-man-dem");
+  if (asmConcert) {
+    const guestZoneSeedId = fixedId(361 + 0); // asmConcert index is 0
+    const guestListSeed = [
+      { id: fixedId(901), fullName: "Khách VIP 1", email: "guest1@ticketbox.test", phone: "+84911111111", status: "INVITED" },
+      { id: fixedId(902), fullName: "Khách VIP 2", email: "guest2@ticketbox.test", phone: "+84922222222", status: "INVITED" },
+      { id: fixedId(903), fullName: "Khách VIP Đã Soát", email: "guest3@ticketbox.test", phone: "+84933333333", status: "CHECKED_IN", checkedInAt: new Date(), checkedInById: userIds.checker },
+    ];
+
+    for (const guest of guestListSeed) {
+      await prisma.guestList.upsert({
+        where: { id: guest.id },
+        create: {
+          id: guest.id,
+          concertId: asmConcert.id,
+          seatZoneId: guestZoneSeedId,
+          fullName: guest.fullName,
+          email: guest.email,
+          phone: guest.phone,
+          status: guest.status,
+          checkedInAt: guest.checkedInAt ?? null,
+          checkedInById: guest.checkedInById ?? null,
+        },
+        update: {
+          status: guest.status,
+          checkedInAt: guest.checkedInAt ?? null,
+          checkedInById: guest.checkedInById ?? null,
+        },
+      });
+    }
   }
 }
 
