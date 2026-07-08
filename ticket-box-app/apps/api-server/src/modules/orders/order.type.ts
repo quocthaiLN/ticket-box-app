@@ -103,6 +103,17 @@ export interface ExpireOrderResponse {
   released_items: Array<{ ticket_type_id: string; quantity: number }>;
 }
 
+export interface TicketQuotaResponse {
+  concert_id: string;
+  items: Array<{
+    ticket_type_id: string;
+    max_per_user: number;
+    held_quantity: number;
+    paid_quantity: number;
+    remaining_quantity: number;
+  }>;
+}
+
 export interface AdminOrderCursor {
   created_at: string;
   id: string;

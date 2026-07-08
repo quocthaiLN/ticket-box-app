@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { SeatMapPanel } from "../../components/SeatMapPanel";
 import { formatCurrency, formatDate, type UiConcert, type UiTicketType } from "../../lib/catalog-ui";
-import { getCatalogConcertDetail } from "../../services/catalog.service";
+import type { TicketQuotaItem } from "../../lib/api-client";
+import { getCatalogConcertDetail, getCatalogTicketQuota } from "../../services/catalog.service";
 import {
   createPendingCheckout,
   formatCountdown,
@@ -20,6 +21,7 @@ export function SeatSelectionPage() {
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [ticketQuotas, setTicketQuotas] = useState<Record<string, TicketQuotaItem>>({});
   const [timeLeft, setTimeLeft] = useState(600);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
@@ -35,15 +37,22 @@ export function SeatSelectionPage() {
     let mounted = true;
     setStatus("loading");
     getCatalogConcertDetail(concertId)
-      .then((data) => {
+      .then(async (data) => {
+        const quota = await getCatalogTicketQuota(data.id).catch(() => null);
         if (!mounted) return;
+        const quotaByTicketType = Object.fromEntries(
+          (quota?.items ?? []).map((item) => [item.ticket_type_id, item]),
+        ) as Record<string, TicketQuotaItem>;
         setConcert(data);
-        // Giỏ đang giữ của concert KHÁC (phiên demo/lần mua trước) → bỏ, tạo mới.
-        // Nếu giữ lại, items cũ mang ticket_type_id không thuộc concert này và
-        // backend sẽ từ chối khi tạo đơn.
+        setTicketQuotas(quotaByTicketType);
+        // Một order đã HELD phải giữ nguyên items gắn với orderId của nó.
+        // Khi quay lại để chọn thêm vé, tạo draft mới; order cũ vẫn được lưu
+        // trong danh sách order đang giữ để người dùng có thể thanh toán sau.
         const stored = readPendingCheckout();
         const pending =
-          stored && stored.concertId === data.id ? stored : createPendingCheckout(data.id);
+          stored && !stored.orderId && stored.concertId === data.id
+            ? stored
+            : createPendingCheckout(data.id);
         const nextPending = {
           ...pending,
           concertId: data.id,
@@ -55,7 +64,13 @@ export function SeatSelectionPage() {
         };
         writePendingCheckout(nextPending);
         setTimeLeft(remainingSeconds(nextPending.expiresAt));
-        setQuantities(Object.fromEntries(nextPending.items.map((item) => [item.ticketTypeId, item.quantity])));
+        setQuantities(Object.fromEntries(nextPending.items.map((item) => {
+          const ticketType = data.ticketTypes.find((type) => type.id === item.ticketTypeId);
+          const quotaItem = quotaByTicketType[item.ticketTypeId];
+          const remaining = quotaItem?.remaining_quantity ?? ticketType?.maxPerUser ?? 0;
+          const available = ticketType?.availableQuantity ?? remaining;
+          return [item.ticketTypeId, Math.min(item.quantity, remaining, available)];
+        })));
         setStatus("ready");
       })
       .catch(() => {
@@ -89,7 +104,8 @@ export function SeatSelectionPage() {
 
   function updateQuantity(ticketType: UiTicketType, nextValue: number) {
     const available = ticketType.availableQuantity ?? ticketType.maxPerUser;
-    const max = Math.max(0, Math.min(ticketType.maxPerUser, available));
+    const remaining = ticketQuotas[ticketType.id]?.remaining_quantity ?? ticketType.maxPerUser;
+    const max = Math.max(0, Math.min(remaining, available));
     const value = Math.max(0, Math.min(max, nextValue));
     setQuantities((current) => ({ ...current, [ticketType.id]: value }));
   }
@@ -173,7 +189,9 @@ export function SeatSelectionPage() {
               {concert.ticketTypes.map((ticketType) => {
                 const quantity = quantities[ticketType.id] ?? 0;
                 const available = ticketType.availableQuantity;
-                const max = Math.max(0, Math.min(ticketType.maxPerUser, available ?? ticketType.maxPerUser));
+                const quota = ticketQuotas[ticketType.id];
+                const remaining = quota?.remaining_quantity ?? ticketType.maxPerUser;
+                const max = Math.max(0, Math.min(remaining, available ?? remaining));
                 const soldOut = ticketType.status === "SOLD_OUT" || available === 0 || max === 0;
                 const notOpenYet = isBeforeSaleStart(ticketType);
                 const locked = soldOut || notOpenYet;
@@ -199,6 +217,11 @@ export function SeatSelectionPage() {
                         <p className="text-xs text-[#8585A0]">
                           Khu {ticketType.zoneCode || "chưa gán"} - tối đa {ticketType.maxPerUser} vé/tài khoản
                         </p>
+                        {quota && (
+                          <p className="mt-1 text-xs text-[#8585A0]">
+                            Đang giữ {quota.held_quantity} · Đã mua {quota.paid_quantity} · Có thể chọn thêm {max}
+                          </p>
+                        )}
                         <p className="mt-2 text-sm font-semibold" style={{ color: ticketType.color }}>{formatCurrency(ticketType.price)}</p>
                       </div>
                       <div className="flex items-center gap-3">

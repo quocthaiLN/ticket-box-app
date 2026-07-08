@@ -30,6 +30,11 @@ const rootEnvPath = path.resolve(
 
 dotenv.config({ path: rootEnvPath });
 
+const optionalEnv = (name: string): string | undefined => {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+};
+
 export const env = {
   server: {
     port: process.env["PORT"] ?? "3000",
@@ -120,6 +125,9 @@ export const env = {
     returnUrl:
       process.env["VNPAY_RETURN_URL"] ??
       "http://localhost:3000/v1/payment/return",
+    // Chỉ dùng khi demo bằng payment mock. Sandbox/production vẫn tạo URL
+    // VNPay cục bộ đúng contract thật và không gọi endpoint này.
+    mockPrepareUrl: optionalEnv("VNPAY_MOCK_PREPARE_URL"),
     timeout: process.env["NODE_ENV"] === "production" ? 5_000 : 10_000,
     // Resilience: circuit breaker + bulkhead
     failureThreshold: Number(process.env["VNPAY_CB_FAILURE_THRESHOLD"] ?? 5),

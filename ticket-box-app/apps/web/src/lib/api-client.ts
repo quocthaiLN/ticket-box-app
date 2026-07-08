@@ -107,6 +107,19 @@ export type Inventory = {
   }>;
 };
 
+export type TicketQuotaItem = {
+  ticket_type_id: string;
+  max_per_user: number;
+  held_quantity: number;
+  paid_quantity: number;
+  remaining_quantity: number;
+};
+
+export type TicketQuota = {
+  concert_id: string;
+  items: TicketQuotaItem[];
+};
+
 export type ConcertMetadata = {
   concert: ConcertDetail;
   venue: Venue;
@@ -211,6 +224,13 @@ export async function listTicketTypes(
 export async function getInventory(concertId: string) {
   const response = await apiGet<ApiResponse<Inventory>>(
     `/concerts/${concertId}/inventory`,
+  );
+  return response.data;
+}
+
+export async function getMyTicketQuota(concertId: string) {
+  const response = await apiGet<ApiResponse<TicketQuota>>(
+    `/concerts/${concertId}/my-ticket-quota`,
   );
   return response.data;
 }

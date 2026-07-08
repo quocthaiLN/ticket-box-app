@@ -13,6 +13,7 @@ import { getApiErrorCode } from "../../lib/api-client";
 import {
   clearPendingCheckout,
   formatCountdown,
+  readHeldCheckouts,
   readPendingCheckout,
   remainingSeconds,
   writePendingCheckout,
@@ -45,7 +46,10 @@ export function CheckoutPage() {
   const [timeLeft, setTimeLeft] = useState(() => remainingSeconds(readPendingCheckout()?.expiresAt ?? 0));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const [failedProviders, setFailedProviders] = useState<PaymentProvider[]>([]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [heldCheckouts, setHeldCheckouts] = useState<PendingCheckout[]>(() => readHeldCheckouts());
 
   useEffect(() => {
     if (!pending || pending.items.length === 0) {
@@ -68,6 +72,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!pending?.orderId) return;
+    setOrder(null);
     let stopped = false;
     const poll = async () => {
       try {
@@ -75,7 +80,8 @@ export function CheckoutPage() {
         if (stopped) return;
         setOrder(detail);
         if (detail.status === "CONFIRMED") {
-          clearPendingCheckout();
+          clearPendingCheckout(detail.id);
+          setHeldCheckouts(readHeldCheckouts());
           setStep("success");
         } else if (detail.status === "CANCELLED" || detail.status === "EXPIRED") {
           setStep("payment");
@@ -102,6 +108,7 @@ export function CheckoutPage() {
     if (!pending || pending.items.length === 0) return;
     setBusy(true);
     setError("");
+    setPaymentError("");
     setStep("processing");
     try {
       const result = await createOrder(
@@ -121,6 +128,7 @@ export function CheckoutPage() {
       };
       writePendingCheckout(nextPending);
       setPending(nextPending);
+      setHeldCheckouts(readHeldCheckouts());
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
     } catch (err) {
@@ -135,6 +143,7 @@ export function CheckoutPage() {
     if (!pending?.orderId) return;
     setBusy(true);
     setError("");
+    setPaymentError("");
     setStep("processing");
     try {
       const paymentIdempotencyKey = pending.paymentIdempotencyKey ?? newIdempotencyKey();
@@ -147,12 +156,27 @@ export function CheckoutPage() {
       };
       writePendingCheckout(nextPending);
       setPending(nextPending);
+      setHeldCheckouts(readHeldCheckouts());
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
       // Redirect in the current tab so browser popup policies cannot block checkout.
       window.location.assign(result.checkout_url);
     } catch (err) {
-      setError(checkoutErrorMessage(err, "Không thể tạo yêu cầu thanh toán."));
+      if (getApiErrorCode(err) === "PAYMENT_PROVIDER_UNAVAILABLE") {
+        const failedProvider = pending.paymentProvider;
+        const nextFailed = failedProviders.includes(failedProvider)
+          ? failedProviders
+          : [...failedProviders, failedProvider];
+        setFailedProviders(nextFailed);
+        setPaymentError(
+          nextFailed.length === 2
+            ? "Các cổng thanh toán đang tạm thời không khả dụng. Vé vẫn được giữ, vui lòng thử lại."
+            : `${failedProvider === "MOMO" ? "MoMo" : "VNPAY"} đang tạm thời không khả dụng.`,
+        );
+      } else {
+        setPaymentError("");
+        setError(checkoutErrorMessage(err, "Không thể tạo yêu cầu thanh toán."));
+      }
       setStep("payment");
     } finally {
       setBusy(false);
@@ -167,7 +191,8 @@ export function CheckoutPage() {
       const detail = await getOrder(pending.orderId);
       setOrder(detail);
       if (detail.status === "CONFIRMED") {
-        clearPendingCheckout();
+        clearPendingCheckout(detail.id);
+        setHeldCheckouts(readHeldCheckouts());
         setStep("success");
       }
     } catch (err) {
@@ -178,11 +203,36 @@ export function CheckoutPage() {
   }
 
   function updateProvider(provider: PaymentProvider) {
-    if (!pending || pending.orderId) return;
-    const next = { ...pending, paymentProvider: provider };
+    if (!pending || pending.checkoutUrl) return;
+    const next = {
+      ...pending,
+      paymentProvider: provider,
+      paymentIdempotencyKey: undefined,
+    };
     writePendingCheckout(next);
     setPending(next);
+    setHeldCheckouts(readHeldCheckouts());
+    setError("");
+    setPaymentError("");
   }
+
+  function selectHeldCheckout(checkout: PendingCheckout) {
+    writePendingCheckout(checkout);
+    setPending(checkout);
+    setOrder(null);
+    setTimeLeft(remainingSeconds(checkout.expiresAt));
+    setStep("payment");
+    setError("");
+    setPaymentError("");
+    setFailedProviders([]);
+  }
+
+  const otherHeldCheckouts = useMemo(
+    () => heldCheckouts.filter(
+      (checkout) => checkout.orderId !== pending?.orderId && checkout.expiresAt > Date.now(),
+    ),
+    [heldCheckouts, pending?.orderId, timeLeft],
+  );
 
   if (!pending) return null;
 
@@ -190,7 +240,7 @@ export function CheckoutPage() {
     return <SuccessState order={order} />;
   }
 
-  if (isExpired) {
+  if (isExpired && otherHeldCheckouts.length === 0) {
     return <ExpiredState concertId={pending.concertId} />;
   }
 
@@ -219,6 +269,28 @@ export function CheckoutPage() {
           <div className="mb-5 rounded-2xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-4 py-3 text-sm text-[#E8315B]">
             {error}
           </div>
+        )}
+
+        {otherHeldCheckouts.length > 0 && (
+          <section className="mb-5 rounded-2xl border border-[#F5C842]/25 bg-[#F5C842]/10 p-4">
+            <p className="text-sm font-semibold text-[#F5C842]">
+              Bạn còn {otherHeldCheckouts.length} đơn vé đang giữ
+            </p>
+            <p className="mt-1 text-xs text-[#8585A0]">Mỗi đơn cần được thanh toán riêng trước khi hết thời gian giữ vé.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {otherHeldCheckouts.map((checkout) => (
+                <button
+                  key={checkout.orderId}
+                  type="button"
+                  onClick={() => selectHeldCheckout(checkout)}
+                  className="rounded-lg border border-[#F5C842]/25 bg-[#08080E]/40 px-3 py-2 text-left text-xs text-[#F0EDEB] hover:border-[#F5C842]/60"
+                >
+                  <span className="block font-semibold">{checkout.items.reduce((sum, item) => sum + item.quantity, 0)} vé · {formatMoney(checkout.totalPrice)}</span>
+                  <span className="mt-0.5 block text-[#8585A0]">Còn {formatCountdown(remainingSeconds(checkout.expiresAt))}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
 
         <div className="mb-8 flex items-center gap-2">
@@ -263,7 +335,7 @@ export function CheckoutPage() {
               <div className="space-y-2">
                 <PaymentOption
                   active={pending.paymentProvider === "VNPAY"}
-                  disabled={Boolean(pending.orderId)}
+                  disabled={Boolean(pending.checkoutUrl)}
                   icon={<CreditCard className="h-5 w-5" />}
                   label="VNPAY"
                   sublabel="Thẻ ATM, QR, Internet Banking"
@@ -272,7 +344,7 @@ export function CheckoutPage() {
                 />
                 <PaymentOption
                   active={pending.paymentProvider === "MOMO"}
-                  disabled={Boolean(pending.orderId)}
+                  disabled={Boolean(pending.checkoutUrl)}
                   icon={<Smartphone className="h-5 w-5" />}
                   label="MoMo"
                   sublabel="Thanh toán qua ví điện tử MoMo"
@@ -334,10 +406,35 @@ export function CheckoutPage() {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  {!pending.checkoutUrl && (
+                  {!pending.checkoutUrl && paymentError && (
+                    <div className="rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 p-3">
+                      <p className="text-sm text-[#E8315B]">{paymentError}</p>
+                      <div className="mt-3 grid gap-2">
+                        {failedProviders.length === 1 && (
+                          <button
+                            type="button"
+                            onClick={() => updateProvider(failedProviders[0] === "MOMO" ? "VNPAY" : "MOMO")}
+                            disabled={busy}
+                            className="rounded-lg bg-[#F0EDEB] px-3 py-2.5 text-sm font-semibold text-[#111118] disabled:opacity-50"
+                          >
+                            Chuyển sang {failedProviders[0] === "MOMO" ? "VNPAY" : "MoMo"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={submitPayment}
+                          disabled={busy || isExpired}
+                          className="rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-[#F0EDEB] disabled:opacity-50"
+                        >
+                          {busy ? "Đang thử lại..." : `Thử lại ${providerLabel}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!pending.checkoutUrl && !paymentError && (
                     <button type="button" onClick={submitPayment} disabled={busy || isExpired} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:opacity-50">
                       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                      Gửi yêu cầu thanh toán qua {providerLabel}
+                      {failedProviders.includes(pending.paymentProvider) ? "Thử lại" : "Gửi yêu cầu thanh toán qua"} {providerLabel}
                     </button>
                   )}
                   <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">

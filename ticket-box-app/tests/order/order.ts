@@ -9,18 +9,23 @@ const allTokens = new SharedArray("loadtest_tokens", function () {
   return JSON.parse(open("./tokens.json"));
 });
 
-const BASE_URL = (__ENV.BASE_URL ?? "http://host.docker.internal:3000/v1").replace(
+function getEnv(name: string, fallback: string): string {
+  const value = __ENV[name];
+  return value === undefined ? fallback : value;
+}
+
+const BASE_URL = getEnv("BASE_URL", "http://host.docker.internal:3000/v1").replace(
   /\/$/,
   "",
 );
-const TOTAL_REQUESTS = Number.parseInt(__ENV.TOTAL_REQUESTS ?? "1000", 10);
-const USER_COUNT = Number.parseInt(__ENV.USER_COUNT ?? "1000", 10);
-const USER_START = Number.parseInt(__ENV.USER_START ?? "1", 10);
-const VUS = Number.parseInt(__ENV.VUS ?? "100", 10);
-const MAX_CART_ITEMS = Number.parseInt(__ENV.MAX_CART_ITEMS ?? "3", 10);
-const RUN_SEED = Number.parseInt(__ENV.RUN_SEED ?? "20260707", 10);
-const PASSWORD = __ENV.LOAD_TEST_PASSWORD ?? "Password@123";
-const RUN_ID = __ENV.RUN_ID ?? Date.now().toString(36);
+const TOTAL_REQUESTS = Number.parseInt(getEnv("TOTAL_REQUESTS", "1000"), 10);
+const USER_COUNT = Number.parseInt(getEnv("USER_COUNT", "1000"), 10);
+const USER_START = Number.parseInt(getEnv("USER_START", "1"), 10);
+const VUS = Number.parseInt(getEnv("VUS", "100"), 10);
+const MAX_CART_ITEMS = Number.parseInt(getEnv("MAX_CART_ITEMS", "3"), 10);
+const RUN_SEED = Number.parseInt(getEnv("RUN_SEED", "20260707"), 10);
+const PASSWORD = getEnv("LOAD_TEST_PASSWORD", "Password@123");
+const RUN_ID = getEnv("RUN_ID", Date.now().toString(36));
 
 type TicketOption = {
   ticketTypeId: string;
@@ -191,7 +196,8 @@ function selectTickets(
 
 function responseCode(response: RefinedResponse<ResponseType>): string | null {
   try {
-    return (response.json() as { code?: string }).code ?? null;
+    const code = (response.json() as { code?: string }).code;
+    return code === undefined ? null : code;
   } catch {
     return null;
   }
@@ -199,9 +205,9 @@ function responseCode(response: RefinedResponse<ResponseType>): string | null {
 
 function accessTokenFrom(response: RefinedResponse<ResponseType>): string | null {
   try {
-    return (
-      response.json() as { data?: { access_token?: string } }
-    ).data?.access_token ?? null;
+    const accessToken = (response.json() as { data?: { access_token?: string } }).data
+      ?.access_token;
+    return accessToken === undefined ? null : accessToken;
   } catch {
     return null;
   }

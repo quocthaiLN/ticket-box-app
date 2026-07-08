@@ -36,13 +36,22 @@ function encodeVnpValue(value: string): string {
 export class VnpayGateway implements PaymentGateway {
   // Adapter này chuyển contract chung sang tham số chuẩn của VNPAY.
   readonly provider = 'VNPAY' as const;
-  // createCheckout chỉ ký URL local, không gọi mạng → không feed circuit breaker.
-  readonly checkoutHitsNetwork = false;
+  // Sandbox/production chỉ ký URL local. Mock mode gọi /prepare để có network
+  // boundary thật cho demo circuit breaker và bulkhead ngay từ checkout.
+  readonly checkoutHitsNetwork = Boolean(env.vnpay.mockPrepareUrl);
 
   // VNPay checkout is a signed redirect URL — built locally, no network call.
   // Tạo redirect URL được ký cục bộ; VNPAY chưa bị gọi ở bước này.
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
-    const { tmnCode, hashSecret, url, returnUrl } = env.vnpay;
+    const { tmnCode, hashSecret, url, returnUrl, mockPrepareUrl, timeout } = env.vnpay;
+
+    if (mockPrepareUrl) {
+      await postJson<{ status: 'ready' }>(
+        mockPrepareUrl,
+        { orderId: input.orderId },
+        timeout,
+      );
+    }
     const now = new Date();
     const expireDate = new Date(now.getTime() + 15 * 60 * 1000);
     const vnpAmount = Math.round(parseFloat(input.amount) * 100);

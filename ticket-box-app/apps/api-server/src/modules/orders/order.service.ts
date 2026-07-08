@@ -7,6 +7,7 @@ import {
   findAdminOrders,
   getOrderByIdempotencyKey,
   getOrderWithDetails,
+  getUserTicketQuotas,
 } from "./repository/order.repository.js";
 import { ApiError } from "../../shared/http/problem-details.js";
 import type {
@@ -17,6 +18,7 @@ import type {
   CreateOrderResponse,
   ExpireOrderResponse,
   OrderDetailResponse,
+  TicketQuotaResponse,
 } from "./order.type.js";
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours
@@ -208,6 +210,24 @@ export async function getOrder(
   }
 
   return mapOrderWithDetailsToResponse(details);
+}
+
+export async function getTicketQuota(
+  userId: string,
+  concertId: string,
+): Promise<TicketQuotaResponse> {
+  const items = await getUserTicketQuotas(userId, concertId);
+
+  return {
+    concert_id: concertId,
+    items: items.map((item) => ({
+      ticket_type_id: item.ticketTypeId,
+      max_per_user: item.maxPerUser,
+      held_quantity: item.heldQuantity,
+      paid_quantity: item.paidQuantity,
+      remaining_quantity: item.remainingQuantity,
+    })),
+  };
 }
 
 export async function cancelOrder(

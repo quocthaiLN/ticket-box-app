@@ -3,15 +3,25 @@ import { check, fail, sleep } from "k6";
 import { Counter } from "k6/metrics";
 import { SharedArray } from "k6/data";
 
-const BASE_URL = (__ENV.BASE_URL ?? "http://host.docker.internal:3000/v1").replace(/\/$/, "");
-const MOCK_CONTROL_URL = __ENV.MOCK_CONTROL_URL ?? "http://host.docker.internal:4100";
+function getEnv(name: string, fallback: string): string {
+  const value = __ENV[name];
+  return value === undefined ? fallback : value;
+}
+
+const BASE_URL = getEnv("BASE_URL", "http://host.docker.internal:3000/v1").replace(/\/$/, "");
+const MOMO_MOCK_CONTROL_URL = getEnv("MOMO_MOCK_CONTROL_URL", "http://host.docker.internal:4101");
+const totalIterations = Number.parseInt(getEnv("PAYMENT_CIRCUIT_TOTAL_ITERATIONS", "15"), 10);
+const failureThreshold = Number.parseInt(getEnv("PAYMENT_CIRCUIT_FAILURE_THRESHOLD", "2"), 10);
+const cooldownSeconds = Number.parseInt(getEnv("PAYMENT_CIRCUIT_COOLDOWN_SECONDS", "6"), 10);
+const failMode = getEnv("PAYMENT_CIRCUIT_FAIL_MODE", "fail");
+const recoveryMode = getEnv("PAYMENT_CIRCUIT_RECOVERY_MODE", "ok");
+const concertId = getEnv("PAYMENT_CIRCUIT_CONCERT_ID", "00000000-0000-0000-0000-000000000202");
+const ticketTypeId = getEnv("PAYMENT_CIRCUIT_TICKET_TYPE_ID", "00000000-0000-0000-0000-000000000510");
 
 // Load tokens.json đã sinh sẵn
 const allTokens = new SharedArray("loadtest_tokens", function () {
   return JSON.parse(open("../order/tokens.json"));
 });
-
-const totalIterations = 15;
 
 export const options = {
   scenarios: {
@@ -22,15 +32,35 @@ export const options = {
       maxDuration: "2m",
     },
   },
+  thresholds: {
+    checks: ["rate==1"],
+  },
 };
 
 type OrderData = { orderId: string; token: string };
-type SetupData = { orders: OrderData[] };
+type SetupData = { orders: OrderData[]; runId: string };
 
 export function setup(): SetupData {
+  if (totalIterations < 12) {
+    fail(`PAYMENT_CIRCUIT_TOTAL_ITERATIONS (${totalIterations}) phải ít nhất là 12.`);
+  }
+  if (failureThreshold < 1 || failureThreshold > 10) {
+    fail(`PAYMENT_CIRCUIT_FAILURE_THRESHOLD (${failureThreshold}) phải từ 1 đến 10.`);
+  }
+
+  const healthRes = http.get(`${MOMO_MOCK_CONTROL_URL}/health`);
+  if (healthRes.status !== 200) {
+    fail(
+      `MoMo mock không sẵn sàng tại ${MOMO_MOCK_CONTROL_URL} ` +
+      `(HTTP ${healthRes.status}). Hãy chạy "npm run dev:payment:momo" trước khi chạy k6.`,
+    );
+  }
+
+  const runId = String(Date.now());
+
   // 1. Reset trạng thái mock payment server về bình thường
   console.log("Resetting mock payment server controls...");
-  const resetRes = http.post(`${MOCK_CONTROL_URL}/__control/reset`);
+  const resetRes = http.post(`${MOMO_MOCK_CONTROL_URL}/__control/reset`);
   if (resetRes.status !== 200) {
     fail(`Không thể reset mock payment server: HTTP ${resetRes.status}`);
   }
@@ -41,14 +71,14 @@ export function setup(): SetupData {
 
   for (let i = 0; i < totalIterations; i++) {
     const token = allTokens[i].token;
-    
+
     const orderRes = http.post(
       `${BASE_URL}/orders`,
       JSON.stringify({
-        concert_id: "00000000-0000-0000-0000-000000000202",
+        concert_id: concertId,
         items: [
           {
-            ticket_type_id: "00000000-0000-0000-0000-000000000510", // GA
+            ticket_type_id: ticketTypeId,
             quantity: 1,
           },
         ],
@@ -57,6 +87,7 @@ export function setup(): SetupData {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          "Idempotency-Key": `circuit-order-${runId}-${i}`,
         },
       }
     );
@@ -69,12 +100,13 @@ export function setup(): SetupData {
     orders.push({ orderId, token });
   }
 
-  // 3. Tiêm lỗi: Cấu hình VNPAY bị hỏng hoàn toàn (mode = fail)
-  console.log("Injecting fault: Setting VNPAY mock mode to 'fail'...");
+  // 3. MoMo checkout gọi network nên có thể kích hoạt circuit breaker.
+  // VNPay checkout chỉ ký URL nội bộ và không gọi QueryDR ở endpoint này.
+  console.log("Injecting fault: Setting MOMO mock mode to 'fail'...");
   const controlRes = http.post(
-    `${MOCK_CONTROL_URL}/__control/vnpay`,
+    `${MOMO_MOCK_CONTROL_URL}/__control/momo`,
     JSON.stringify({
-      mode: "fail",
+      mode: failMode,
     }),
     {
       headers: { "Content-Type": "application/json" },
@@ -82,16 +114,16 @@ export function setup(): SetupData {
   );
 
   if (controlRes.status !== 200) {
-    fail(`Không thể cấu hình VNPAY lỗi: HTTP ${controlRes.status}`);
+    fail(`Không thể cấu hình MOMO lỗi: HTTP ${controlRes.status}`);
   }
 
-  return { orders };
+  return { orders, runId };
 }
 
 export default function (data: SetupData): void {
   const iteration = __ITER;
   const orderInfo = data.orders[iteration];
-  
+
   if (!orderInfo) {
     fail(`Iteration ${iteration} không tìm thấy thông tin order.`);
   }
@@ -99,69 +131,83 @@ export default function (data: SetupData): void {
   console.log(`[Iteration ${iteration + 1}/${totalIterations}]`);
 
   // Thực hiện các kịch bản dựa theo chỉ số iteration:
-  
+
   if (iteration === 10) {
-    // KỊCH BẢN CB-1: Chờ 6 giây (vượt resetTimeout = 5 giây) để OPEN -> HALF_OPEN
-    console.log("Waiting 6 seconds (cooldown) to allow circuit to transition to HALF_OPEN...");
-    sleep(6);
+    // KỊCH BẢN CB-1: Chờ cooldown để OPEN -> HALF_OPEN
+    console.log(`Waiting ${cooldownSeconds} seconds (cooldown) to allow circuit to transition to HALF_OPEN...`);
+    sleep(cooldownSeconds);
   }
 
   if (iteration === 11) {
-    // KỊCH BẢN CB-2: Cứu hộ cổng VNPAY hoạt động lại bình thường
-    console.log("Rescuing VNPAY: Setting VNPAY mock mode back to 'ok'...");
-    http.post(
-      `${MOCK_CONTROL_URL}/__control/vnpay`,
-      JSON.stringify({ mode: "ok" }),
+    // KỊCH BẢN CB-2: Khôi phục cổng MOMO hoạt động lại bình thường
+    console.log(`Rescuing MOMO: Setting MOMO mock mode back to '${recoveryMode}'...`);
+    const recoveryRes = http.post(
+      `${MOMO_MOCK_CONTROL_URL}/__control/momo`,
+      JSON.stringify({ mode: recoveryMode }),
       { headers: { "Content-Type": "application/json" } }
     );
-    // Chờ 6 giây tiếp theo để cooldown trước khi gọi request khôi phục mạch
-    console.log("Waiting 6 seconds (cooldown) to allow transition to HALF_OPEN for recovery...");
-    sleep(6);
+    if (recoveryRes.status !== 200) {
+      fail(`Không thể khôi phục MOMO mock: HTTP ${recoveryRes.status}`);
+    }
+    // Chờ cooldown tiếp theo trước khi gọi request khôi phục mạch
+    console.log(`Waiting ${cooldownSeconds} seconds (cooldown) to allow transition to HALF_OPEN for recovery...`);
+    sleep(cooldownSeconds);
   }
 
-  // Gửi request thanh toán qua VNPay
+  // Gửi request thanh toán qua MoMo để đi qua network circuit breaker.
   const response = http.post(
     `${BASE_URL}/orders/${orderInfo.orderId}/payments`,
     JSON.stringify({
-      payment_provider: "VNPAY",
+      payment_provider: "MOMO",
     }),
     {
       headers: {
         Authorization: `Bearer ${orderInfo.token}`,
         "Content-Type": "application/json",
+        "Idempotency-Key": `circuit-payment-${data.runId}-${iteration}`,
       },
-      tags: { name: "POST /v1/orders/:id/payments (VNPAY)" },
+      tags: { name: "POST /v1/orders/:id/payments (MOMO)" },
     }
   );
 
   // Lấy trạng thái Circuit Breaker qua API health check
   const healthRes = http.get(`${BASE_URL}/payments/health`);
-  const healthData = healthRes.json() as { providers: { vnpay: { circuitBreaker: { state: string } } } };
-  const cbState = healthData.providers.vnpay.circuitBreaker.state;
+  if (healthRes.status !== 200 && healthRes.status !== 503) {
+    fail(`Không đọc được payment health: HTTP ${healthRes.status} - ${healthRes.body}`);
+  }
+  const healthData = healthRes.json() as { providers: { momo: { circuitBreaker: { state: string } } } };
+  const cbState = healthData.providers.momo.circuitBreaker.state;
 
   console.log(`Request Status: ${response.status} | Circuit Breaker State: ${cbState}`);
 
-  if (iteration < 5) {
-    // 5 requests đầu: mạch CLOSED, lỗi phát sinh từ mock server (thường là 500 hoặc 400 tùy logic API)
+  if (iteration < failureThreshold - 1) {
+    // Các lỗi trước ngưỡng chưa mở mạch.
     check(response, {
-      "5 requests đầu bị lỗi do VNPAY hỏng (status >= 400)": (res) => res.status >= 400,
+      "Request trước ngưỡng trả PAYMENT_PROVIDER_UNAVAILABLE": (res) =>
+        res.status === 503 && (res.json() as { code: string }).code === "PAYMENT_PROVIDER_UNAVAILABLE",
       "Circuit Breaker vẫn ở trạng thái CLOSED": () => cbState === "CLOSED",
     });
-  } else if (iteration >= 5 && iteration <= 9) {
-    // Từ request thứ 6 đến 10: mạch đã OPEN, API chặn ngay lập tức và trả về lỗi 503
+  } else if (iteration === failureThreshold - 1) {
+    // Request đạt ngưỡng sẽ mở mạch ngay sau lỗi.
     check(response, {
-      "Từ request thứ 6 trở đi bị chặn ngay lập tức (status 503)": (res) => res.status === 503,
+      "Request đạt ngưỡng trả status 503": (res) => res.status === 503,
+      "Circuit Breaker mở khi đủ ngưỡng lỗi": () => cbState === "OPEN",
+    });
+  } else if (iteration >= failureThreshold && iteration <= 9) {
+    // Các request tiếp theo bị circuit OPEN chặn ngay.
+    check(response, {
+      "Request sau ngưỡng bị chặn ngay lập tức (status 503)": (res) => res.status === 503,
       "Mã code lỗi đúng Circuit Open": (res) => (res.json() as { code: string }).code === "PAYMENT_PROVIDER_UNAVAILABLE",
       "Circuit Breaker đã chuyển sang trạng thái OPEN": () => cbState === "OPEN",
     });
   } else if (iteration === 10) {
-    // Request thứ 11 (sau cooldown): Mạch chuyển HALF_OPEN -> gửi thử request -> thất bại vì VNPAY vẫn hỏng -> quay lại OPEN
+    // Request 11: HALF_OPEN probe vẫn lỗi nên quay lại OPEN.
     check(response, {
       "Request thăm dò ở HALF_OPEN thất bại (status >= 400)": (res) => res.status >= 400,
       "Circuit Breaker quay trở lại OPEN ngay lập tức": () => cbState === "OPEN",
     });
   } else if (iteration === 11) {
-    // Request thứ 12 (sau khi VNPAY hồi phục & cooldown): Mạch chuyển HALF_OPEN -> gửi request -> thành công -> quay về CLOSED
+    // Request 12: MoMo đã hồi phục, HALF_OPEN probe thành công và đóng mạch.
     check(response, {
       "Request thăm dò khi VNPAY hồi phục thành công (status 201)": (res) => res.status === 201,
       "Circuit Breaker được khôi phục về CLOSED": () => cbState === "CLOSED",
@@ -178,5 +224,5 @@ export default function (data: SetupData): void {
 export function teardown(): void {
   // Khôi phục lại trạng thái bình thường cho mock payment
   console.log("Teardown: Resetting mock payment server controls...");
-  http.post(`${MOCK_CONTROL_URL}/__control/reset`);
+  http.post(`${MOMO_MOCK_CONTROL_URL}/__control/reset`);
 }

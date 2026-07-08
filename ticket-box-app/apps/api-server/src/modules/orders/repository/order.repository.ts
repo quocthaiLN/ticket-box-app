@@ -96,6 +96,42 @@ export type OrderWithDetails = {
   tickets: TicketRow[];
 };
 
+export async function getUserTicketQuotas(userId: string, concertId: string) {
+  const ticketTypes = await prisma.ticketType.findMany({
+    where: { concertId },
+    select: {
+      id: true,
+      maxPerUser: true,
+      counters: {
+        where: { userId },
+        select: {
+          heldQuantity: true,
+          paidQuantity: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: [{ price: 'asc' }, { name: 'asc' }],
+  });
+
+  return ticketTypes.map((ticketType) => {
+    const counter = ticketType.counters[0];
+    const heldQuantity = counter?.heldQuantity ?? 0;
+    const paidQuantity = counter?.paidQuantity ?? 0;
+
+    return {
+      ticketTypeId: ticketType.id,
+      maxPerUser: ticketType.maxPerUser,
+      heldQuantity,
+      paidQuantity,
+      remainingQuantity: Math.max(
+        ticketType.maxPerUser - heldQuantity - paidQuantity,
+        0,
+      ),
+    };
+  });
+}
+
 // Map typed InventoryReservationError (từ createHeldOrder) sang ApiError của
 // module orders. Lỗi khác (kể cả P2002 idempotency) propagate nguyên vẹn để
 // service createOrder xử lý replay.
