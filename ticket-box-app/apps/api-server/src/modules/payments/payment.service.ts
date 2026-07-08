@@ -49,8 +49,8 @@ export async function buildCheckoutUrl(
       // Provider trả checkout URL dùng để redirect user sang trang thanh toán.
       const gateway = getGateway(provider);
       const run = () => gateway.createCheckout({ orderId, amount, currency, orderInfo });
-      // Chỉ checkout chạm mạng (MoMo) mới feed circuit breaker; VNPay ký URL local
-      // nên không record vào breaker để tránh reset/đóng nhầm trạng thái sức khỏe.
+      // Chỉ checkout chạm mạng mới feed circuit breaker. VNPay sandbox/production
+      // ký URL local; VNPay mock mode có bước /prepare nên đi qua lớp resilience.
       const { payUrl } = gateway.checkoutHitsNetwork
         ? await callProvider(provider, run)
         : await run();
@@ -253,7 +253,8 @@ export async function handleVnpayWebhook(body: VnpayWebhookBody): Promise<{ RspC
   } else if (!isSuccess && payment) {
     const failureReason = `VNPAY_${responseCode}`;
     await failPayment(payment.id, orderId, failureReason);
-    getCircuitBreaker('VNPAY').recordFailure();
+    // Provider đã phản hồi hợp lệ; thất bại nghiệp vụ không phải outage.
+    getCircuitBreaker('VNPAY').recordSuccess();
     void recordPaymentWebhookAudit({
       action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
       paymentId: payment.id,
@@ -366,7 +367,8 @@ export async function handleMomoWebhook(body: MomoWebhookBody): Promise<{ status
   } else if (!isSuccess && payment) {
     const failureReason = `MOMO_${resultCode}`;
     await failPayment(payment.id, orderId, failureReason);
-    getCircuitBreaker('MOMO').recordFailure();
+    // Provider đã phản hồi hợp lệ; thất bại nghiệp vụ không phải outage.
+    getCircuitBreaker('MOMO').recordSuccess();
     void recordPaymentWebhookAudit({
       action: AUDIT_ACTIONS.PAYMENT_WEBHOOK_FAILED,
       paymentId: payment.id,

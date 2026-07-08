@@ -2,10 +2,12 @@ import {
   getConcert,
   getConcertMetadata,
   getInventory,
+  getMyTicketQuota,
   listConcerts,
   type ConcertDetail,
   type ConcertMetadata,
   type Inventory,
+  type TicketQuota,
 } from "../lib/api-client";
 import {
   mapDetailConcert,
@@ -49,6 +51,10 @@ export async function getCatalogConcertDetail(concertId: string): Promise<UiConc
       : emptyInventory(concert.id);
 
   return mapDetailConcert(concert, metadata, inventory);
+}
+
+export async function getCatalogTicketQuota(concertId: string): Promise<TicketQuota> {
+  return getMyTicketQuota(concertId);
 }
 
 function emptyMetadata(concert: ConcertDetail): ConcertMetadata {

@@ -66,6 +66,8 @@ export type CreateOrganizerRequestInput = {
   checker_count: number;
   press_kit_url?: string;
   artist_bio_image_url?: string;
+  // Ảnh sơ đồ chỗ ngồi (upload qua /organizer/uploads/seat-map trước khi nộp hồ sơ).
+  seat_map_url?: string;
   ticket_types: OrganizerRequestTicketTypeInput[];
 };
 
@@ -80,7 +82,7 @@ export type UpdateOrganizerConcertInput = {
   ends_at?: string;
   planned_publish_at?: string;
   cover_image_url?: string;
-  seat_map_url?: string;
+  seat_map_url?: string | null;
   guest_drive_folder_id?: string;
 };
 
@@ -121,6 +123,7 @@ export function parseCreateOrganizerRequestBody(body: unknown): CreateOrganizerR
     checker_count: requiredPositiveInt(value.checker_count, "checker_count"),
     press_kit_url: asOptionalString(value.press_kit_url),
     artist_bio_image_url: asOptionalString(value.artist_bio_image_url),
+    seat_map_url: asOptionalString(value.seat_map_url),
     ticket_types: ticketTypes,
   };
 }
@@ -173,7 +176,8 @@ export function parseUpdateOrganizerConcertBody(body: unknown): UpdateOrganizerC
     ends_at: optionalDateString(value.ends_at, "ends_at"),
     planned_publish_at: optionalDateString(value.planned_publish_at, "planned_publish_at"),
     cover_image_url: asOptionalString(value.cover_image_url),
-    seat_map_url: asOptionalString(value.seat_map_url),
+    // null = organizer gỡ ảnh sơ đồ (xóa hẳn), khác với undefined = không đổi.
+    seat_map_url: value.seat_map_url === null ? null : asOptionalString(value.seat_map_url),
     guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }

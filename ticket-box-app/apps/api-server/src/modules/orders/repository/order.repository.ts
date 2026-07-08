@@ -96,6 +96,42 @@ export type OrderWithDetails = {
   tickets: TicketRow[];
 };
 
+export async function getUserTicketQuotas(userId: string, concertId: string) {
+  const ticketTypes = await prisma.ticketType.findMany({
+    where: { concertId },
+    select: {
+      id: true,
+      maxPerUser: true,
+      counters: {
+        where: { userId },
+        select: {
+          heldQuantity: true,
+          paidQuantity: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: [{ price: 'asc' }, { name: 'asc' }],
+  });
+
+  return ticketTypes.map((ticketType) => {
+    const counter = ticketType.counters[0];
+    const heldQuantity = counter?.heldQuantity ?? 0;
+    const paidQuantity = counter?.paidQuantity ?? 0;
+
+    return {
+      ticketTypeId: ticketType.id,
+      maxPerUser: ticketType.maxPerUser,
+      heldQuantity,
+      paidQuantity,
+      remainingQuantity: Math.max(
+        ticketType.maxPerUser - heldQuantity - paidQuantity,
+        0,
+      ),
+    };
+  });
+}
+
 // Map typed InventoryReservationError (từ createHeldOrder) sang ApiError của
 // module orders. Lỗi khác (kể cả P2002 idempotency) propagate nguyên vẹn để
 // service createOrder xử lý replay.
@@ -110,11 +146,19 @@ function mapReservationErrorToApi(err: unknown): unknown {
         detail: err.message,
       });
     case "TICKET_TYPE_NOT_ON_SALE":
-    case "SALE_WINDOW_CLOSED":
       return new ApiError({
         title: "TICKET_TYPE_NOT_ON_SALE",
         status: 422,
         code: "TICKET_TYPE_NOT_ON_SALE",
+        detail: err.message,
+      });
+    // Tách khỏi NOT_ON_SALE: vé hợp lệ nhưng ngoài khung giờ bán (chưa mở/đã đóng)
+    // để FE hiển thị đúng "chưa tới giờ mở bán" thay vì "vé không mở bán".
+    case "SALE_WINDOW_CLOSED":
+      return new ApiError({
+        title: "SALE_WINDOW_CLOSED",
+        status: 422,
+        code: "SALE_WINDOW_CLOSED",
         detail: err.message,
       });
     case "INSUFFICIENT_INVENTORY":

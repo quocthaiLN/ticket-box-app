@@ -68,16 +68,16 @@ const concerts = [
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 100),
-      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 300),
-      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 800),
-      zone("GA", "General Admission", "Khu đứng tự do.", 2000),
+      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 10),
+      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 30),
+      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 80),
+      zone("GA", "General Admission", "Khu đứng tự do.", 200),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 100, 5, 68, 2),
-      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 300, 12, 201, 2),
-      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 800, 30, 420, 4),
-      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 2000, 80, 1100, 4),
+      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 10, 1, 3, 2),
+      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 30, 2, 8, 2),
+      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 80, 3, 17, 4),
+      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 200, 5, 45, 4),
     ],
   },
   {
@@ -861,8 +861,39 @@ async function seedOperations() {
   }
 }
 
+async function seedLoadTestUsers() {
+  // 1.000 user AUDIENCE cho k6 load test.
+  // Email: loadtest0001@ticketbox.test … loadtest1000@ticketbox.test
+  // Mật khẩu chung: Password@123 (10 rounds để seed nhanh hơn).
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 10);
+
+  const data = [];
+  for (let i = 1; i <= 100000; i++) {
+    const index = String(i).padStart(4, "0");
+    data.push({
+      email: `loadtest${index}@ticketbox.test`,
+      passwordHash,
+      fullName: `Load Test User ${index}`,
+      phone: null,
+      role: "AUDIENCE",
+      status: "ACTIVE",
+    });
+  }
+
+  // createMany với skipDuplicates idempotent — chạy lại không sinh lỗi.
+  const result = await prisma.user.createMany({ data, skipDuplicates: true });
+  console.log(`seedLoadTestUsers: ${result.count} user mới được tạo (${1000 - result.count} đã tồn tại).`);
+
+  // Đảm bảo mật khẩu luôn đúng cho những user đã có (phòng trường hợp hash cũ).
+  await prisma.user.updateMany({
+    where: { email: { startsWith: "loadtest", endsWith: "@ticketbox.test" } },
+    data: { passwordHash, status: "ACTIVE" },
+  });
+}
+
 async function main() {
   await seedUsers();
+  await seedLoadTestUsers();
   await seedCatalog();
   await seedOrganizerWorkflow();
   await seedDemoTickets();

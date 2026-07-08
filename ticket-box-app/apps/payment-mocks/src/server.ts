@@ -3,8 +3,6 @@ import { ControlStore, type FaultMode, type Provider } from './control.js';
 import { momoRouter } from './momo.js';
 import { vnpayRouter } from './vnpay.js';
 
-const PROVIDERS: Provider[] = ['momo', 'vnpay'];
-
 interface ControlBody {
   mode?: FaultMode;
   latencyMs?: number;
@@ -12,10 +10,10 @@ interface ControlBody {
 }
 
 /**
- * Builds the standalone mock payment server. Returns the Express app plus the
+ * Builds one standalone provider mock. Returns the Express app plus the
  * ControlStore so tests can drive fault injection programmatically (without HTTP).
  */
-export function createMockPaymentServer(): { app: Express; control: ControlStore } {
+function createProviderMockServer(hostedProvider: Provider): { app: Express; control: ControlStore } {
   const control = new ControlStore();
   const app = express();
   app.use(express.json());
@@ -24,19 +22,22 @@ export function createMockPaymentServer(): { app: Express; control: ControlStore
     res.json({ status: 'OK' });
   });
 
-  app.use('/momo', momoRouter(control));
-  app.use('/vnpay', vnpayRouter(control));
+  if (hostedProvider === 'momo') {
+    app.use('/momo', momoRouter(control));
+  } else {
+    app.use('/vnpay', vnpayRouter(control));
+  }
 
   // ── Fault-injection control ───────────────────────────────────────────────
   app.post('/__control/reset', (_req, res) => {
-    control.reset();
+    control.set(hostedProvider, { mode: 'ok', latencyMs: 0, failRate: 0 });
     res.json({ status: 'reset' });
   });
 
   app.post('/__control/:provider', (req, res) => {
     const provider = req.params.provider as Provider;
-    if (!PROVIDERS.includes(provider)) {
-      res.status(404).json({ error: `Unknown provider: ${provider}` });
+    if (provider !== hostedProvider) {
+      res.status(404).json({ error: `Provider ${req.params.provider} is not hosted by this mock server` });
       return;
     }
     const { mode, latencyMs, failRate } = req.body as ControlBody;
@@ -50,3 +51,6 @@ export function createMockPaymentServer(): { app: Express; control: ControlStore
 
   return { app, control };
 }
+
+export const createMomoMockServer = () => createProviderMockServer('momo');
+export const createVnpayMockServer = () => createProviderMockServer('vnpay');

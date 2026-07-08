@@ -77,7 +77,10 @@ export async function findExpiredHeldOrders(
     FROM orders
     WHERE status = ${OrderStatus.HELD}::order_status
       AND hold_expires_at IS NOT NULL
-      AND hold_expires_at <= ${now}
+      -- Cột TIMESTAMP naive lưu theo quy ước UTC (Prisma). Ép param về naive-UTC
+      -- trước khi so sánh để không phụ thuộc TimeZone của Postgres server
+      -- (server chạy múi giờ khác UTC sẽ làm mọi hold bị coi là quá hạn ngay).
+      AND hold_expires_at <= (${now}::timestamptz AT TIME ZONE 'UTC')
     ORDER BY hold_expires_at ASC
     LIMIT ${Math.max(1, Math.min(limit, 500))}
   `);

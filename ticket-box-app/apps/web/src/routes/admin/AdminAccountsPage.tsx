@@ -9,6 +9,7 @@ import {
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../services/admin-account.service";
+import { LongText } from "../../components/LongText";
 import { AdminAccessState, AdminShell } from "./AdminShell";
 
 type LoadState = "loading" | "ready" | "error";
@@ -175,7 +176,7 @@ function AccountRow({
         <span className="block max-w-[260px] break-words">{user.full_name || "Chưa đặt tên"}</span>
       </td>
       <td className="px-4 py-3 text-xs text-[#8585A0]">
-        <span className="block max-w-[320px] break-all">{user.email}</span>
+        <LongText value={user.email} copyable className="max-w-[320px]" />
       </td>
       <td className="px-4 py-3">
         <span className="rounded-full px-2 py-1 text-xs font-semibold" style={{ background: roleStyle.bg, color: roleStyle.color }}>

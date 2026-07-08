@@ -3,7 +3,7 @@ import {
   Prisma,
   TicketTypeStatus,
   UserStatus,
-  prisma
+  prisma,
 } from "@ticketbox/database";
 import type { ListAdminQuery, ListConcertsQuery } from "./catalog.schema.js";
 import type {
@@ -15,7 +15,7 @@ import type {
   SeatMapDto,
   SeatZoneDto,
   TicketTypeDto,
-  VenueDto
+  VenueDto,
 } from "./catalog.types.js";
 
 type ConcertWithVenueAndPrices = Prisma.ConcertGetPayload<{
@@ -42,58 +42,66 @@ type TicketTypeWithZone = Prisma.TicketTypeGetPayload<{
 }>;
 
 export class CatalogRepository {
-  async listPublishedConcerts(query: ListConcertsQuery): Promise<ConcertSummaryDto[]> {
+  async listPublishedConcerts(
+    query: ListConcertsQuery,
+  ): Promise<ConcertSummaryDto[]> {
     const concerts = await prisma.concert.findMany({
       where: {
         ...buildConcertFilters(query),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
       include: {
         venue: true,
         ticketTypes: {
-          select: { price: true, currency: true }
-        }
+          select: { price: true, currency: true },
+        },
       },
       orderBy: buildOrderBy(query.sort),
-      take: query.limit
+      take: query.limit,
     });
 
     return concerts.map(mapConcertSummary);
   }
 
-  async getPublishedConcertById(concertId: string): Promise<ConcertDetailDto | null> {
+  async getPublishedConcertById(
+    concertId: string,
+  ): Promise<ConcertDetailDto | null> {
     const concert = await prisma.concert.findFirst({
       where: {
         ...buildConcertIdentityFilter(concertId),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
-      include: { venue: true }
+      include: { venue: true },
     });
 
     return concert ? mapConcertDetail(concert) : null;
   }
 
-  async getConcertMetadata(concertId: string): Promise<ConcertMetadataDto | null> {
+  async getConcertMetadata(
+    concertId: string,
+  ): Promise<ConcertMetadataDto | null> {
     const concert = await prisma.concert.findFirst({
       where: {
         ...buildConcertIdentityFilter(concertId),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
       include: {
         venue: true,
         seatZones: { orderBy: { sortOrder: "asc" } },
         ticketTypes: {
           include: { seatZone: true },
-          orderBy: { price: "asc" }
-        }
-      }
+          orderBy: { price: "asc" },
+        },
+      },
     });
 
     return concert ? mapConcertMetadata(concert) : null;
   }
 
   // Admin preview: không lọc status để xem được cả concert DRAFT.
-  async getConcertMetadataAnyStatus(concertId: string): Promise<ConcertMetadataDto | null> {
+  async getConcertMetadataAnyStatus(
+    concertId: string,
+  ): Promise<ConcertMetadataDto | null> {
     const concert = await prisma.concert.findFirst({
       where: buildConcertIdentityFilter(concertId),
       include: {
@@ -101,9 +109,9 @@ export class CatalogRepository {
         seatZones: { orderBy: { sortOrder: "asc" } },
         ticketTypes: {
           include: { seatZone: true },
-          orderBy: { price: "asc" }
-        }
-      }
+          orderBy: { price: "asc" },
+        },
+      },
     });
 
     return concert ? mapConcertMetadata(concert) : null;
@@ -113,11 +121,11 @@ export class CatalogRepository {
     const concert = await prisma.concert.findFirst({
       where: {
         ...buildConcertIdentityFilter(concertId),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
       include: {
-        seatZones: { orderBy: { sortOrder: "asc" } }
-      }
+        seatZones: { orderBy: { sortOrder: "asc" } },
+      },
     });
 
     if (!concert) return null;
@@ -125,38 +133,45 @@ export class CatalogRepository {
     return {
       concert_id: concert.id,
       svg_url: concert.seatMapUrl ?? undefined,
-      zones: concert.seatZones.map((zone) => ({
+      zones: concert.seatZones.filter(isAudienceZone).map((zone) => ({
         seat_zone_id: zone.id,
         code: zone.code,
         name: zone.name,
         svg_path: zone.svgPath ?? undefined,
-        sort_order: zone.sortOrder
-      }))
+        sort_order: zone.sortOrder,
+      })),
     };
   }
 
-  async listTicketTypes(concertId: string, includeClosed: boolean): Promise<TicketTypeDto[]> {
+  async listTicketTypes(
+    concertId: string,
+    includeClosed: boolean,
+  ): Promise<TicketTypeDto[]> {
     const concert = await prisma.concert.findFirst({
       where: {
         ...buildConcertIdentityFilter(concertId),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
-      select: { id: true }
+      select: { id: true },
     });
 
     if (!concert) return [];
 
     const statuses = includeClosed
-      ? [TicketTypeStatus.ON_SALE, TicketTypeStatus.SOLD_OUT, TicketTypeStatus.CLOSED]
+      ? [
+          TicketTypeStatus.ON_SALE,
+          TicketTypeStatus.SOLD_OUT,
+          TicketTypeStatus.CLOSED,
+        ]
       : [TicketTypeStatus.ON_SALE, TicketTypeStatus.SOLD_OUT];
 
     const ticketTypes = await prisma.ticketType.findMany({
       where: {
         concertId: concert.id,
-        status: { in: statuses }
+        status: { in: statuses },
       },
       include: { seatZone: true },
-      orderBy: [{ price: "asc" }, { name: "asc" }]
+      orderBy: [{ price: "asc" }, { name: "asc" }],
     });
 
     return ticketTypes.map(mapTicketType);
@@ -166,22 +181,32 @@ export class CatalogRepository {
     const concert = await prisma.concert.findFirst({
       where: {
         ...buildConcertIdentityFilter(concertId),
-        status: ConcertStatus.PUBLISHED
+        status: ConcertStatus.PUBLISHED,
       },
-      select: { id: true }
+      select: { id: true },
     });
 
     if (!concert) {
-      return { concert_id: concertId, as_of: new Date().toISOString(), items: [] };
+      return {
+        concert_id: concertId,
+        as_of: new Date().toISOString(),
+        items: [],
+      };
     }
 
     const ticketTypes = await prisma.ticketType.findMany({
       where: {
         concertId: concert.id,
-        status: { in: [TicketTypeStatus.ON_SALE, TicketTypeStatus.SOLD_OUT, TicketTypeStatus.CLOSED] }
+        status: {
+          in: [
+            TicketTypeStatus.ON_SALE,
+            TicketTypeStatus.SOLD_OUT,
+            TicketTypeStatus.CLOSED,
+          ],
+        },
       },
       include: { seatZone: true },
-      orderBy: [{ price: "asc" }, { name: "asc" }]
+      orderBy: [{ price: "asc" }, { name: "asc" }],
     });
 
     return {
@@ -189,11 +214,15 @@ export class CatalogRepository {
       as_of: new Date().toISOString(),
       items: ticketTypes.map((ticketType) => {
         const available = Math.max(
-          ticketType.totalQuantity - ticketType.heldQuantity - ticketType.soldQuantity,
-          0
+          ticketType.totalQuantity -
+            ticketType.heldQuantity -
+            ticketType.soldQuantity,
+          0,
         );
         const status =
-          ticketType.status === TicketTypeStatus.DRAFT ? TicketTypeStatus.CLOSED : ticketType.status;
+          ticketType.status === TicketTypeStatus.DRAFT
+            ? TicketTypeStatus.CLOSED
+            : ticketType.status;
 
         return {
           ticket_type_id: ticketType.id,
@@ -201,9 +230,9 @@ export class CatalogRepository {
           zone_code: ticketType.seatZone.code,
           available_quantity: available,
           status: status as "ON_SALE" | "SOLD_OUT" | "CLOSED",
-          display_status: getDisplayStatus(status, available)
+          display_status: getDisplayStatus(status, available),
         };
-      })
+      }),
     };
   }
 
@@ -211,35 +240,35 @@ export class CatalogRepository {
     const venues = await prisma.venue.findMany({
       where: buildVenueFilters(query),
       orderBy: { name: "asc" },
-      take: query.limit
+      take: query.limit,
     });
 
     return venues.map(mapVenue);
   }
 
   async listAdminConcerts(
-    query: ListAdminQuery
+    query: ListAdminQuery,
   ): Promise<(ConcertSummaryDto & { guest_drive_folder_id?: string })[]> {
     const concerts = await prisma.concert.findMany({
       where: {
         ...buildConcertFilters(query),
         ...(query.status ? { status: query.status } : {}),
-        ...(query.venue_id ? { venueId: query.venue_id } : {})
+        ...(query.venue_id ? { venueId: query.venue_id } : {}),
       },
       include: {
         venue: true,
         ticketTypes: {
-          select: { price: true, currency: true }
-        }
+          select: { price: true, currency: true },
+        },
       },
       orderBy: buildOrderBy(query.sort),
-      take: query.limit
+      take: query.limit,
     });
 
     // Admin-only: kèm thư mục Drive khách mời để UI hiển thị link đã gán.
     return concerts.map((concert) => ({
       ...mapConcertSummary(concert),
-      guest_drive_folder_id: concert.guestDriveFolderId ?? undefined
+      guest_drive_folder_id: concert.guestDriveFolderId ?? undefined,
     }));
   }
 
@@ -255,9 +284,17 @@ export class CatalogRepository {
 
   async updateVenue(
     venueId: string,
-    input: Partial<{ name: string; address: string; city: string; capacity: number; mapUrl: string | null }>
+    input: Partial<{
+      name: string;
+      address: string;
+      city: string;
+      capacity: number;
+      mapUrl: string | null;
+    }>,
   ): Promise<VenueDto> {
-    return mapVenue(await prisma.venue.update({ where: { id: venueId }, data: input }));
+    return mapVenue(
+      await prisma.venue.update({ where: { id: venueId }, data: input }),
+    );
   }
 
   async createConcert(input: {
@@ -277,7 +314,7 @@ export class CatalogRepository {
   }): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.create({
       data: input,
-      include: { venue: true }
+      include: { venue: true },
     });
 
     return mapConcertDetail(concert);
@@ -297,33 +334,48 @@ export class CatalogRepository {
       coverImageUrl: string | null;
       seatMapUrl: string | null;
       guestDriveFolderId: string | null;
-    }>
+    }>,
   ): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.update({
       where: { id: concertId },
       data: input,
-      include: { venue: true }
+      include: { venue: true },
     });
 
     return mapConcertDetail(concert);
   }
 
-  async setConcertStatus(concertId: string, status: "PUBLISHED" | "CANCELLED" | "COMPLETED"): Promise<ConcertDetailDto> {
+  async setConcertStatus(
+    concertId: string,
+    status: "PUBLISHED" | "CANCELLED" | "COMPLETED",
+  ): Promise<ConcertDetailDto> {
     const concert = await prisma.$transaction(async (tx) => {
       const updatedConcert = await tx.concert.update({
         where: { id: concertId },
         data: { status },
-        include: { venue: true }
+        include: { venue: true },
       });
 
-      if (status === ConcertStatus.CANCELLED || status === ConcertStatus.COMPLETED) {
+      // Publish concert = mở bán: loại vé còn DRAFT chuyển ON_SALE, nếu không
+      // inventory API (chỉ trả ON_SALE/SOLD_OUT/CLOSED) sẽ rỗng → UI báo "Hết vé".
+      if (status === ConcertStatus.PUBLISHED) {
+        await tx.ticketType.updateMany({
+          where: { concertId, status: TicketTypeStatus.DRAFT },
+          data: { status: TicketTypeStatus.ON_SALE },
+        });
+      }
+
+      if (
+        status === ConcertStatus.CANCELLED ||
+        status === ConcertStatus.COMPLETED
+      ) {
         await tx.user.updateMany({
           where: {
             role: "CHECKER",
             status: { not: UserStatus.DISABLED },
-            concertCheckerAccounts: { some: { concertId } }
+            concertCheckerAccounts: { some: { concertId } },
           },
-          data: { status: UserStatus.DISABLED }
+          data: { status: UserStatus.DISABLED },
         });
       }
 
@@ -343,10 +395,10 @@ export class CatalogRepository {
         _count: {
           select: {
             seatZones: true,
-            ticketTypes: true
-          }
-        }
-      }
+            ticketTypes: true,
+          },
+        },
+      },
     });
 
     if (!concert) return null;
@@ -354,32 +406,46 @@ export class CatalogRepository {
     return {
       has_valid_time_range: concert.endsAt > concert.startsAt,
       seat_zone_count: concert._count.seatZones,
-      ticket_type_count: concert._count.ticketTypes
+      ticket_type_count: concert._count.ticketTypes,
     };
   }
 
-  async createSeatZone(concertId: string, input: {
-    code: string;
-    name: string;
-    description?: string;
-    capacity: number;
-    svgPath?: string;
-    sortOrder: number;
-  }): Promise<SeatZoneDto> {
-    return mapSeatZone(await prisma.seatZone.create({ data: { ...input, concertId } }));
+  async createSeatZone(
+    concertId: string,
+    input: {
+      code: string;
+      name: string;
+      description?: string;
+      capacity: number;
+      svgPath?: string;
+      sortOrder: number;
+    },
+  ): Promise<SeatZoneDto> {
+    return mapSeatZone(
+      await prisma.seatZone.create({ data: { ...input, concertId } }),
+    );
   }
 
   async updateSeatZone(
     seatZoneId: string,
-    input: Partial<{ code: string; name: string; description: string | null; capacity: number; svgPath: string | null; sortOrder: number }>
+    input: Partial<{
+      code: string;
+      name: string;
+      description: string | null;
+      capacity: number;
+      svgPath: string | null;
+      sortOrder: number;
+    }>,
   ): Promise<SeatZoneDto> {
-    return mapSeatZone(await prisma.seatZone.update({ where: { id: seatZoneId }, data: input }));
+    return mapSeatZone(
+      await prisma.seatZone.update({ where: { id: seatZoneId }, data: input }),
+    );
   }
 
   async getSeatZoneCapacityUsage(seatZoneId: string) {
     const zone = await prisma.seatZone.findUnique({
       where: { id: seatZoneId },
-      include: { ticketTypes: { select: { id: true, totalQuantity: true } } }
+      include: { ticketTypes: { select: { id: true, totalQuantity: true } } },
     });
 
     if (!zone) return null;
@@ -387,28 +453,34 @@ export class CatalogRepository {
     return {
       concert_id: zone.concertId,
       capacity: zone.capacity,
-      configured_quantity: zone.ticketTypes.reduce((total, item) => total + item.totalQuantity, 0)
+      configured_quantity: zone.ticketTypes.reduce(
+        (total, item) => total + item.totalQuantity,
+        0,
+      ),
     };
   }
 
-  async createTicketType(concertId: string, input: {
-    seatZoneId: string;
-    name: string;
-    description?: string;
-    price: number;
-    totalQuantity: number;
-    maxPerUser: number;
-    saleStartAt: Date;
-    saleEndAt: Date;
-  }): Promise<TicketTypeDto> {
+  async createTicketType(
+    concertId: string,
+    input: {
+      seatZoneId: string;
+      name: string;
+      description?: string;
+      price: number;
+      totalQuantity: number;
+      maxPerUser: number;
+      saleStartAt: Date;
+      saleEndAt: Date;
+    },
+  ): Promise<TicketTypeDto> {
     const ticketType = await prisma.ticketType.create({
       data: {
         ...input,
         concertId,
         currency: "VND",
-        status: TicketTypeStatus.DRAFT
+        status: TicketTypeStatus.DRAFT,
       },
-      include: { seatZone: true }
+      include: { seatZone: true },
     });
 
     return mapTicketType(ticketType);
@@ -426,12 +498,12 @@ export class CatalogRepository {
       saleStartAt: Date;
       saleEndAt: Date;
       status: "DRAFT" | "ON_SALE" | "SOLD_OUT" | "CLOSED";
-    }>
+    }>,
   ): Promise<TicketTypeDto> {
     const ticketType = await prisma.ticketType.update({
       where: { id: ticketTypeId },
       data: input,
-      include: { seatZone: true }
+      include: { seatZone: true },
     });
 
     return mapTicketType(ticketType);
@@ -441,32 +513,36 @@ export class CatalogRepository {
     const user = await prisma.user.findFirst({
       where: { role: { in: ["ORGANIZER", "ADMIN"] }, status: "ACTIVE" },
       orderBy: { createdAt: "asc" },
-      select: { id: true }
+      select: { id: true },
     });
 
     return user?.id ?? null;
   }
 }
 
-function buildConcertFilters(query: ListConcertsQuery): Prisma.ConcertWhereInput {
+function buildConcertFilters(
+  query: ListConcertsQuery,
+): Prisma.ConcertWhereInput {
   return {
     ...(query.q
       ? {
           OR: [
             { title: { contains: query.q, mode: "insensitive" } },
-            { artistName: { contains: query.q, mode: "insensitive" } }
-          ]
+            { artistName: { contains: query.q, mode: "insensitive" } },
+          ],
         }
       : {}),
-    ...(query.city ? { venue: { city: { contains: query.city, mode: "insensitive" } } } : {}),
+    ...(query.city
+      ? { venue: { city: { contains: query.city, mode: "insensitive" } } }
+      : {}),
     ...(query.from || query.to
       ? {
           startsAt: {
             ...(query.from ? { gte: new Date(query.from) } : {}),
-            ...(query.to ? { lte: new Date(query.to) } : {})
-          }
+            ...(query.to ? { lte: new Date(query.to) } : {}),
+          },
         }
-      : {})
+      : {}),
   };
 }
 
@@ -476,11 +552,13 @@ function buildVenueFilters(query: ListConcertsQuery): Prisma.VenueWhereInput {
       ? {
           OR: [
             { name: { contains: query.q, mode: "insensitive" } },
-            { address: { contains: query.q, mode: "insensitive" } }
-          ]
+            { address: { contains: query.q, mode: "insensitive" } },
+          ],
         }
       : {}),
-    ...(query.city ? { city: { contains: query.city, mode: "insensitive" } } : {})
+    ...(query.city
+      ? { city: { contains: query.city, mode: "insensitive" } }
+      : {}),
   };
 }
 
@@ -488,14 +566,20 @@ function buildConcertIdentityFilter(value: string): Prisma.ConcertWhereInput {
   return isUuid(value) ? { id: value } : { slug: value };
 }
 
-function buildOrderBy(sort: ListConcertsQuery["sort"]): Prisma.ConcertOrderByWithRelationInput {
+function buildOrderBy(
+  sort: ListConcertsQuery["sort"],
+): Prisma.ConcertOrderByWithRelationInput {
   if (sort === "-starts_at") return { startsAt: "desc" };
   if (sort === "title") return { title: "asc" };
   return { startsAt: "asc" };
 }
 
-function mapConcertSummary(concert: ConcertWithVenueAndPrices): ConcertSummaryDto {
-  const prices = concert.ticketTypes.map((ticketType) => Number(ticketType.price));
+function mapConcertSummary(
+  concert: ConcertWithVenueAndPrices,
+): ConcertSummaryDto {
+  const prices = concert.ticketTypes.map((ticketType) =>
+    Number(ticketType.price),
+  );
 
   return {
     id: concert.id,
@@ -510,34 +594,47 @@ function mapConcertSummary(concert: ConcertWithVenueAndPrices): ConcertSummaryDt
     venue: {
       id: concert.venue.id,
       name: concert.venue.name,
-      city: concert.venue.city
+      city: concert.venue.city,
     },
     ticket_price_range:
       prices.length > 0
         ? {
             min_amount: Math.min(...prices),
             max_amount: Math.max(...prices),
-            currency: "VND"
+            currency: "VND",
           }
-        : undefined
+        : undefined,
   };
 }
 
 // Cột JSONB `artists` → DTO; dữ liệu bẩn/không đúng shape thì bỏ qua (fallback field đơn).
-function mapConcertArtists(value: Prisma.JsonValue | null): ConcertArtistDto[] | undefined {
+function mapConcertArtists(
+  value: Prisma.JsonValue | null,
+): ConcertArtistDto[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const artists = value.flatMap((item) => {
-    const record = item as { name?: unknown; bio?: unknown; image_url?: unknown };
+    const record = item as {
+      name?: unknown;
+      bio?: unknown;
+      image_url?: unknown;
+    };
     if (typeof record?.bio !== "string" || record.bio.length === 0) return [];
     return [
       {
         name: typeof record.name === "string" ? record.name : "",
         bio: record.bio,
-        image_url: typeof record.image_url === "string" ? record.image_url : null,
+        image_url:
+          typeof record.image_url === "string" ? record.image_url : null,
       },
     ];
   });
   return artists.length > 0 ? artists : undefined;
+}
+
+// Khu khách mời (code GUEST, sinh từ guest-list import) không bán vé —
+// không đưa vào sơ đồ/danh sách zone phía audience; check-in/gate vẫn dùng bình thường.
+function isAudienceZone(zone: { code: string }): boolean {
+  return zone.code !== "GUEST";
 }
 
 function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
@@ -555,11 +652,13 @@ function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
     status: concert.status,
     cover_image_url: concert.coverImageUrl ?? undefined,
     seat_map_url: concert.seatMapUrl ?? undefined,
-    venue: mapVenue(concert.venue)
+    venue: mapVenue(concert.venue),
   };
 }
 
-function mapConcertMetadata(concert: ConcertMetadataRecord): ConcertMetadataDto {
+function mapConcertMetadata(
+  concert: ConcertMetadataRecord,
+): ConcertMetadataDto {
   const detail = mapConcertDetail(concert);
 
   return {
@@ -572,32 +671,36 @@ function mapConcertMetadata(concert: ConcertMetadataRecord): ConcertMetadataDto 
       starts_at: detail.starts_at,
       ends_at: detail.ends_at,
       status: detail.status,
-      cover_image_url: detail.cover_image_url
+      cover_image_url: detail.cover_image_url,
     },
     venue: mapVenue(concert.venue),
-    seat_zones: concert.seatZones.map(mapSeatZone),
+    seat_zones: concert.seatZones.filter(isAudienceZone).map(mapSeatZone),
     ticket_types: concert.ticketTypes.map(mapTicketType),
     seat_map: {
-      svg_url: concert.seatMapUrl ?? undefined
+      svg_url: concert.seatMapUrl ?? undefined,
     },
     artist_bio: concert.artistBio ?? undefined,
     artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
-    artists: mapConcertArtists(concert.artists)
+    artists: mapConcertArtists(concert.artists),
   };
 }
 
-function mapVenue(venue: Prisma.VenueGetPayload<Record<string, never>>): VenueDto {
+function mapVenue(
+  venue: Prisma.VenueGetPayload<Record<string, never>>,
+): VenueDto {
   return {
     id: venue.id,
     name: venue.name,
     address: venue.address,
     city: venue.city,
     capacity: venue.capacity ?? undefined,
-    map_url: venue.mapUrl ?? undefined
+    map_url: venue.mapUrl ?? undefined,
   };
 }
 
-function mapSeatZone(zone: Prisma.SeatZoneGetPayload<Record<string, never>>): SeatZoneDto {
+function mapSeatZone(
+  zone: Prisma.SeatZoneGetPayload<Record<string, never>>,
+): SeatZoneDto {
   return {
     id: zone.id,
     code: zone.code,
@@ -605,7 +708,7 @@ function mapSeatZone(zone: Prisma.SeatZoneGetPayload<Record<string, never>>): Se
     description: zone.description ?? undefined,
     capacity: zone.capacity,
     svg_path: zone.svgPath ?? undefined,
-    sort_order: zone.sortOrder
+    sort_order: zone.sortOrder,
   };
 }
 
@@ -619,22 +722,28 @@ function mapTicketType(ticketType: TicketTypeWithZone): TicketTypeDto {
     description: ticketType.description ?? undefined,
     price: {
       amount: Number(ticketType.price),
-      currency: "VND"
+      currency: "VND",
     },
     max_per_user: ticketType.maxPerUser,
     sale_start_at: ticketType.saleStartAt.toISOString(),
     sale_end_at: ticketType.saleEndAt.toISOString(),
-    status: ticketType.status
+    status: ticketType.status,
   };
 }
 
-function getDisplayStatus(status: TicketTypeStatus, available: number): InventoryDto["items"][number]["display_status"] {
+function getDisplayStatus(
+  status: TicketTypeStatus,
+  available: number,
+): InventoryDto["items"][number]["display_status"] {
   if (status === TicketTypeStatus.CLOSED) return "CLOSED";
-  if (status === TicketTypeStatus.SOLD_OUT || available === 0) return "SOLD_OUT";
+  if (status === TicketTypeStatus.SOLD_OUT || available === 0)
+    return "SOLD_OUT";
   if (available <= 20) return "LOW_STOCK";
   return "AVAILABLE";
 }
 
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }

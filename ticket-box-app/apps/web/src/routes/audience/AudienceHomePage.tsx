@@ -231,7 +231,7 @@ export function AudienceHomePage() {
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: <Zap className="h-6 w-6" />, title: "Thanh toán nhanh", desc: "Luồng checkout rõ ràng, sẵn sàng nối VNPAY/MoMo sandbox cho demo." },
+              { icon: <Zap className="h-6 w-6" />, title: "Thanh toán nhanh", desc: "Luồng checkout rõ ràng, thanh toán nhanh chóng qua VNPAY/MoMo." },
               { icon: <Shield className="h-6 w-6" />, title: "Vé xác thực", desc: "Mỗi e-ticket có mã QR riêng để giảm tranh chấp và chống vé giả." },
               { icon: <Smartphone className="h-6 w-6" />, title: "Check-in tiện lợi", desc: "QR ticket hỗ trợ soát vé online tại cổng và đồng bộ offline." },
               { icon: <Star className="h-6 w-6" />, title: "Vận hành tập trung", desc: "Danh mục, khách mời và Artist Bio nằm trong một hệ thống quản trị." },

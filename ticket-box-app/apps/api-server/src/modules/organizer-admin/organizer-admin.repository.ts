@@ -47,6 +47,8 @@ export type AdminRequestDetailDto = AdminRequestSummaryDto & {
   description?: string;
   planned_publish_at?: string;
   press_kit_url?: string;
+  // Sơ đồ chỗ ngồi organizer upload lúc nộp hồ sơ — admin xem trước khi duyệt.
+  seat_map_url?: string;
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
@@ -188,6 +190,7 @@ export class OrganizerAdminRepository {
           artistBio: request.artistBio ?? undefined, // mang bio AI (sinh từ press kit) vào concert
           artistBioImageUrl: request.artistBioImageUrl ?? undefined, // ảnh nghệ sĩ tách từ press kit
           coverImageUrl: request.coverImageUrl ?? undefined, // ảnh concert tách từ press kit (trang 1)
+          seatMapUrl: request.seatMapUrl ?? undefined, // sơ đồ chỗ ngồi organizer upload lúc nộp hồ sơ
           // Danh sách nghệ sĩ AI tách từ press kit — mang nguyên sang concert.
           ...(request.artists !== null
             ? { artists: request.artists as Prisma.InputJsonValue }
@@ -561,6 +564,7 @@ function mapRequestDetail(
     description: request.description ?? undefined,
     planned_publish_at: request.plannedPublishAt?.toISOString(),
     press_kit_url: request.pressKitUrl ?? undefined,
+    seat_map_url: request.seatMapUrl ?? undefined,
     artist_bio: request.artistBio ?? null,
     bio_status: request.bioStatus ?? null,
     artist_bio_image_url: request.artistBioImageUrl ?? null,
