@@ -38,10 +38,11 @@ npm run dev:worker
 Đối với payment mock (dùng cho resilience test):
 
 ```bash
-npm run dev:payment
+npm run dev:payment:momo
+npm run dev:payment:vnpay
 ```
 
-Mock payment server sẽ chạy ở cổng `4000` theo `MOCK_PAYMENTS_PORT` trong `.env`.
+MoMo mock chạy ở cổng `4101` theo `MOMO_MOCK_PORT`; VNPay mock chạy ở cổng `4102` theo `VNPAY_MOCK_PORT` trong `.env`.
 
 ---
 
@@ -160,7 +161,8 @@ Kiểm thử các cơ chế chịu lỗi cho hệ thống thanh toán khi các c
 1. Khởi động mock payment server:
 
 ```bash
-npm run dev:payment
+npm run dev:payment:momo
+npm run dev:payment:vnpay
 ```
 
 2. Khởi động API server và worker:

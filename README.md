@@ -135,7 +135,8 @@ Run the main services:
 npm run dev:api
 npm run dev:web
 npm run dev:worker
-npm run dev:payment
+npm run dev:payment:momo
+npm run dev:payment:vnpay
 ```
 
 Run the mobile checker app:
@@ -150,7 +151,8 @@ Default local URLs:
 | --- | --- |
 | API | `http://localhost:3000/v1` |
 | Web | `http://localhost:3001` |
-| Payment mocks | `http://localhost:4100` |
+| MoMo payment mock | `http://localhost:4101` |
+| VNPay payment mock | `http://localhost:4102` |
 | Postgres | `localhost:5433` |
 | Redis | `localhost:6379` |
 

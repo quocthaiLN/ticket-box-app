@@ -64,7 +64,7 @@ Demo phương thức thanh toán thứ hai, chứng minh hệ thống hỗ trợ
 3. Hệ thống chuyển sang cổng MoMo test (`test-payment.momo.vn`); thanh toán bằng QR test hoặc luồng sandbox của MoMo, redirect về `http://localhost:3000/v1/payment/return/momo`.
 4. Kiểm tra vé mới trong **Vé của tôi**; đơn hàng ghi payment provider là MoMo.
 
-Ghi chú: nếu môi trường không truy cập được MoMo sandbox, dùng payment mocks (`npm run dev:payment`, cổng 4100) theo cấu hình `.env` tương ứng.
+Ghi chú: nếu môi trường không truy cập được MoMo sandbox, dùng payment mocks theo cấu hình `.env` tương ứng: `npm run dev:payment:momo` cho MoMo mock ở cổng `4101`, và `npm run dev:payment:vnpay` cho VNPay mock ở cổng `4102`.
 
 ---
 
