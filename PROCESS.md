@@ -1,251 +1,252 @@
-# Đánh giá chất lượng, tiến độ và kế hoạch tiếp theo TicketBox
+# TicketBox - Process và kế hoạch demo final
 
-Ngày cập nhật: 2026-07-04  
-Phạm vi: blueprint, code trong `ticket-box-app/`, test suite hiện tại, tài liệu setup và trạng thái worktree.
+Ngày cập nhật: 2026-07-09
+
+Phạm vi: đánh giá trạng thái local nhánh `thanh` sau khi merge `origin/thai` và `origin/Quang`, code trong `ticket-box-app/`, test suite hiện có, tài liệu setup/demo và các việc cần chốt trong 1 ngày trước demo final.
 
 ## 1. Trạng thái kiểm chứng hiện tại
 
-| Hạng mục               | Kết quả  | Ghi chú                                                                                                                    |
-| ---------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Build toàn workspace   | Đạt      | `npm.cmd run build` pass khi chạy ngoài sandbox; web có warning chunk JS > 500 kB                                          |
-| Docker local           | Đạt      | Postgres `ticketbox-postgres` chạy `localhost:5433`, Redis `ticketbox-redis` chạy `localhost:6379`                         |
-| Database               | Đạt      | `npm.cmd run db:validate` pass; `db:generate`, `db:migrate`, `db:seed` đã chạy được trong lượt kiểm chứng cleanup trước đó |
-| Test suite sau cleanup | Đạt      | `npm.cmd test -w @ticketbox/tests`: 1 file, 7/7 pass; còn warning cấu hình Vitest 4 về `poolOptions`                       |
-| Test inventory cũ      | Đã xóa   | Folder `ticket-box-app/tests/inventory/` là test cũ, import module không còn tồn tại                                       |
-| Test checkout cũ       | Đã xóa   | Folder `ticket-box-app/tests/checkout/` fail do không khớp flow mới; đã dọn khỏi tree                                      |
-| Tài liệu setup         | Đã gộp   | `WEB_RUN_GUIDE.md` + `MOBILE_TEST_GUIDE.md` được merge thành `SET_UP_GUIDE.md`                                             |
-| `.env.example`         | Đã chỉnh | Đã cập nhật port DB Docker, `WEB_URL`, `VITE_API_BASE_URL`, payment return URL, mock payment port                          |
+### 1.1. Kết quả mới nhất
 
-Kết luận ngắn: dự án đã có nền tảng tốt để chốt giai đoạn hiện tại: build được, Docker local chạy được, test suite sau cleanup đã xanh. Phần còn thiếu lớn nhất cho MVP tiếp theo là viết lại test nghiệp vụ checkout/inventory theo flow hiện tại, bổ sung kiểm chứng audit/notification và hoàn thiện demo scripts.
+| Hạng mục | Trạng thái | Ghi chú |
+| --- | --- | --- |
+| Branch local | Đạt | Đang ở branch `thanh`; đã merge `origin/thai` và `origin/Quang`. |
+| Docker local | Đạt | `ticketbox-postgres` đang chạy `localhost:5433`, `ticketbox-redis` đang chạy `localhost:6379`. |
+| Database migrate | Đạt | `npm.cmd run db:migrate` pass; đã apply migration `20260707120000_organizer_request_seat_map`. |
+| Prisma generate | Đạt | `npm.cmd run db:generate` pass sau merge. |
+| Prisma validate | Đạt | `npm.cmd run db:validate` pass. |
+| Build workspace | Đạt | `npm.cmd run build` pass khi chạy ngoài sandbox; web còn warning chunk JS lớn khoảng `718.38 kB`. |
+| Integration tests | Đạt | `npm.cmd test -w @ticketbox/tests`: 3 test files, 18/18 tests pass. |
+| Vitest config | Cần sửa nhỏ | Có warning Vitest 4: `test.poolOptions` đã bị remove, nên chuyển cấu hình forks lên top-level option sau demo. |
 
-## 2. Lưu ý quan trọng
+### 1.2. Chi tiết test suite đã xanh
 
-### 2.1. Test tree sau cleanup
+| Nhóm test | File | Kết quả | Bao phủ chính |
+| --- | --- | --- | --- |
+| Audit | `ticket-box-app/tests/audit/audit.integration.test.ts` | 2/2 pass | Record audit sanitized metadata, filter theo action/actor/entity/time range, cursor pagination. |
+| Worker auto-publish | `ticket-box-app/tests/worker/auto-publish.integration.test.ts` | 3/3 pass | Publish concert DRAFT tới hạn, mở ticket type `ON_SALE`, skip concert thiếu dữ liệu, idempotency. |
+| Check-in | `ticket-box-app/tests/checkin/checkin.integration.test.ts` | 13/13 pass | Online scan, wrong gate, guest pass, offline sync/replay, duplicate/conflict, ticket `CANCELLED`/`REFUNDED`, device revoked, gate inactive, concert mismatch. |
 
-| Folder                            | Trạng thái                                                                                                               | Quyết định                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| `ticket-box-app/tests/inventory/` | Test cũ, import `apps/api-server/src/modules/inventory/*` không còn tồn tại                                              | Đã xóa                         |
-| `ticket-box-app/tests/checkout/`  | Test cũ kỳ vọng `createOrder` trả `payment_id`/`checkout_url`; implementation hiện đã tách order hold và payment attempt | Đã xóa                         |
-| `ticket-box-app/tests/checkin/`   | Pass 7/7, bao phủ online scan, wrong gate, guest scan, offline sync, duplicate/conflict                                  | Giữ lại làm test gate hiện tại |
+### 1.3. Kết luận trạng thái
 
-### 2.2. Module Inventory trong blueprint
+Dự án hiện đạt mức sẵn sàng khoảng 85% cho demo final. Các trụ cột audit, auto-publish và check-in đã có test gate xanh. Rủi ro lớn nhất còn lại nằm ở smoke end-to-end của luồng Audience checkout/payment/issue ticket và việc thiếu Vitest integration test riêng cho checkout/inventory theo flow mới.
 
-Code hiện tại không còn module `inventory` riêng. Năng lực inventory đang nằm ở:
+## 2. Các mục đã chốt
 
-- `orders/repository/hold.ts`: giữ vé, chống oversell, enforce `maxPerUser`.
-- `orders` module: cancel/expire held order.
-- `payments` module: confirm payment, release khi fail, tạo tickets.
-- `tickets` module: đọc/list/detail/QR/void ticket, không phải nơi quản lý tồn kho.
+### 2.1. Kiến trúc và source of truth
 
-Đánh giá:
+| Mục | Đã chốt |
+| --- | --- |
+| Monorepo chính | Source code production nằm trong `ticket-box-app/`. |
+| Frontend production | `ticket-box-app/apps/web` là source of truth cho web app. Không sửa `Frontend/` như app chính nếu thư mục cũ còn tồn tại local. |
+| Mobile checker | `ticket-box-app/apps/mobile-checker` là app mobile checker; web checker vẫn có route riêng để demo nhanh. |
+| Database | Prisma schema nằm tại `ticket-box-app/packages/database/prisma/schema.prisma`; mỗi lần merge migration/schema phải `db:migrate` + `db:generate`. |
+| Redis/Queue | Redis dùng cho cache, idempotency, queue/worker; demo worker cần Redis đang chạy. |
+| Payment mock | Package mock hiện có script riêng `dev:payment:momo` và `dev:payment:vnpay`; tài liệu không nên ghi một lệnh chung nếu package chưa có alias. |
 
-- Với MVP, không bắt buộc phục hồi module `inventory` riêng nếu test mới chứng minh được hold/release/confirm chính xác.
-- `tickets` và `payments` không thay thế hoàn toàn Inventory; chúng chỉ xử lý các phần sau khi inventory đã được giữ hoặc xác nhận.
-- Admin-adjust inventory và reconcile API là việc ngoài scope hiện tại, đưa sang giai đoạn sau này.
+### 2.2. Các luồng nghiệp vụ đã có
 
-### 2.3. Catalog detail, publish schedule và preview
+| Luồng | Trạng thái | Bằng chứng trong repo |
+| --- | --- | --- |
+| Catalog public theo slug | Đã có | Web link `/concerts/${concert.slug}`; backend public catalog resolve slug/UUID. |
+| Preview Admin/Organizer | Đã có | Route web `/admin/concerts/:concertId/preview`, `/organizer/concerts/:concertId/preview`; backend có API metadata preview cho admin. |
+| Seat map / zone selection | Đã có | `SeatMapPanel`, upload/preview seat map, zone/ticket type mapping. |
+| Order hold / inventory trong Orders | Đã có | Inventory không còn module riêng; năng lực hold/release/confirm nằm trong `orders`, `payments`, `tickets`. |
+| Payment VNPay/MoMo | Đã có | Gateway, mock server, return/webhook handling, circuit breaker/bulkhead scripts. |
+| Ticket issue / QR / void | Đã có | `tickets` module, audit issue/void, QR ticket cho audience. |
+| Check-in online/offline | Đã có | Backend check-in + mobile checker + 13 integration tests pass. |
+| Guest List import | Đã có | API trigger/list job/errors, worker import CSV/Drive, `GuestListPanel`, guest pass handoff cho checker. |
+| Notification | Đã có ở mức demo | Worker notification/email, reminder type `CONCERT_REMINDER`, retry route và audit retry. |
+| Audit log | Đã có | Audit module API, admin audit UI, audit cho retry notification, payment webhook, ticket issue/void, guest import, auto-publish. |
+| Auto-publish | Đã có | Worker scheduler, readiness check, auto `ON_SALE`, cache invalidation, audit `CONCERT_AUTO_PUBLISHED`, 3 tests pass. |
+| Demo guide | Đã có | `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md`, `GUIDE_TEST_DEMO/DEMO/DEMO_MOBILE_CHECKER.md`, `GUIDE_TEST_DEMO/GUIDE/TEST_GUIDE.md`. |
 
-Một số điểm cần chốt thêm trước khi hoàn thiện MVP:
+### 2.3. Quy ước demo
 
-- Public URL của concert detail phải dùng `slug`, ví dụ `/concerts/anh-sang-man-dem`, không dùng UUID trên URL người dùng. Backend public catalog hiện đã hỗ trợ tìm concert theo UUID hoặc slug, nhưng frontend hiện vẫn đang tạo link bằng `concert.id` ở card/home/organizer/admin.
-- Các route phụ của audience như chọn ghế nên đi theo slug ở URL nếu user nhìn thấy, ví dụ `/concerts/anh-sang-man-dem/seats`; phần checkout/API nội bộ vẫn dùng `concert.id` sau khi đã resolve detail.
-- Concert `DRAFT` có `planned_publish_at` tới hạn hiện chưa có job tự động publish trong worker. Hiện code mới có publish thủ công qua `POST /admin/concerts/:concert_id/publish`; cần thêm scheduler/job hoặc ghi rõ trong demo rằng admin phải publish thủ công.
-- Nút xem detail concert của Admin và Organizer phải là "Xem trước": mở một trang preview riêng có auth/role, render giống góc nhìn Audience khi concert publish, nhưng không phải route public `/concerts/:slug` và không làm lộ concert DRAFT ra catalog công khai.
-- Preview cần dùng dữ liệu DRAFT/PUBLISHED theo quyền Admin/Organizer, có nhãn rõ "Preview" hoặc "Xem trước", vô hiệu hóa hành động mua vé/thanh toán nếu concert chưa public.
+| Mục | Quy ước |
+| --- | --- |
+| Demo chính | Ưu tiên theo `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md`: Organizer tạo/submit -> Admin duyệt/preview -> Worker auto-publish -> Audience mua vé -> Ticket QR -> Checker scan -> Admin xem audit. |
+| Demo payment | Nếu sandbox thật không ổn định, dùng payment mock và nói rõ đây là môi trường giả lập gateway. |
+| Demo notification | Nếu SMTP thật chưa cấu hình, demo bằng notification status + audit log; không hứa email thật nếu không có credential. |
+| Demo guest list | Nếu Google Drive credential chưa sẵn sàng, demo gán folder/job UI và guest seed/pass mẫu; không phụ thuộc import Drive thật trong buổi demo. |
+| Demo mobile checker | Có thể demo web checker nếu Expo/device gặp lỗi; mobile app dùng để chứng minh preload/offline/sync nếu thời gian cho phép. |
 
-## 3. Cleanup worktree
+## 3. Các vấn đề còn tồn đọng
 
-Lưu ý: đây là trạng thái cleanup đã chốt vào commit chuẩn. Các file không nên đưa lên remote đã được untrack/ignore đúng hướng; `Frontend/` vẫn giữ local ignored làm tư liệu tham khảo.
+### 3.1. P0 - cần chốt trước demo final
 
-### Đã thực hiện
+| Vấn đề | Ảnh hưởng | Hướng xử lý |
+| --- | --- | --- |
+| Chưa smoke end-to-end checkout/payment mới nhất | Có thể fail ở bước mua vé, redirect, issue ticket dù test audit/check-in đã xanh. | Chạy thử 1 luồng Audience: chọn vé -> tạo order -> thanh toán VNPay/MoMo mock hoặc sandbox -> redirect -> thấy QR trong My Tickets. |
+| Thiếu Vitest checkout/inventory theo flow mới | Test gate chưa cover oversell, max-per-user, payment success/failure, webhook duplicate bằng unit/integration Vitest. | Trong 1 ngày cuối chỉ smoke/manual; sau demo bổ sung test có hệ thống. |
+| Tài liệu lệnh payment mock có thể lệch script | Demo bị đứng nếu người chạy dùng `npm run dev:payment` nhưng package chỉ có `dev:payment:momo`/`dev:payment:vnpay`. | Sửa docs hoặc thêm alias script nếu cần. |
+| Seed/demo data cần ổn định | Tạo data live tốn thời gian và dễ sai thao tác. | Chuẩn bị trước account, concert, ticket type, gate, checker, QR vé, guest pass, planned publish concert. |
+| Worktree chưa chốt commit | Dễ sót thay đổi PROCESS/docs khi nộp. | Review `git status`, commit `PROCESS.md` sau khi nhóm đồng ý. |
 
-| Đường dẫn                                                | Hành động                                                                                                                                                         |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ticket-box-app/tests/inventory/`                        | Xóa folder test cũ                                                                                                                                                |
-| `ticket-box-app/tests/checkout/`                         | Xóa folder test cũ                                                                                                                                                |
-| `CHECKER_GUIDE.md`                                       | Giữ trạng thái xóa                                                                                                                                                |
-| `TEAMWORK.md`                                            | Giữ trạng thái xóa                                                                                                                                                |
-| `WEB_RUN_GUIDE.md`                                       | Merge vào `SET_UP_GUIDE.md`, sau đó xóa                                                                                                                           |
-| `MOBILE_TEST_GUIDE.md`                                   | Merge vào `SET_UP_GUIDE.md`, sau đó xóa                                                                                                                           |
-| `.gitignore`                                             | Thêm `ticket-box-app/apps/*/tsconfig.tsbuildinfo`                                                                                                                 |
-| `.gitignore`                                             | Thêm `Frontend/` để giữ thư mục này làm tham khảo local, không đưa lại lên remote                                                                                 |
-| `ticket-box-app/.env.example`                            | Cập nhật để khớp Docker/code hiện tại                                                                                                                             |
-| `Frontend/`                                              | Untrack khỏi git index; `git status --ignored` hiển thị `D` trong index và `!! Frontend/` local ignored; `ticket-box-app/apps/web` là source of truth cho web app |
-| `ticket-box-app/apps/api-server/tsconfig.tsbuildinfo`    | Untrack khỏi git index; giữ local/generated                                                                                                                       |
-| `ticket-box-app/apps/payment-mocks/tsconfig.tsbuildinfo` | Untrack khỏi git index; giữ local/generated                                                                                                                       |
-| `ticket-box-app/apps/worker-server/tsconfig.tsbuildinfo` | Untrack khỏi git index; giữ local/generated                                                                                                                       |
-| Tracking check                                           | `git ls-files Frontend ticket-box-app/apps/*/tsconfig.tsbuildinfo ticket-box-app/**/node_modules/* node_modules/*` không trả file nào                             |
+### 3.2. P1 - nên làm để demo mượt
 
-### Quy ước cleanup/commit
+| Vấn đề | Ảnh hưởng | Hướng xử lý |
+| --- | --- | --- |
+| Web chunk JS lớn | Không chặn demo, nhưng build warning. | Để sau demo hoặc code split route admin/audience nếu có thời gian. |
+| Vitest config warning `poolOptions` | Không fail test, nhưng noise trong log. | Đổi cấu hình forks theo Vitest 4 sau demo nếu không muốn chạm logic. |
+| SMTP/Google Drive/Supabase credential | Các luồng external có thể không chạy thật. | Chuẩn bị credential trước, hoặc ghi rõ fallback demo. |
+| Mobile real-device QA | Camera/offline network thật có thể khác emulator. | Test nhanh trên 1 thiết bị/emulator; nếu lỗi, demo web checker. |
+| Admin audit filter data | Audit page có thể ít bản ghi nếu demo mới bắt đầu. | Chạy trước auto-publish/payment/guest trigger để tạo audit data. |
 
-| Nhóm file                                    | Quyết định                                                                                                                                             |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Frontend/`                                  | Xóa khỏi remote bằng cleanup commit riêng. Thư mục vẫn giữ untracked/ignored ở local vì còn mẫu tham khảo cho UI AI Artist Bio và cập nhật CSV/import. |
-| `ticket-box-app/apps/*/tsconfig.tsbuildinfo` | Generated metadata, không commit. Nếu tách lịch sử commit kỹ hơn, gom các deletion khỏi index vào cleanup commit riêng cho build artifacts.            |
-| `node_modules/`                              | Không commit. Giữ `node_modules/` trong `.gitignore`, chỉ commit `package.json`/lockfile khi dependency thật sự thay đổi.                              |
-| `ticket-box-app/apps/web`                    | Là source of truth duy nhất cho frontend production/demo; mọi chỉnh UI cần port vào đây thay vì sửa trực tiếp trong `Frontend/`.                       |
+### 3.3. P2 - chuyển sang sau demo
 
-## 4. Đánh giá `.env.example`
+| Hạng mục | Lý do để sau |
+| --- | --- |
+| Admin-adjust inventory API | Vượt scope demo, để sau khi có checkout/inventory tests đầy đủ. |
+| Reconcile job order-payment-ticket | Quan trọng cho production, nhưng không nên mở rộng trong ngày cuối. |
+| Observability/queue dashboard | Tốt cho vận hành, không cần cho demo final. |
+| Security hardening mobile | AsyncStorage -> SecureStore, background sync, conflict UX chi tiết cần làm sau. |
+| Anti-bot nâng cao | Rate limit cơ bản đã có; captcha/waiting room để giai đoạn sau. |
+| CI/CD đầy đủ | Nên làm sau khi repo/tài liệu/test gate ổn định. |
 
-`.env.example` hiện đã tương đối đầy đủ cho local development và demo. Các nhóm biến chính đã có:
+## 4. Phân công công việc chi tiết
 
-- Server/Web: `NODE_ENV`, `PORT`, `WEB_URL`, `VITE_API_BASE_URL`.
-- Database/Redis: `DATABASE_URL`, `REDIS_URL`.
-- Auth: `JWT_SECRET`, `JWT_REFRESH_SECRET`.
-- SMTP/notification worker: `SMTP_*`.
-- Worker/order policy: `ORDER_HOLD_DURATION_SECONDS`, `EXPIRE_HOLDS_*`.
-- Storage/AI/guest import: `STORAGE_*`, `AI_*`, `SUPABASE_*`, `GOOGLE_SERVICE_ACCOUNT_JSON`.
-- QR signing: `QR_SIGNING_PRIVATE_KEY_B64`, `QR_SIGNING_PUBLIC_KEY_B64`.
-- Payment: `VNPAY_*`, `MOMO_*`, `MOCK_PAYMENTS_PORT`.
+Ghi chú chung cho tất cả thành viên:
 
-Các điểm đã chỉnh:
+- Mỗi thành viên phải kiểm tra lại `ticket-box-app/.env.example` và `GUIDE_TEST_DEMO/GUIDE/ENV_GUIDE.md` theo đúng phần mình phụ trách, bảo đảm các biến môi trường/port/service mà Thuận setup đã đủ để chạy demo.
+- Mỗi thành viên phải đọc lại `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md`, đối chiếu với nghiệp vụ mình nắm và báo ngay nếu có bước demo sai flow, thiếu dữ liệu, thiếu service hoặc dễ gây gián đoạn khi quay.
+- Nếu phát hiện docs lệch code, ưu tiên sửa docs/script nhỏ ngay; không mở rộng scope code lớn trong ngày cuối nếu không trực tiếp chặn demo.
 
-- `DATABASE_URL` đổi sang Docker Compose local: `ticketbox:ticketbox@localhost:5433/ticketbox?schema=public`.
-- Thêm `WEB_URL` và `VITE_API_BASE_URL`.
-- Sửa `VNPAY_RETURN_URL`, `MOMO_REDIRECT_URL`, `MOMO_IPN_URL` sang route `/v1`.
-- Thêm `MOMO_QUERY_URL` làm alias legacy vì `config/payment.ts` vẫn đọc biến này.
-- Thêm `MOCK_PAYMENTS_PORT=4100`.
+### 4.1. Thái - Backend Core / Checkout / Inventory / Payment
 
-Đề xuất về sau:
+Mục tiêu: đảm bảo luồng bán vé không oversell, không double charge, không issue ticket sai và demo payment đi hết luồng.
 
-- Tách thêm `.env.production.example` nếu cần triển khai API/worker ngoài Vercel.
-- Không đưa secret thật vào `.env.example`.
-- Khi CI/CD có test DB riêng, thêm `.env.test.example`.
+| Việc cần làm | Mức ưu tiên | Đầu ra cần có |
+| --- | --- | --- |
+| Smoke luồng checkout end-to-end với data demo | P0 | 1 order thành công, ticket issued, QR hiện trong My Tickets. |
+| Smoke payment failure/cancel release inventory | P0 | Chứng minh order/hold không bị kẹt khi payment fail/cancel. |
+| Kiểm tra webhook duplicate/idempotency bằng mock hoặc thao tác lặp lại | P0 | Webhook lặp không issue ticket 2 lần. |
+| Xác nhận command payment mock đúng với docs | P0 | Docs/script khớp `dev:payment:momo`, `dev:payment:vnpay` hoặc có alias mới. |
+| Kiểm tra env/docs cho checkout/payment | P0 | Xác nhận `.env.example` và `GUIDE_TEST_DEMO/GUIDE/ENV_GUIDE.md` có đủ `VNPAY_*`, `MOMO_*`, return URL, mock URL/port, timeout/circuit breaker nếu cần demo. |
+| Đối chiếu `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md` phần mua vé/thanh toán | P0 | Luồng Audience chọn vé -> checkout -> payment -> redirect -> My Tickets đúng với code hiện tại. |
+| Ghi nhanh các gap checkout/inventory test còn thiếu | P1 | Danh sách case sau demo: oversell, max-per-user, success/failure, duplicate webhook, orphan payment, expired hold. |
+| Sau demo: viết Vitest checkout/inventory theo flow mới | P2 | Test gate bổ sung cho hold/release/confirm/issue ticket. |
 
-## 5. Giai đoạn tiếp theo: hoàn thiện MVP
+### 4.2. Quang - Check-in / Mobile Checker
 
-Mục tiêu: đáp ứng sản phẩm MVP theo blueprint, đủ demo và đủ cơ sở đánh giá chất lượng.
+Mục tiêu: đảm bảo scan vé/guest pass tại cổng hoạt động ổn định, có phương án demo web và mobile.
 
-| Nhóm việc                      | Nhiệm vụ                                                                                                                                                      | Kết quả mong đợi                                                                                             |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Test nghiệp vụ core            | Viết lại checkout/inventory tests theo flow mới                                                                                                               | Bao phủ hold, max-per-user, payment success/failure, webhook idempotency, ticket issuance, release inventory |
-| Proposal risk tests            | Thêm test cho các vấn đề trong proposal: oversell, double charge/idempotency, offline duplicate, guest duplicate, rate limit cơ bản                           | Test phản ánh đúng rủi ro thiết kế                                                                           |
-| Notification 70-80% blueprint  | Kiểm chứng và polish notification hiện có: ticket issued, reminder, admin list/detail/retry, email/log provider rõ ràng                                       | Trình bày được notification trong video/demo                                                                 |
-| Audit log 70-80% blueprint     | Chuẩn hóa audit service/API; hiện đã có schema và logging rải rác ở auth, organizer-admin, AI bio, payment webhook payload, check-in log, guest import errors | Truy vết được hành động quan trọng qua một luồng admin rõ ràng                                               |
-| Catalog publish/preview polish | Chuẩn hóa URL detail theo slug, thêm auto-publish theo `planned_publish_at`, thêm trang preview riêng cho Admin/Organizer                                     | Không lộ DRAFT ra public, nhưng Admin/Organizer xem thử được đúng giao diện audience                         |
-| Demo scripts                   | Viết script demo end-to-end cho Audience, Admin Web, Ban tổ chức/Organizer và Checker                                                                         | Có nhiều kịch bản video 1 phút rõ luồng                                                                      |
-| Docker/setup                   | Chuẩn hóa Docker Compose, `.env.example`, `SET_UP_GUIDE.md`, seed data                                                                                        | Người mới clone repo chạy được local nhanh                                                                   |
-| Documentation                  | README + SET_UP_GUIDE + PROCESS.md nhất quán                                                                                                                  | Tài liệu đủ để nộp/chấm giai đoạn MVP                                                                        |
+| Việc cần làm | Mức ưu tiên | Đầu ra cần có |
+| --- | --- | --- |
+| Chạy lại `npm.cmd test -w @ticketbox/tests` trước demo | P0 | Xác nhận 13/13 check-in tests vẫn pass trong tổng 18/18. |
+| Smoke web checker bằng QR seed/demo | P0 | Scan vé hợp lệ thành công, scan lại bị từ chối, vé cancelled/refunded bị từ chối. |
+| Smoke mobile checker trên Expo/emulator nếu demo mobile | P0 | Login, preload, scan online, scan offline, sync lại. |
+| Chuẩn bị checker account/gate/device code để đọc trong demo | P0 | Email/password/device code không phải tìm live lúc quay. |
+| Kiểm tra env/docs cho checker | P0 | Xác nhận `.env.example` và `GUIDE_TEST_DEMO/GUIDE/ENV_GUIDE.md` có đủ API base URL, auth/JWT, QR signing public/private key và các biến cần cho web/mobile checker. |
+| Đối chiếu `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md` phần check-in | P0 | Bước lấy QR, đăng nhập checker, scan vé/guest, scan trùng/sai cổng khớp với behavior backend/mobile hiện tại. |
+| Ghi rõ known issues mobile/offline khi bị hỏi | P1 | AsyncStorage, manual sync, conflict UX, real-device QA. |
+| Phối hợp với Thuận về guest pass sau import/seed | P1 | Guest pass mẫu scan được đúng gate. |
 
-## 6. Phân công nhiệm vụ 4 thành viên
+### 4.3. Thanh - Notification / Audit / Worker
 
-### Thái: Backend Core / Checkout / Inventory
+Mục tiêu: đảm bảo worker chạy ổn định, auto-publish và audit có bằng chứng rõ trong demo.
 
-Phạm vi chính: bảo đảm luồng bán vé không oversell, không vượt giới hạn mỗi user, không phát vé sai sau thanh toán.
+| Việc cần làm | Mức ưu tiên | Đầu ra cần có |
+| --- | --- | --- |
+| Chạy worker cùng Redis trước demo | P0 | Worker log không crash; auto-publish tick hoạt động. |
+| Smoke auto-publish với concert DRAFT `planned_publish_at` gần hiện tại | P0 | Concert chuyển `PUBLISHED`, ticket type DRAFT -> `ON_SALE`, audit `CONCERT_AUTO_PUBLISHED`. |
+| Mở admin audit page và chuẩn bị filter sẵn | P0 | Filter được `CONCERT_AUTO_PUBLISHED`, `PAYMENT_WEBHOOK_SUCCEEDED`, `TICKET_ISSUED`, `GUEST_IMPORT_TRIGGERED`. |
+| Kiểm tra notification retry/audit retry | P1 | Retry notification FAILED có audit `RETRY_NOTIFICATION`. |
+| Kiểm tra env/docs cho worker/notification/audit | P0 | Xác nhận `.env.example` và `GUIDE_TEST_DEMO/GUIDE/ENV_GUIDE.md` có đủ `REDIS_URL`, `SMTP_*`, worker interval, audit/notification config và hướng dẫn chạy worker. |
+| Đối chiếu `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md` phần auto-publish/audit/notification | P0 | Bước worker auto-publish, audit log, notification fallback khớp code và không hứa service external nếu env chưa sẵn sàng. |
+| Chốt repo trước nộp | P0 | `git status` chỉ còn thay đổi mong muốn; không secret, không `node_modules`, không build artifact tracked. |
+| Xác nhận SMTP mode | P1 | Nếu có credential thì gửi email thật; nếu không thì demo fallback rõ ràng. |
+| Sau demo: sửa warning Vitest config nếu cần | P2 | Test log gọn hơn, không còn deprecated warning. |
 
-Nhiệm vụ chi tiết:
+### 4.4. Thuận - Guest List / Frontend / Demo / Docs / DevOps
 
-- Rà soát code hiện tại ở `orders`, `payments`, `tickets` để vẽ lại flow thật: create held order -> create payment attempt -> payment return/webhook -> confirm/release -> issue ticket.
-- Viết lại test checkout/inventory theo flow mới, không dùng lại giả định cũ `createOrder` trả thẳng `payment_id`/`checkout_url`.
-- Bổ sung test giữ vé thành công, giữ vé quá số lượng còn lại, giữ vé vượt `maxPerUser`, hủy order HELD và expire hold.
-- Bổ sung test payment success phát ticket, payment failure/cancel release inventory, webhook duplicate không phát vé hai lần.
-- Kiểm tra idempotency key ở create order/create payment/webhook, ghi lại endpoint nào bắt buộc có idempotency key.
-- Rà lại transaction isolation/retry quanh `orders/repository/hold.ts`, đặc biệt các nhánh concurrent checkout.
-- Chuẩn hóa seed data cho concert/ticket type phục vụ test và demo checkout.
-- Cập nhật tài liệu ngắn mô tả trạng thái inventory nằm trong Orders/Payments/Tickets thay vì module `inventory` riêng.
+Mục tiêu: đảm bảo UI, docs, demo data và repo sạch cho buổi demo/nộp bài.
 
-Đầu ra:
+| Việc cần làm | Mức ưu tiên | Đầu ra cần có |
+| --- | --- | --- |
+| Tổng duyệt `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md` theo flow A -> C -> E | P0 | Kịch bản demo 1 mạch, người quay không bị thiếu bước. |
+| Kiểm tra docs setup và payment mock command | P0 | Lệnh trong docs khớp package scripts hiện tại. |
+| Tổng hợp xác nhận env/docs từ các thành viên | P0 | `.env.example` và `GUIDE_TEST_DEMO/GUIDE/ENV_GUIDE.md` phản ánh đủ phần checkout/payment, checker, worker/audit/notification, guest list/frontend. |
+| Đối chiếu `GUIDE_TEST_DEMO/DEMO/DEMO_END_TO_END.md` với UI/frontend | P0 | Route slug, preview, seat map, checkout UI, My Tickets, audit page, Guest List Panel đúng với màn hình hiện tại. |
+| Chuẩn bị demo data | P0 | Account admin/audience/organizer/checker, concert, ticket, gate, QR, guest pass, planned publish concert. |
+| Smoke UI web desktop/mobile viewport | P0 | Home, detail slug, seats, checkout, my tickets, admin audit, preview không vỡ layout. |
+| Chốt Guest List fallback | P1 | Có CSV/Drive mẫu nếu credential sẵn sàng; có guest seed/pass mẫu nếu Drive không demo thật. |
 
-- Test checkout/inventory xanh và chạy được bằng `npm test -w @ticketbox/tests`.
-- Tài liệu ngắn mô tả flow nghiệp vụ ticketing hiện tại, kèm danh sách edge cases đã test.
-- Checklist rủi ro còn lại: oversell, double charge, duplicate webhook, orphan payment, held order quá hạn.
+### 4.5. Cả nhóm - tổng duyệt cuối
 
-### Quang: Check-in / Mobile Checker
+| Việc | Người chính | Kết quả cần đạt |
+| --- | --- | --- |
+| Tổng duyệt môi trường | Thuận | Docker, DB, Redis, API, Web, Worker, payment mock/sandbox sẵn sàng. |
+| Tổng duyệt Audience checkout | Thái | Mua vé thành công, QR ticket sẵn sàng cho checker. |
+| Tổng duyệt Admin/Organizer | Thuận + Thanh | Tạo/duyệt/preview/auto-publish và audit có đủ bằng chứng. |
+| Tổng duyệt Checker | Quang | Scan hợp lệ/trùng/hủy/sai cổng và optional offline sync. |
+| Tổng duyệt audit evidence | Thanh | Audit page có data mới và filter chạy được. |
 
-Phạm vi chính: bảo đảm luồng scan tại cổng hoạt động ổn định cho vé và guest pass; trọng tâm là mobile checker, online/offline sync, duplicate và conflict handling.
+## 5. Checklist demo final
 
-Nhiệm vụ chi tiết:
+### 5.1. Trước khi demo
 
-- Duy trì `tests/checkin` đang xanh, coi đây là test gate chính cho check-in.
-- Đọc lại `checkin` API và mobile checker app để đối chiếu các trạng thái: valid, wrong gate, duplicate, void/cancelled ticket, guest QR.
-- Giữ các testcase đã có: guest đúng/sai cổng, offline batch replay, duplicate item, conflict khi online scan trước rồi offline sync sau, offline guest duplicate.
-- Bổ sung test cho ticket `CANCELLED`/`REFUNDED`, device inactive/sai staff, gate inactive/sai concert nếu seed và service hiện tại hỗ trợ đủ.
-- Chuẩn bị seed data tối thiểu cho checker account, gate, event, ticket và guest pass mẫu để demo scan không phụ thuộc thao tác thủ công.
-- Viết kịch bản demo Mobile Checker 1 phút: login -> preload -> online scan -> tắt mạng giả lập -> scan offline -> sync lại.
-- Phối hợp với Thuận để nhận guest data/CSV mẫu và xác nhận guest pass sau import check-in được đúng cổng.
-- Ghi lại giới hạn hiện tại của mobile/offline: secure storage, background sync, conflict UX, real-device QA.
+- [ ] Docker Desktop đang chạy.
+- [ ] `docker compose up -d postgres redis` đã chạy.
+- [ ] `npm.cmd run db:migrate` pass.
+- [ ] `npm.cmd run db:generate` pass.
+- [ ] `npm.cmd run db:seed` đã chạy nếu cần reset demo data.
+- [ ] `npm.cmd test -w @ticketbox/tests` pass 18/18.
+- [ ] API server đang chạy: `npm run dev:api`.
+- [ ] Web đang chạy: `npm run dev:web`.
+- [ ] Worker đang chạy: `npm run dev:worker`.
+- [ ] Payment mock/sandbox sẵn sàng: MoMo/VNPay theo script đã chốt.
+- [ ] Tài khoản demo đã chuẩn bị: Admin, Audience, Organizer, Checker.
+- [ ] Concert demo có zone, ticket type, gate, checker, seat map, slug.
+- [ ] QR ticket/guest pass demo đã sẵn sàng hoặc có cách tạo nhanh.
+- [ ] Admin audit page có data để filter.
+- [ ] Không có secret thật trong file docs/env mẫu.
+- [ ] `git status` chỉ còn các thay đổi được nhóm chấp nhận.
 
-Đầu ra:
+### 5.2. Luồng demo ưu tiên
 
-- Check-in test gate ổn định.
-- Demo script Mobile Checker 1 phút.
-- Ghi chú known issues mobile/offline nếu có.
+| Thứ tự | Luồng | Kết quả cần cho khán giả thấy |
+| --- | --- | --- |
+| 1 | Organizer tạo/submits concert | Concert có thông tin, zone, ticket type, planned publish, seat map/guest config. |
+| 2 | Admin preview và duyệt | Admin xem trước DRAFT, accept request, checker account/gate được tạo. |
+| 3 | Worker auto-publish | Concert từ `DRAFT` -> `PUBLISHED`, ticket type -> `ON_SALE`, audit log có `CONCERT_AUTO_PUBLISHED`. |
+| 4 | Audience xem slug/detail/seat map | URL thân thiện, seat map/zone/ticket hiện đúng. |
+| 5 | Audience checkout/payment | Order được giữ, thanh toán thành công, redirect về app. |
+| 6 | My Tickets / QR | Ticket issued và QR sẵn sàng scan. |
+| 7 | Checker scan | Vé hợp lệ thành công, scan lại bị từ chối; nếu kịp demo cancelled/refunded/wrong gate. |
+| 8 | Admin audit log | Audit trace được auto-publish, payment webhook, ticket issued, guest import/retry notification nếu có. |
+| 9 | Guest List | Demo import/guest panel hoặc guest pass seed, bàn giao sang checker. |
 
-### Thanh: Notification / Audit / Worker
+### 5.3. Lệnh nhanh để chạy lại
 
-Phạm vi chính: làm rõ các luồng nền có thể demo được, có truy vết hành động quan trọng, và xử lý các job vận hành theo thời gian.
+```powershell
+cd "D:\U\Y3\S2\Software Design\ticket-box-app\ticket-box-app"
+docker compose up -d postgres redis
+npm.cmd run db:migrate
+npm.cmd run db:generate
+npm.cmd test -w @ticketbox/tests
+npm.cmd run build
+```
 
-Nhiệm vụ chi tiết:
+Chạy service trong các terminal riêng:
 
-- Rà soát `worker-server` hiện có: notification worker, email worker, expire holds, guest import, AI bio worker và scheduler reminder.
-- Kiểm chứng notification ở mức demo: ticket issued đã tạo notification khi payment success, reminder scheduler đã tạo notification trước sự kiện, admin list/detail/retry đã có route.
-- Bổ sung scheduler/job auto-publish concert: định kỳ tìm concert `DRAFT` có `planned_publish_at <= now`, đủ điều kiện publish, rồi chuyển sang `PUBLISHED`, invalidate cache catalog và ghi audit/system log.
-- Bảo đảm auto-publish không publish concert thiếu seat zone/ticket type/thời gian hợp lệ; job phải idempotent để chạy lại không đổi sai trạng thái.
-- Làm rõ trong demo nếu auto-publish chưa hoàn thiện: admin dùng publish thủ công, còn `planned_publish_at` chỉ là dữ liệu hẹn lịch.
-- Làm rõ provider email/log hiện tại: flow nào gửi thật, flow nào mock/log, biến môi trường nào cần cấu hình.
-- Chuẩn hóa audit service tập trung để các module gọi chung thay vì ghi rải rác; hiện auth, organizer-admin và AI bio đã ghi `audit_logs`, còn payment/check-in/guest import chủ yếu nằm ở bảng nghiệp vụ.
-- Bổ sung audit cho các hành động trọng yếu còn thiếu: payment webhook state change, ticket issue/void, guest import trigger, admin retry notification.
-- Thêm admin query/filter audit log cơ bản theo actor, action, entity/resource, time range nếu kịp scope MVP.
-- Viết service-level checks/test cơ bản cho notification create/retry và audit write/query.
-- Cập nhật hướng dẫn chạy worker và cách kiểm chứng queue/job trong demo.
+```powershell
+npm run dev:api
+npm run dev:web
+npm run dev:worker
+npm run dev:payment:momo
+npm run dev:payment:vnpay
+```
 
-Đầu ra:
+### 5.4. Tiêu chí go/no-go
 
-- Notification demo hoạt động rõ.
-- Audit log query/filter cơ bản cho admin.
-- Worker flow có hướng dẫn chạy và kiểm chứng.
+| Tiêu chí | Go | No-go |
+| --- | --- | --- |
+| Test gate | 18/18 pass | Có test fail logic chưa rõ nguyên nhân. |
+| Checkout/payment | Mua vé demo thành công ít nhất 1 lần. | Không issue được ticket/QR. |
+| Worker auto-publish | Concert demo publish tự động hoặc có fallback publish thủ công rõ ràng. | Worker crash không có fallback. |
+| Checker | Scan QR demo thành công. | Không scan được vé hợp lệ. |
+| Audit | Audit page hiện đủ action chính. | Không có bằng chứng cho hành động nền. |
+| Docs/demo script | Người demo đi được theo script. | Lệnh/tài khoản/data thiếu, phải sửa live quá nhiều. |
 
-### Thuận: Guest List / Frontend / Demo / Documentation / DevOps / Cover Thanh
-
-Phạm vi chính: giữ frontend production ở `ticket-box-app/apps/web`, phụ trách Guest List import/CSV/admin UI/demo data, chuẩn hóa URL/preview catalog, làm demo rõ vai trò, và giữ repo sạch để nộp.
-
-Nhiệm vụ chi tiết:
-
-- Xác nhận mọi chỉnh UI chính đều nằm trong `ticket-box-app/apps/web`; chỉ dùng `Frontend/` làm mẫu tham khảo local cho UI AI Artist Bio, CSV/import và layout cũ.
-- Port phần UI còn cần từ `Frontend/` sang `apps/web` theo từng màn hình, không sửa `Frontend/` như app chính.
-- Chuẩn hóa route audience concert detail dùng slug: card/home/events phải link `/concerts/${concert.slug}`; URL hiển thị ví dụ `/concerts/anh-sang-man-dem`, không dùng UUID.
-- Sửa mapping UI để `UiConcert.slug` lấy từ API `concert.slug`, không map nhầm từ `concert.id`; vẫn giữ `id` cho checkout/API nội bộ.
-- Sửa route chọn ghế và redirect sau login theo slug ở URL người dùng, nhưng khi tạo checkout phải dùng `concert.id` đã resolve từ detail.
-- Tạo trang "Xem trước" riêng cho Admin/Organizer, ví dụ `/admin/concerts/:concert_id/preview` và `/organizer/concerts/:concert_id/preview`, render gần giống Audience detail nhưng lấy dữ liệu theo quyền và cho xem cả DRAFT.
-- Nút xem detail trong Admin/Organizer phải trỏ vào trang preview riêng, không trỏ trực tiếp đến public `/concerts/:slug`; preview cần có nhãn "Xem trước" và disable mua vé nếu concert chưa `PUBLISHED`.
-- Phụ trách Guest List: rà `guest-list` API, worker import CSV/Drive, trang admin/organizer xem guest, trạng thái import job và danh sách lỗi từng dòng.
-- Chuẩn bị CSV mẫu/Drive folder mẫu cho guest import, bao gồm guest hợp lệ, guest trùng phone/email, sai zone/gate và dòng lỗi để demo/kiểm thử.
-- Chuẩn hóa seed/demo data cho guest list: concert, seat zone, gate mapping, guest VIP, checker handoff data để Quang dùng trong mobile checker demo.
-- Viết demo script Guest List 1 phút: cấu hình folder CSV -> trigger/import job -> xem kết quả/lỗi -> tìm guest -> bàn giao sang checker scan guest pass.
-- Chuẩn hóa README, `SET_UP_GUIDE.md`, `PROCESS.md` để thống nhất port, lệnh chạy, yêu cầu Docker, seed, test và known gaps.
-- Kiểm tra `.env.example` khớp code: API URL, web URL, payment mock, Redis, Postgres, storage, AI, QR signing.
-- Chuẩn bị seed/demo accounts cho Audience, Organizer, Checker, Admin, kèm mật khẩu demo rõ trong tài liệu nội bộ nếu được phép.
-- Viết demo scripts 1 phút cho Audience, Organizer, Admin Web, Guest List và Checker; mỗi script có mục tiêu, tài khoản, dữ liệu cần có, bước quay, kết quả mong đợi.
-- Chuẩn bị checklist trước khi commit: không có `node_modules`, không có secret thật, không có build artifact tracked, `Frontend/` chỉ là ignored local.
-- Tách commit cleanup hợp lý: một commit cho untrack `Frontend/`, một commit riêng cho untrack `tsconfig.tsbuildinfo` nếu nhóm muốn lịch sử thật sạch.
-
-Đầu ra:
-
-- Tài liệu setup chạy được từ đầu.
-- Demo scripts theo role, bao gồm luồng Guest List import/CSV và preview concert trước publish.
-- Worktree sạch trước khi chốt giai đoạn.
-
-## 7. Kết luận chốt hiện tại
-
-- Build và Docker local đã đủ tốt để tiếp tục.
-- Test gate hiện tại chỉ nên giữ `checkin`.
-- `inventory` và `checkout` tests cũ đã xóa; cần viết lại trong giai đoạn MVP tiếp theo.
-- Notification và audit log nên là trọng tâm MVP tiếp theo, đặt mục tiêu 70-80% blueprint.
-- Admin-adjust/reconcile API, device/gate polish, anti-bot nâng cao và security hardening chuyển sang giai đoạn sau này.
-
-## 8. Giai đoạn sau này: phát triển dài lâu
-
-Các việc dưới đây quan trọng nhưng vượt scope chốt MVP hiện tại.
-
-| Nhóm việc                   | Đề xuất                                                                                                                                                  |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Admin-adjust inventory API  | Tạo `inventory` hoặc `admin-inventory` service; route xem tồn kho, adjust stock, release hold thủ công; bắt buộc audit log                               |
-| Reconcile API/job           | Job/admin endpoint đối soát order-payment-ticket: payment success chưa issue ticket, order HELD quá hạn, ticket count lệch order item, webhook duplicate |
-| Device/gate polish          | Device enrollment, disable/reassign device, gate dashboard, trạng thái thiết bị                                                                          |
-| Anti-bot nâng cao           | Captcha, waiting room, bot scoring, adaptive rate limit, IP/device reputation                                                                            |
-| Security hardening          | Refresh-token rotation, CSRF nếu dùng cookie, secret management, mobile secure storage, permission matrix test                                           |
-| Observability               | Structured logs, metrics, tracing, queue dashboard, webhook/payment alerts                                                                               |
-| CI/CD                       | Pipeline build/test với Postgres/Redis service, coverage, deploy preview                                                                                 |
-| Performance/load test       | Kịch bản burst traffic 80.000 users/5 phút, cache hit ratio, checkout concurrency                                                                        |
-| Mobile production readiness | Background sync, conflict UX, real-device QA                                                                                                             |
-| Data governance             | Retention policy cho audit/notification/log, backup/restore DB                                                                                           |
+Nếu sát giờ demo có sự cố external service, ưu tiên fallback local: payment mock, guest seed/pass mẫu, web checker thay mobile, audit log thay email thật.

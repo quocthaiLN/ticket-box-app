@@ -10,6 +10,5 @@ ticket-box-app/apps/api-server/public/uploads/
 ticket-box-app/apps/*/tsconfig.tsbuildinfo
 z-doc-cua-thai
 scripts/
-temp-docs/
 ticket-box-app/tests/order/tokens_client_*
 ticket-box-app/tests/order/tokens.json
