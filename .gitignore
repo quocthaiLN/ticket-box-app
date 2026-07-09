@@ -12,3 +12,5 @@ z-doc-cua-thai
 scripts/
 ticket-box-app/tests/order/tokens_client_*
 ticket-box-app/tests/order/tokens.json
+PROCESS.md
+temp-docs/
