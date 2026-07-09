@@ -98,6 +98,7 @@ async function processGuestImportJob(
     // Mọi khách mời được gán vào khu khách mời (zone code = "GUEST") — tự tạo nếu thiếu.
     const guestZoneId = await resolveGuestZoneId(job.concertId);
     const stats = await importRows(job, rows, guestZoneId);
+    await syncGuestZoneCapacity(job.concertId, guestZoneId);
     const finalStatus = stats.errorRows > 0 ? "PARTIAL" : "DONE";
 
     await prisma.guestImportJob.update({
@@ -229,12 +230,27 @@ async function resolveGuestZoneId(concertId: string): Promise<string> {
       code: "GUEST",
       name: "Khu khách mời",
       description: "Khu vực dành cho khách mời (tự tạo khi nhập guest list).",
-      capacity: 1000,
+      // Sức chứa thật = số khách mời import được, đồng bộ lại sau mỗi lần import.
+      capacity: 0,
       sortOrder: 99,
     },
     select: { id: true },
   });
   return zone.id;
+}
+
+/**
+ * Capacity khu GUEST = số khách mời hiện hành của concert (import là upsert theo
+ * email nên phải đếm lại từ DB, không cộng dồn successRows giữa các lần import).
+ */
+async function syncGuestZoneCapacity(concertId: string, guestZoneId: string): Promise<void> {
+  const guestCount = await prisma.guestList.count({
+    where: { concertId, status: { not: "CANCELLED" } },
+  });
+  await prisma.seatZone.update({
+    where: { id: guestZoneId },
+    data: { capacity: guestCount },
+  });
 }
 
 function parseCsv(input: string): CsvRow[] {

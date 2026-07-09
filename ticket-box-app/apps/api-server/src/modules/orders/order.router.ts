@@ -4,6 +4,7 @@ import {
   createOrderHandler,
   expireOrderHandler,
   getOrderHandler,
+  getTicketQuotaHandler,
   listAdminOrdersHandler,
 } from './order.controller.js';
 import { idempotencyMiddleware } from '../../shared/middleware/idempotency.middleware.js';
@@ -13,6 +14,14 @@ import { requireAuth } from '../../shared/middleware/auth.middleware.js';
 import { requireRole } from '../../shared/guards/role.guard.js';
 
 const router = Router();
+
+// GET /concerts/:concert_id/my-ticket-quota — quota cá nhân, không cache chung.
+router.get(
+  '/concerts/:concert_id/my-ticket-quota',
+  requireAuth,
+  requireRole('AUDIENCE', 'ADMIN'),
+  getTicketQuotaHandler,
+);
 
 // POST /orders - Create order (HELD) + payment URL — AUDIENCE, ADMIN
 router.post(

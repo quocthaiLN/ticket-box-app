@@ -56,7 +56,7 @@ export function EventsPage() {
             Khám phá sự kiện
           </h1>
           <p className="mb-6 text-sm text-[#8585A0]">
-            {status === "ready" ? `${concerts.length} sự kiện phù hợp` : "Danh mục công khai từ TicketBox API"}
+            {status === "ready" ? `${concerts.length} sự kiện phù hợp` : "Khám phá các sự kiện đang mở bán"}
           </p>
 
           <div

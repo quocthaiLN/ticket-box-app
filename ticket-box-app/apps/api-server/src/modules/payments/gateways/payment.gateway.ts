@@ -33,13 +33,21 @@ export interface StatusResult {
   raw: Record<string, unknown>; // Response gốc đã parse, không phụ thuộc provider cụ thể.
 }
 
+// Provider đã phản hồi bình thường nhưng từ chối vì lý do nghiệp vụ. Lỗi này
+// không chứng minh hạ tầng provider bị hỏng nên không được mở circuit breaker.
+export class ProviderBusinessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProviderBusinessError';
+  }
+}
+
 // Contract adapter chung. Payment service gọi qua contract này thay vì biết API
 // riêng từng provider; network I/O được service bọc bởi bulkhead/circuit breaker.
 export interface PaymentGateway {
   readonly provider: PaymentProvider;
-  // True khi createCheckout thực sự gọi mạng tới provider (MoMo). False khi chỉ ký
-  // URL local (VNPay) — op local không feed vào circuit breaker để tránh reset/đóng
-  // nhầm trạng thái sức khỏe provider.
+  // True khi createCheckout thực sự gọi mạng tới provider. VNPay chỉ true trong
+  // mock mode; sandbox/production vẫn ký URL local.
   readonly checkoutHitsNetwork: boolean;
   createCheckout(input: CheckoutInput): Promise<CheckoutResult>;
   queryStatus(input: StatusInput): Promise<StatusResult>;

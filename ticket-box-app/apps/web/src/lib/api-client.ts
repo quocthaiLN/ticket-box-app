@@ -46,10 +46,18 @@ export type ConcertSummary = {
   };
 };
 
+// Nghệ sĩ trong lineup (concert nhiều nghệ sĩ); vắng → fallback field đơn.
+export type ConcertArtist = {
+  name: string;
+  bio: string;
+  image_url: string | null;
+};
+
 export type ConcertDetail = ConcertSummary & {
   description?: string;
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtist[];
   seat_map_url?: string;
   venue: Venue;
 };
@@ -99,6 +107,19 @@ export type Inventory = {
   }>;
 };
 
+export type TicketQuotaItem = {
+  ticket_type_id: string;
+  max_per_user: number;
+  held_quantity: number;
+  paid_quantity: number;
+  remaining_quantity: number;
+};
+
+export type TicketQuota = {
+  concert_id: string;
+  items: TicketQuotaItem[];
+};
+
 export type ConcertMetadata = {
   concert: ConcertDetail;
   venue: Venue;
@@ -110,6 +131,7 @@ export type ConcertMetadata = {
   };
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtist[];
 };
 
 const apiBaseUrl =
@@ -206,6 +228,13 @@ export async function getInventory(concertId: string) {
   return response.data;
 }
 
+export async function getMyTicketQuota(concertId: string) {
+  const response = await apiGet<ApiResponse<TicketQuota>>(
+    `/concerts/${concertId}/my-ticket-quota`,
+  );
+  return response.data;
+}
+
 export async function listVenues() {
   const response = await apiGet<ApiCollectionResponse<Venue>>(
     "/admin/venues?limit=100",
@@ -278,7 +307,8 @@ async function apiRequest<TData>(
   });
 
   if (!response.ok) {
-    throw new Error(await errorMessage(response));
+    const { message, code } = await parseErrorResponse(response);
+    throw new ApiClientError(message, code, response.status);
   }
 
   if (response.status === 204) {
@@ -313,21 +343,39 @@ function queryString(params: Record<string, string>) {
   return text ? `?${text}` : "";
 }
 
-async function errorMessage(response: Response) {
+// Lỗi API kèm `code` từ ProblemDetails để UI map sang thông báo thân thiện
+// (message thô của server có thể chứa UUID/tiếng Anh — không nên hiển thị thẳng).
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public status?: number,
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
+
+export function getApiErrorCode(err: unknown): string | undefined {
+  return err instanceof ApiClientError ? err.code : undefined;
+}
+
+async function parseErrorResponse(response: Response): Promise<{ message: string; code?: string }> {
   const fallback = `TicketBox API request failed: ${response.status}`;
   const text = await response.text();
-  if (!text) return fallback;
+  if (!text) return { message: fallback };
 
   try {
     const problem = JSON.parse(text) as {
       detail?: string;
       title?: string;
+      code?: string;
       errors?: Array<{ field?: string; message?: string }>;
     };
     const firstFieldError = problem.errors?.find((item) => item.message);
-    if (firstFieldError?.message) return firstFieldError.message;
-    return problem.detail ?? problem.title ?? fallback;
+    const message = firstFieldError?.message ?? problem.detail ?? problem.title ?? fallback;
+    return { message, code: problem.code };
   } catch {
-    return text;
+    return { message: text };
   }
 }

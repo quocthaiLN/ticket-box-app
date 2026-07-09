@@ -203,8 +203,8 @@ export function AdminHomePage() {
                     <Clock className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{request.title}</span>
-                    <span className="mt-1 block truncate text-xs text-[#8585A0]">
+                    <span className="block break-words text-sm font-semibold">{request.title}</span>
+                    <span className="mt-1 block break-words text-xs text-[#8585A0]">
                       {request.artist_name} - {formatDate(request.starts_at)}
                     </span>
                   </span>
@@ -232,17 +232,17 @@ export function AdminHomePage() {
                       <Calendar className="h-5 w-5 text-[#8585A0]" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{concert.title}</p>
-                    <p className="mt-1 truncate text-xs text-[#8585A0]">
+                  <Link to={`/admin/concerts/${concert.id}`} className="min-w-0 flex-1 hover:opacity-80">
+                    <p className="break-words text-sm font-semibold">{concert.title}</p>
+                    <p className="mt-1 break-words text-xs text-[#8585A0]">
                       {concert.venue.city} - {formatDate(concert.starts_at)}
                     </p>
-                  </div>
+                  </Link>
                   <StatusChip status={concert.status} />
                   <Link
-                    to={`/concerts/${concert.id}`}
+                    to={`/admin/concerts/${concert.id}/preview`}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]"
-                    title="Mở trang công khai"
+                    title="Xem trước"
                   >
                     <Eye className="h-4 w-4" />
                   </Link>

@@ -47,9 +47,12 @@ export type AdminRequestDetailDto = AdminRequestSummaryDto & {
   description?: string;
   planned_publish_at?: string;
   press_kit_url?: string;
+  // Sơ đồ chỗ ngồi organizer upload lúc nộp hồ sơ — admin xem trước khi duyệt.
+  seat_map_url?: string;
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
+  artists?: Prisma.JsonValue | null;
   ticket_types: unknown;
   review_note?: string;
   reviewed_by?: string | null;
@@ -114,6 +117,8 @@ export type ProvisionChecker = {
 export type ApproveProvisionInput = {
   requestId: string;
   adminId: string;
+  // Id sinh trước ở service để slug mang suffix 5 ký tự cuối của id.
+  concertId: string;
   slug: string;
   zones: ProvisionZone[];
   ticketTypes: StoredTicketType[];
@@ -175,6 +180,7 @@ export class OrganizerAdminRepository {
 
       const concert = await tx.concert.create({
         data: {
+          id: input.concertId,
           venueId: request.venueId,
           organizerId: request.organizerId,
           title: request.title,
@@ -182,7 +188,13 @@ export class OrganizerAdminRepository {
           description: request.description ?? undefined,
           artistName: request.artistName,
           artistBio: request.artistBio ?? undefined, // mang bio AI (sinh từ press kit) vào concert
-          artistBioImageUrl: request.artistBioImageUrl ?? undefined, // ảnh nghệ sĩ BTC đã gắn ở hồ sơ
+          artistBioImageUrl: request.artistBioImageUrl ?? undefined, // ảnh nghệ sĩ tách từ press kit
+          coverImageUrl: request.coverImageUrl ?? undefined, // ảnh concert tách từ press kit (trang 1)
+          seatMapUrl: request.seatMapUrl ?? undefined, // sơ đồ chỗ ngồi organizer upload lúc nộp hồ sơ
+          // Danh sách nghệ sĩ AI tách từ press kit — mang nguyên sang concert.
+          ...(request.artists !== null
+            ? { artists: request.artists as Prisma.InputJsonValue }
+            : {}),
           startsAt: request.startsAt,
           endsAt: request.endsAt,
           plannedPublishAt: request.plannedPublishAt ?? undefined,
@@ -198,6 +210,7 @@ export class OrganizerAdminRepository {
       });
 
       const zoneIdByCode = new Map<string, string>();
+      const seatZoneIds: string[] = [];
       let sortOrder = 0;
       for (const zone of input.zones) {
         const created = await tx.seatZone.create({
@@ -211,6 +224,7 @@ export class OrganizerAdminRepository {
           select: { id: true },
         });
         zoneIdByCode.set(zone.code, created.id);
+        seatZoneIds.push(created.id);
       }
 
       for (const ticketType of input.ticketTypes) {
@@ -234,15 +248,32 @@ export class OrganizerAdminRepository {
         });
       }
 
+      const gateIds: string[] = [];
       for (let i = 1; i <= request.gateCount; i++) {
-        await tx.checkinGate.create({
+        const gate = await tx.checkinGate.create({
           data: {
             concertId: concert.id,
             code: `GATE-${i}`,
             name: `Cổng ${i}`,
             sortOrder: i - 1,
           },
+          select: { id: true },
         });
+        gateIds.push(gate.id);
+      }
+
+      // Hồ sơ organizer chỉ khai báo số cổng, chưa có UI gán zone cho từng cổng.
+      // Mặc định mỗi cổng phục vụ mọi zone để payment success luôn phát hành được ticket.
+      for (const gateId of gateIds) {
+        for (const seatZoneId of seatZoneIds) {
+          await tx.checkinGateZone.create({
+            data: {
+              gateId,
+              seatZoneId,
+              concertId: concert.id,
+            },
+          });
+        }
       }
 
       const checkerAccounts: ApprovedCheckerCredential[] = [];
@@ -533,9 +564,11 @@ function mapRequestDetail(
     description: request.description ?? undefined,
     planned_publish_at: request.plannedPublishAt?.toISOString(),
     press_kit_url: request.pressKitUrl ?? undefined,
+    seat_map_url: request.seatMapUrl ?? undefined,
     artist_bio: request.artistBio ?? null,
     bio_status: request.bioStatus ?? null,
     artist_bio_image_url: request.artistBioImageUrl ?? null,
+    artists: request.artists ?? null,
     ticket_types: request.ticketTypes,
     review_note: request.reviewNote ?? undefined,
     reviewed_by: request.reviewedById,

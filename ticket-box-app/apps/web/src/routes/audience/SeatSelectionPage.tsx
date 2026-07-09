@@ -2,14 +2,15 @@ import { AlertCircle, ChevronLeft, Clock, Minus, Plus, Ticket } from "lucide-rea
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { SeatMapPanel } from "../../components/SeatMapPanel";
 import { formatCurrency, formatDate, type UiConcert, type UiTicketType } from "../../lib/catalog-ui";
-import { getCatalogConcertDetail } from "../../services/catalog.service";
+import type { TicketQuotaItem } from "../../lib/api-client";
+import { getCatalogConcertDetail, getCatalogTicketQuota } from "../../services/catalog.service";
 import {
   createPendingCheckout,
   formatCountdown,
-  readPendingCheckout,
   remainingSeconds,
-  writePendingCheckout,
+  type PendingCheckout,
   type PendingCheckoutItem,
 } from "./checkout-storage";
 
@@ -19,17 +20,34 @@ export function SeatSelectionPage() {
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [ticketQuotas, setTicketQuotas] = useState<Record<string, TicketQuotaItem>>({});
   const [timeLeft, setTimeLeft] = useState(600);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [checkoutDraft, setCheckoutDraft] = useState<PendingCheckout | null>(null);
+
+  // Click khu trên sơ đồ → cuộn tới và highlight card hạng vé của khu đó.
+  function selectZone(zoneId: string) {
+    setSelectedZoneId(zoneId);
+    const target = document.querySelector(`[data-zone-id="${zoneId}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   useEffect(() => {
     if (!concertId) return;
     let mounted = true;
     setStatus("loading");
     getCatalogConcertDetail(concertId)
-      .then((data) => {
+      .then(async (data) => {
+        const quota = await getCatalogTicketQuota(data.id).catch(() => null);
         if (!mounted) return;
+        const quotaByTicketType = Object.fromEntries(
+          (quota?.items ?? []).map((item) => [item.ticket_type_id, item]),
+        ) as Record<string, TicketQuotaItem>;
         setConcert(data);
-        const pending = readPendingCheckout() ?? createPendingCheckout(data.id);
+        setTicketQuotas(quotaByTicketType);
+        // Draft chọn vé chỉ nằm trong state của trang. Chưa ghi vào danh sách
+        // checkout chờ cho đến khi API tạo order HELD thành công.
+        const pending = createPendingCheckout(data.id);
         const nextPending = {
           ...pending,
           concertId: data.id,
@@ -39,9 +57,9 @@ export function SeatSelectionPage() {
           venueName: data.venue.name,
           startsAt: data.startsAt,
         };
-        writePendingCheckout(nextPending);
+        setCheckoutDraft(nextPending);
         setTimeLeft(remainingSeconds(nextPending.expiresAt));
-        setQuantities(Object.fromEntries(nextPending.items.map((item) => [item.ticketTypeId, item.quantity])));
+        setQuantities({});
         setStatus("ready");
       })
       .catch(() => {
@@ -54,11 +72,11 @@ export function SeatSelectionPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const pending = readPendingCheckout();
-      if (!pending) return;
-      const remaining = remainingSeconds(pending.expiresAt);
-      setTimeLeft(remaining);
-      if (remaining <= 0) window.clearInterval(timer);
+      setTimeLeft((current) => {
+        const remaining = Math.max(0, current - 1);
+        if (remaining <= 0) window.clearInterval(timer);
+        return remaining;
+      });
     }, 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -75,15 +93,23 @@ export function SeatSelectionPage() {
 
   function updateQuantity(ticketType: UiTicketType, nextValue: number) {
     const available = ticketType.availableQuantity ?? ticketType.maxPerUser;
-    const max = Math.max(0, Math.min(ticketType.maxPerUser, available));
+    const remaining = ticketQuotas[ticketType.id]?.remaining_quantity ?? ticketType.maxPerUser;
+    const max = Math.max(0, Math.min(remaining, available));
     const value = Math.max(0, Math.min(max, nextValue));
     setQuantities((current) => ({ ...current, [ticketType.id]: value }));
   }
 
   function continueToCheckout() {
-    if (!concert || selectedItems.length === 0) return;
-    const pending = readPendingCheckout() ?? createPendingCheckout(concert.id);
-    writePendingCheckout({
+    if (!concert) return;
+
+    // Không chọn vé mới: mở checkout đang giữ hiện có, nếu có.
+    if (selectedItems.length === 0) {
+      navigate("/checkout");
+      return;
+    }
+
+    const pending = checkoutDraft ?? createPendingCheckout(concert.id);
+    const draft = {
       ...pending,
       concertId: concert.id,
       concertTitle: concert.title,
@@ -93,13 +119,13 @@ export function SeatSelectionPage() {
       startsAt: concert.startsAt,
       items: selectedItems,
       totalPrice,
-    });
-    navigate("/checkout");
+    };
+    navigate("/checkout", { state: { checkoutDraft: draft } });
   }
 
   if (status === "loading") return <CenteredState text="Đang tải khu vé..." />;
   if (status === "error" || !concert) return <CenteredState text="Không thể tải khu vé." actionLabel="Về danh sách sự kiện" />;
-  if (timeLeft <= 0) return <ExpiredState concertId={concert.id} />;
+  if (timeLeft <= 0) return <ExpiredState concertId={concert.slug} />;
 
   return (
     <main className="min-h-screen bg-[#08080E] pt-16 text-[#F0EDEB]">
@@ -111,7 +137,7 @@ export function SeatSelectionPage() {
             </button>
             <div className="min-w-0">
               <p className="text-xs text-[#8585A0]">Chọn loại vé</p>
-              <p className="truncate text-sm font-semibold">{concert.title}</p>
+              <p className="break-words text-sm font-semibold">{concert.title}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-[#F5C842]/25 bg-[#F5C842]/10 px-3 py-1.5 text-sm font-semibold text-[#F5C842]">
@@ -135,6 +161,18 @@ export function SeatSelectionPage() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#111118] p-5">
+            <h2 className="mb-1 text-sm font-semibold">Sơ đồ chỗ ngồi</h2>
+            <p className="mb-4 text-xs text-[#8585A0]">Đối chiếu khu vực trên sơ đồ và bấm chip hạng vé để chọn nhanh.</p>
+            <SeatMapPanel
+              seatMapUrl={concert.seatMapUrl}
+              zones={concert.seatZones}
+              ticketTypes={concert.ticketTypes}
+              selectedZoneId={selectedZoneId}
+              onSelectZone={selectZone}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold">Loại vé đang mở bán</h2>
@@ -147,10 +185,25 @@ export function SeatSelectionPage() {
               {concert.ticketTypes.map((ticketType) => {
                 const quantity = quantities[ticketType.id] ?? 0;
                 const available = ticketType.availableQuantity;
-                const max = Math.max(0, Math.min(ticketType.maxPerUser, available ?? ticketType.maxPerUser));
+                const quota = ticketQuotas[ticketType.id];
+                const remaining = quota?.remaining_quantity ?? ticketType.maxPerUser;
+                const max = Math.max(0, Math.min(remaining, available ?? remaining));
                 const soldOut = ticketType.status === "SOLD_OUT" || available === 0 || max === 0;
+                const notOpenYet = isBeforeSaleStart(ticketType);
+                const locked = soldOut || notOpenYet;
+                const zoneSelected = selectedZoneId !== null && ticketType.seatZoneId === selectedZoneId;
                 return (
-                  <article key={ticketType.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4" style={{ opacity: soldOut ? 0.55 : 1 }}>
+                  <article
+                    key={ticketType.id}
+                    data-zone-id={ticketType.seatZoneId}
+                    onClick={() => setSelectedZoneId(ticketType.seatZoneId)}
+                    className="rounded-xl border bg-white/[0.03] p-4 transition-colors"
+                    style={{
+                      opacity: locked ? 0.55 : 1,
+                      borderColor: zoneSelected ? ticketType.color : "rgba(255,255,255,0.07)",
+                      boxShadow: zoneSelected ? `0 0 0 1px ${ticketType.color}` : "none",
+                    }}
+                  >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <div className="mb-2 flex items-center gap-2">
@@ -160,14 +213,19 @@ export function SeatSelectionPage() {
                         <p className="text-xs text-[#8585A0]">
                           Khu {ticketType.zoneCode || "chưa gán"} - tối đa {ticketType.maxPerUser} vé/tài khoản
                         </p>
+                        {quota && (
+                          <p className="mt-1 text-xs text-[#8585A0]">
+                            Đang giữ {quota.held_quantity} · Đã mua {quota.paid_quantity} · Có thể chọn thêm {max}
+                          </p>
+                        )}
                         <p className="mt-2 text-sm font-semibold" style={{ color: ticketType.color }}>{formatCurrency(ticketType.price)}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <button type="button" disabled={quantity <= 0 || soldOut} onClick={() => updateQuantity(ticketType, quantity - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-[#F0EDEB] disabled:opacity-35">
+                        <button type="button" disabled={quantity <= 0 || locked} onClick={() => updateQuantity(ticketType, quantity - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-[#F0EDEB] disabled:opacity-35">
                           <Minus className="h-4 w-4" />
                         </button>
                         <span className="w-8 text-center text-sm font-semibold">{quantity}</span>
-                        <button type="button" disabled={quantity >= max || soldOut} onClick={() => updateQuantity(ticketType, quantity + 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-[#F0EDEB] disabled:opacity-35">
+                        <button type="button" disabled={quantity >= max || locked} onClick={() => updateQuantity(ticketType, quantity + 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-[#F0EDEB] disabled:opacity-35">
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
@@ -176,7 +234,13 @@ export function SeatSelectionPage() {
                       <div className="h-full rounded-full" style={{ width: `${ticketType.soldPercent}%`, background: ticketType.soldPercent > 85 ? "#E8315B" : ticketType.color }} />
                     </div>
                     <p className="mt-2 text-xs text-[#8585A0]">
-                      {soldOut ? "Hết vé" : available === null ? "Đang mở bán" : `Còn ${available.toLocaleString("vi-VN")} vé`}
+                      {soldOut
+                        ? "Hết vé"
+                        : notOpenYet
+                          ? `Mở bán lúc ${formatSaleStart(ticketType.saleStartAt!)}`
+                          : available === null
+                            ? "Đang mở bán"
+                            : `Còn ${available.toLocaleString("vi-VN")} vé`}
                     </p>
                   </article>
                 );
@@ -199,7 +263,7 @@ export function SeatSelectionPage() {
                 selectedItems.map((item) => (
                   <div key={item.ticketTypeId} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.ticketTypeName}</p>
+                      <p className="break-words text-sm font-medium">{item.ticketTypeName}</p>
                       <p className="text-xs text-[#8585A0]">{item.zoneName} x {item.quantity}</p>
                     </div>
                     <p className="text-sm font-semibold text-[#F5C842]">{formatCurrency(item.quantity * item.unitPrice)}</p>
@@ -212,7 +276,7 @@ export function SeatSelectionPage() {
                 <span className="text-sm text-[#8585A0]">Tổng cộng</span>
                 <span className="text-lg font-bold text-[#F5C842]">{formatCurrency(totalPrice)}</span>
               </div>
-              <button type="button" disabled={selectedItems.length === 0} onClick={continueToCheckout} className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:cursor-not-allowed disabled:opacity-45">
+              <button type="button" onClick={continueToCheckout} className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25">
                 Tiếp tục thanh toán
               </button>
             </div>
@@ -221,6 +285,21 @@ export function SeatSelectionPage() {
       </div>
     </main>
   );
+}
+
+// Chặn chọn vé trước giờ mở bán ngay trên UI — backend cũng chặn (SALE_WINDOW_CLOSED),
+// nhưng để user bấm rồi mới báo lỗi thì trải nghiệm kém.
+function isBeforeSaleStart(ticketType: UiTicketType): boolean {
+  return Boolean(ticketType.saleStartAt && Date.now() < new Date(ticketType.saleStartAt).getTime());
+}
+
+function formatSaleStart(iso: string): string {
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(iso));
 }
 
 function toPendingItem(ticketType: UiTicketType, concert: UiConcert, quantity: number): PendingCheckoutItem | null {

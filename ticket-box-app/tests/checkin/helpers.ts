@@ -28,6 +28,12 @@ export type CheckinFixture = {
   wrongGateId: string;
   deviceId: string;
   wrongGateDeviceId: string;
+  revokedDeviceId: string;
+  inactiveGateId: string;
+  inactiveGateDeviceId: string;
+  otherConcertId: string;
+  otherConcertGateId: string;
+  otherConcertDeviceId: string;
 };
 
 export type IssuedTicket = {
@@ -45,19 +51,38 @@ export async function createCheckinFixture(): Promise<CheckinFixture> {
   const wrongGateId = crypto.randomUUID();
   const deviceId = crypto.randomUUID();
   const wrongGateDeviceId = crypto.randomUUID();
+  const revokedDeviceId = crypto.randomUUID();
+  const inactiveGateId = crypto.randomUUID();
+  const inactiveGateDeviceId = crypto.randomUUID();
+  const otherConcertId = crypto.randomUUID();
+  const otherConcertGateId = crypto.randomUUID();
+  const otherConcertDeviceId = crypto.randomUUID();
 
-  await db.concert.create({
-    data: {
-      id: concertId,
-      venueId: SEED_VENUE_ID,
-      organizerId: USER_IDS.organizer,
-      title: `Check-in Test ${suffix}`,
-      slug: `checkin-test-${suffix}`,
-      artistName: 'Check-in Artist',
-      startsAt: new Date('2026-12-10T19:00:00Z'),
-      endsAt: new Date('2026-12-10T22:00:00Z'),
-      status: ConcertStatus.PUBLISHED,
-    },
+  await db.concert.createMany({
+    data: [
+      {
+        id: concertId,
+        venueId: SEED_VENUE_ID,
+        organizerId: USER_IDS.organizer,
+        title: `Check-in Test ${suffix}`,
+        slug: `checkin-test-${suffix}`,
+        artistName: 'Check-in Artist',
+        startsAt: new Date('2026-12-10T19:00:00Z'),
+        endsAt: new Date('2026-12-10T22:00:00Z'),
+        status: ConcertStatus.PUBLISHED,
+      },
+      {
+        id: otherConcertId,
+        venueId: SEED_VENUE_ID,
+        organizerId: USER_IDS.organizer,
+        title: `Check-in Test Other ${suffix}`,
+        slug: `checkin-test-other-${suffix}`,
+        artistName: 'Check-in Artist',
+        startsAt: new Date('2026-12-10T19:00:00Z'),
+        endsAt: new Date('2026-12-10T22:00:00Z'),
+        status: ConcertStatus.PUBLISHED,
+      },
+    ],
   });
 
   await db.seatZone.createMany({
@@ -117,6 +142,22 @@ export async function createCheckinFixture(): Promise<CheckinFixture> {
         isActive: true,
         sortOrder: 2,
       },
+      {
+        id: inactiveGateId,
+        concertId,
+        code: `INACTIVE-GATE-${suffix}`,
+        name: 'Inactive Gate',
+        isActive: false,
+        sortOrder: 3,
+      },
+      {
+        id: otherConcertGateId,
+        concertId: otherConcertId,
+        code: `OTHER-GATE-${suffix}`,
+        name: 'Other Gate',
+        isActive: true,
+        sortOrder: 1,
+      },
     ],
   });
 
@@ -124,6 +165,7 @@ export async function createCheckinFixture(): Promise<CheckinFixture> {
     data: [
       { gateId, seatZoneId: allowedZoneId, concertId },
       { gateId: wrongGateId, seatZoneId: otherZoneId, concertId },
+      { gateId: inactiveGateId, seatZoneId: allowedZoneId, concertId },
     ],
   });
 
@@ -147,6 +189,33 @@ export async function createCheckinFixture(): Promise<CheckinFixture> {
         name: 'Wrong gate checker',
         status: DeviceStatus.ACTIVE,
       },
+      {
+        id: revokedDeviceId,
+        deviceCode: `CHECKIN-REVOKED-${suffix}`,
+        staffId: USER_IDS.checker,
+        concertId,
+        gateId,
+        name: 'Revoked checker',
+        status: DeviceStatus.REVOKED,
+      },
+      {
+        id: inactiveGateDeviceId,
+        deviceCode: `CHECKIN-INACTIVE-${suffix}`,
+        staffId: USER_IDS.checker,
+        concertId,
+        gateId: inactiveGateId,
+        name: 'Inactive gate checker',
+        status: DeviceStatus.ACTIVE,
+      },
+      {
+        id: otherConcertDeviceId,
+        deviceCode: `CHECKIN-OTHER-${suffix}`,
+        staffId: USER_IDS.checker,
+        concertId: otherConcertId,
+        gateId: otherConcertGateId,
+        name: 'Other concert checker',
+        status: DeviceStatus.ACTIVE,
+      },
     ],
   });
 
@@ -159,21 +228,28 @@ export async function createCheckinFixture(): Promise<CheckinFixture> {
     wrongGateId,
     deviceId,
     wrongGateDeviceId,
+    revokedDeviceId,
+    inactiveGateId,
+    inactiveGateDeviceId,
+    otherConcertId,
+    otherConcertGateId,
+    otherConcertDeviceId,
   };
 }
 
 export async function cleanupCheckinFixture(fixture: CheckinFixture): Promise<void> {
-  await db.checkinLog.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.offlineCheckinBatch.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.ticket.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.guestList.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.order.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.checkinDevice.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.checkinGateZone.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.checkinGate.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.ticketType.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.seatZone.deleteMany({ where: { concertId: fixture.concertId } });
-  await db.concert.deleteMany({ where: { id: fixture.concertId } });
+  const concertIds = [fixture.concertId, fixture.otherConcertId];
+  await db.checkinLog.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.offlineCheckinBatch.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.ticket.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.guestList.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.order.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.checkinDevice.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.checkinGateZone.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.checkinGate.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.ticketType.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.seatZone.deleteMany({ where: { concertId: { in: concertIds } } });
+  await db.concert.deleteMany({ where: { id: { in: concertIds } } });
 }
 
 export async function issueTicket(

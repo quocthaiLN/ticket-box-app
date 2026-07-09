@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
   "exports": {
     ".": "./src/server.ts"
   },
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "dev:momo": "tsx src/momo-server.ts",
+    "dev:vnpay": "tsx src/vnpay-server.ts",
+    "start:momo": "node dist/momo-server.js",
+    "start:vnpay": "node dist/vnpay-server.js",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {

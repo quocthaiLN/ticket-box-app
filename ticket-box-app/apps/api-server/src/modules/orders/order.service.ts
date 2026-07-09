@@ -7,6 +7,7 @@ import {
   findAdminOrders,
   getOrderByIdempotencyKey,
   getOrderWithDetails,
+  getUserTicketQuotas,
 } from "./repository/order.repository.js";
 import { ApiError } from "../../shared/http/problem-details.js";
 import type {
@@ -17,6 +18,7 @@ import type {
   CreateOrderResponse,
   ExpireOrderResponse,
   OrderDetailResponse,
+  TicketQuotaResponse,
 } from "./order.type.js";
 
 const IDEMPOTENCY_TTL = 86400; // 24 hours
@@ -90,10 +92,19 @@ export async function createOrder(
   req: CreateOrderRequest,
   idempotencyKey: string,
 ): Promise<CreateOrderResponse> {
+  const t0 = Date.now();
+
   // Trả lại kết quả cũ nếu yêu cầu cùng idempotency key đã được xử lý.
   const cacheKey = idempotencyCacheKey(userId, idempotencyKey);
   const cached = await get(cacheKey);
+  const t1 = Date.now();
+
   if (cached) {
+    console.log(JSON.stringify({
+      event: "createOrder",
+      cache_hit: true,
+      cache_lookup_ms: t1 - t0,
+    }));
     return cached as CreateOrderResponse;
   }
 
@@ -155,8 +166,21 @@ export async function createOrder(
     })),
   };
 
+  const t2 = Date.now();
+
   // Lưu response để các lần gửi lại cùng key không tạo đơn mới.
   await set(cacheKey, response, IDEMPOTENCY_TTL);
+
+  const t3 = Date.now();
+
+  console.log(JSON.stringify({
+    event: "createOrder",
+    cache_hit: false,
+    cache_lookup_ms: t1 - t0,
+    tx_ms: t2 - t1,
+    cache_write_ms: t3 - t2,
+    total_ms: t3 - t0,
+  }));
 
   return response;
 }
@@ -186,6 +210,24 @@ export async function getOrder(
   }
 
   return mapOrderWithDetailsToResponse(details);
+}
+
+export async function getTicketQuota(
+  userId: string,
+  concertId: string,
+): Promise<TicketQuotaResponse> {
+  const items = await getUserTicketQuotas(userId, concertId);
+
+  return {
+    concert_id: concertId,
+    items: items.map((item) => ({
+      ticket_type_id: item.ticketTypeId,
+      max_per_user: item.maxPerUser,
+      held_quantity: item.heldQuantity,
+      paid_quantity: item.paidQuantity,
+      remaining_quantity: item.remainingQuantity,
+    })),
+  };
 }
 
 export async function cancelOrder(

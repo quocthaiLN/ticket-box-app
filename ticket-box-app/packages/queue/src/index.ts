@@ -10,6 +10,7 @@ export {
   getAiBioQueue,
   getGuestImportQueue,
   getEmailQueue,
+  closeAllQueues,
   type QueueName,
 } from "./queues.js";
 export type {

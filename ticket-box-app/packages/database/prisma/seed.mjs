@@ -68,16 +68,16 @@ const concerts = [
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 100),
-      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 300),
-      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 800),
-      zone("GA", "General Admission", "Khu đứng tự do.", 2000),
+      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 10),
+      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 30),
+      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 80),
+      zone("GA", "General Admission", "Khu đứng tự do.", 200),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 100, 5, 68, 2),
-      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 300, 12, 201, 2),
-      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 800, 30, 420, 4),
-      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 2000, 80, 1100, 4),
+      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 10, 1, 3, 2),
+      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 30, 2, 8, 2),
+      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 80, 3, 17, 4),
+      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 200, 5, 45, 4),
     ],
   },
   {
@@ -217,6 +217,11 @@ const concerts = [
 const fixedId = (number) =>
   `00000000-0000-0000-0000-${String(number).padStart(12, "0")}`;
 
+// Đồng bộ quy tắc slug với apps/api-server/src/shared/utils/slug.ts:
+// slug công khai luôn kèm 5 ký tự cuối của concert id để bảo đảm unique.
+const slugWithIdSuffix = (slug, concertId) =>
+  `${slug}-${concertId.replace(/-/g, "").slice(-5)}`;
+
 const zoneId = (concertIndex, zoneIndex) => fixedId(301 + concertIndex * 5 + zoneIndex);
 const gateId = (concertIndex, zoneIndex) => fixedId(401 + concertIndex * 5 + zoneIndex);
 const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex * 5 + ticketIndex);
@@ -255,7 +260,9 @@ async function seedUsers() {
     ["audience", "audience@gmail.com", "Khán giả 1", "+84900000001", "AUDIENCE"],
     ["organizer", "organizer@gmail.com", "BTC 1", "+84900000002", "ORGANIZER"],
     ["organizerTwo", "organizer2@gmail.com", "BTC 2", "+84900000007", "ORGANIZER"],
+    ["checker", "checker@gmail.com", "Nhân viên soát vé Demo", "+84900000003", "CHECKER"],
     ["admin", "admin@gmail.com", "Quản trị viên Demo", "+84900000004", "ADMIN"],
+    ["checker", "checker@ticketbox.test", "Checker Soát Vé Demo", "+84900000003", "CHECKER"],
     ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
   ];
@@ -297,7 +304,7 @@ async function seedCatalog() {
         venueId: concert.venueId,
         organizerId: userIds.organizer,
         title: concert.title,
-        slug: concert.slug,
+        slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
         artistName: concert.artistName,
         artistBio: concert.artistBio,
@@ -312,7 +319,7 @@ async function seedCatalog() {
         venueId: concert.venueId,
         organizerId: userIds.organizer,
         title: concert.title,
-        slug: concert.slug,
+        slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
         artistName: concert.artistName,
         artistBio: concert.artistBio,
@@ -724,13 +731,86 @@ async function seedDemoTickets() {
       },
     });
   }
+
+  // Bổ sung các ticket phụ cho concert 1 (anh-sang-man-dem) phục vụ demo
+  const asmConcert = publishedConcerts[0];
+  if (asmConcert) {
+    const sourceConcertIndex = concerts.findIndex((item) => item.id === asmConcert.id);
+    const ticketIndex = Math.min(1, asmConcert.tickets.length - 1);
+    const ticketSeed = asmConcert.tickets[ticketIndex];
+    const ticketType = ticketTypeId(sourceConcertIndex, ticketIndex);
+    const sourceZoneIndex = asmConcert.zones.findIndex((item) => item.code === ticketSeed.zoneCode);
+    const amount = ticketSeed.price;
+
+    const extraTickets = [
+      { id: fixedId(801), orderId: fixedId(811), orderItemId: fixedId(821), qrTokenHash: `qr-seed-${asmConcert.slug}-002`, status: "ISSUED" },
+      { id: fixedId(802), orderId: fixedId(812), orderItemId: fixedId(822), qrTokenHash: `qr-seed-${asmConcert.slug}-cancelled`, status: "CANCELLED" },
+      { id: fixedId(803), orderId: fixedId(813), orderItemId: fixedId(823), qrTokenHash: `qr-seed-${asmConcert.slug}-refunded`, status: "REFUNDED" },
+    ];
+
+    for (const ext of extraTickets) {
+      await prisma.order.upsert({
+        where: { id: ext.orderId },
+        create: {
+          id: ext.orderId,
+          userId: userIds.audience,
+          concertId: asmConcert.id,
+          idempotencyKey: `seed-order-${ext.id}`,
+          status: "CONFIRMED",
+          totalAmount: amount,
+          currency: "VND",
+          confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
+        },
+        update: {
+          status: "CONFIRMED",
+        },
+      });
+
+      await prisma.orderItem.upsert({
+        where: { id: ext.orderItemId },
+        create: {
+          id: ext.orderItemId,
+          orderId: ext.orderId,
+          ticketTypeId: ticketType,
+          quantity: 1,
+          unitPrice: amount,
+          lineTotal: amount,
+        },
+        update: {},
+      });
+
+      await prisma.ticket.upsert({
+        where: { id: ext.id },
+        create: {
+          id: ext.id,
+          orderId: ext.orderId,
+          orderItemId: ext.orderItemId,
+          userId: userIds.audience,
+          concertId: asmConcert.id,
+          ticketTypeId: ticketType,
+          seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
+          gateId: gateId(sourceConcertIndex, sourceZoneIndex),
+          qrTokenHash: ext.qrTokenHash,
+          qrPayload: null,
+          qrSignature: null,
+          status: ext.status,
+          issuedAt: new Date("2026-06-08T10:05:00+07:00"),
+        },
+        update: {
+          status: ext.status,
+        },
+      });
+    }
+  }
 }
 
 async function seedOperations() {
   for (const [concertIndex, concert] of concerts.entries()) {
     if (concert.zones.length === 0) continue;
     const gateIndex = Math.max(0, concert.zones.findIndex((item) => item.code === "VIP"));
-    const staffId = concert.slug === "secret-show-2026" ? userIds.checkerSecretOne : userIds.checkerSecretTwo;
+    const staffId = concert.slug === "secret-show-2026"
+      ? userIds.checkerSecretOne
+      : (concert.slug === "anh-sang-man-dem" ? userIds.checker : userIds.checkerSecretTwo);
 
     await prisma.checkinDevice.upsert({
       where: { id: fixedId(641 + concertIndex) },
@@ -853,10 +933,74 @@ async function seedOperations() {
       },
     });
   }
+
+  // Ghi đè/upsert guest list samples cho concert 1 (anh-sang-man-dem)
+  const asmConcert = concerts.find((concert) => concert.slug === "anh-sang-man-dem");
+  if (asmConcert) {
+    const guestZoneSeedId = fixedId(361 + 0); // asmConcert index is 0
+    const guestListSeed = [
+      { id: fixedId(901), fullName: "Khách VIP 1", email: "guest1@ticketbox.test", phone: "+84911111111", status: "INVITED" },
+      { id: fixedId(902), fullName: "Khách VIP 2", email: "guest2@ticketbox.test", phone: "+84922222222", status: "INVITED" },
+      { id: fixedId(903), fullName: "Khách VIP Đã Soát", email: "guest3@ticketbox.test", phone: "+84933333333", status: "CHECKED_IN", checkedInAt: new Date(), checkedInById: userIds.checker },
+    ];
+
+    for (const guest of guestListSeed) {
+      await prisma.guestList.upsert({
+        where: { id: guest.id },
+        create: {
+          id: guest.id,
+          concertId: asmConcert.id,
+          seatZoneId: guestZoneSeedId,
+          fullName: guest.fullName,
+          email: guest.email,
+          phone: guest.phone,
+          status: guest.status,
+          checkedInAt: guest.checkedInAt ?? null,
+          checkedInById: guest.checkedInById ?? null,
+        },
+        update: {
+          status: guest.status,
+          checkedInAt: guest.checkedInAt ?? null,
+          checkedInById: guest.checkedInById ?? null,
+        },
+      });
+    }
+  }
+}
+
+async function seedLoadTestUsers() {
+  // 1.000 user AUDIENCE cho k6 load test.
+  // Email: loadtest0001@ticketbox.test … loadtest1000@ticketbox.test
+  // Mật khẩu chung: Password@123 (10 rounds để seed nhanh hơn).
+  const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 10);
+
+  const data = [];
+  for (let i = 1; i <= 100000; i++) {
+    const index = String(i).padStart(4, "0");
+    data.push({
+      email: `loadtest${index}@ticketbox.test`,
+      passwordHash,
+      fullName: `Load Test User ${index}`,
+      phone: null,
+      role: "AUDIENCE",
+      status: "ACTIVE",
+    });
+  }
+
+  // createMany với skipDuplicates idempotent — chạy lại không sinh lỗi.
+  const result = await prisma.user.createMany({ data, skipDuplicates: true });
+  console.log(`seedLoadTestUsers: ${result.count} user mới được tạo (${1000 - result.count} đã tồn tại).`);
+
+  // Đảm bảo mật khẩu luôn đúng cho những user đã có (phòng trường hợp hash cũ).
+  await prisma.user.updateMany({
+    where: { email: { startsWith: "loadtest", endsWith: "@ticketbox.test" } },
+    data: { passwordHash, status: "ACTIVE" },
+  });
 }
 
 async function main() {
   await seedUsers();
+  await seedLoadTestUsers();
   await seedCatalog();
   await seedOrganizerWorkflow();
   await seedDemoTickets();

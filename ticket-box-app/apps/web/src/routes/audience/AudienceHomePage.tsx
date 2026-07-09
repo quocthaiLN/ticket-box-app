@@ -99,7 +99,7 @@ export function AudienceHomePage() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <Link
-                  to={`/concerts/${featured.id}`}
+                  to={`/concerts/${featured.slug}`}
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/30 transition-transform hover:scale-105"
                 >
                   Mua vé ngay
@@ -121,14 +121,14 @@ export function AudienceHomePage() {
                 {concerts.slice(1, 4).map((concert) => (
                   <Link
                     key={concert.id}
-                    to={`/concerts/${concert.id}`}
+                    to={`/concerts/${concert.slug}`}
                     className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#111118]/80 px-4 py-3 backdrop-blur transition-colors hover:bg-white/10"
                   >
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
                       <ImageWithFallback src={concert.coverImageUrl} alt={concert.title} className="h-full w-full object-cover" />
                     </div>
                     <div>
-                      <p className="line-clamp-1 text-xs font-medium text-[#F0EDEB]">{concert.title}</p>
+                      <p className="break-words text-xs font-medium text-[#F0EDEB]">{concert.title}</p>
                       <p className="text-xs text-[#8585A0]">{concert.artistName}</p>
                     </div>
                   </Link>
@@ -231,7 +231,7 @@ export function AudienceHomePage() {
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: <Zap className="h-6 w-6" />, title: "Thanh toán nhanh", desc: "Luồng checkout rõ ràng, sẵn sàng nối VNPAY/MoMo sandbox cho demo." },
+              { icon: <Zap className="h-6 w-6" />, title: "Thanh toán nhanh", desc: "Luồng checkout rõ ràng, thanh toán nhanh chóng qua VNPAY/MoMo." },
               { icon: <Shield className="h-6 w-6" />, title: "Vé xác thực", desc: "Mỗi e-ticket có mã QR riêng để giảm tranh chấp và chống vé giả." },
               { icon: <Smartphone className="h-6 w-6" />, title: "Check-in tiện lợi", desc: "QR ticket hỗ trợ soát vé online tại cổng và đồng bộ offline." },
               { icon: <Star className="h-6 w-6" />, title: "Vận hành tập trung", desc: "Danh mục, khách mời và Artist Bio nằm trong một hệ thống quản trị." },

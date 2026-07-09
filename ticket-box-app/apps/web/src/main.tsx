@@ -3,10 +3,11 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./routes/AppLayout";
 import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
+import { AdminAuditLogPage } from "./routes/admin/AdminAuditLogPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
-import { AdminGuestListPage } from "./routes/admin/AdminGuestListPage";
+import { AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
-import { AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
+import { AdminOrganizerRequestReviewPage, AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
 import { AuthPage } from "./routes/auth/AuthPage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
@@ -17,6 +18,7 @@ import { SeatSelectionPage } from "./routes/audience/SeatSelectionPage";
 import { CheckerPage } from "./routes/checker/CheckerPage";
 import { PaymentResultPage } from "./routes/payment/PaymentResultPage";
 import { OrganizerWorkspacePage } from "./routes/organizer/OrganizerWorkspacePage";
+import { ConcertPreviewPage } from "./routes/preview/ConcertPreviewPage";
 import "./styles/globals.css";
 
 const router = createBrowserRouter([
@@ -65,6 +67,10 @@ const router = createBrowserRouter([
         element: <AdminOrganizerRequestsPage />
       },
       {
+        path: "admin/organizer-requests/:requestId",
+        element: <AdminOrganizerRequestReviewPage />
+      },
+      {
         path: "admin/deletion-requests",
         element: <AdminDeletionRequestsPage />
       },
@@ -73,8 +79,20 @@ const router = createBrowserRouter([
         element: <AdminAccountsPage />
       },
       {
-        path: "admin/guest-list",
-        element: <AdminGuestListPage />
+        path: "admin/audit-logs",
+        element: <AdminAuditLogPage />
+      },
+      {
+        path: "admin/concerts/:concertId",
+        element: <AdminConcertDetailPage />
+      },
+      {
+        path: "admin/concerts/:concertId/preview",
+        element: <ConcertPreviewPage role="admin" />
+      },
+      {
+        path: "organizer/concerts/:concertId/preview",
+        element: <ConcertPreviewPage role="organizer" />
       },
       {
         path: "organizer",

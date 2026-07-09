@@ -53,6 +53,7 @@ export type OrganizerRequestDetailDto = OrganizerRequestSummaryDto & {
   artist_bio?: string | null;
   bio_status?: string | null;
   artist_bio_image_url?: string | null;
+  artists?: Prisma.JsonValue | null;
   ticket_types: unknown;
   reviewed_by?: string | null;
   reviewed_at?: string;
@@ -67,11 +68,14 @@ export type OrganizerConcertSummaryDto = {
   description?: string;
   artist_name: string;
   artist_bio?: string;
+  artist_bio_image_url?: string;
+  artists?: Prisma.JsonValue | null;
   status: string;
   starts_at: string;
   ends_at: string;
   planned_publish_at?: string;
   cover_image_url?: string;
+  seat_map_url?: string;
   guest_drive_folder_id?: string;
   venue: {
     id: string;
@@ -187,6 +191,7 @@ export type OrganizerGuestDto = {
 type UpdateConcertData = Partial<{
   venueId: string;
   title: string;
+  slug: string;
   description: string | null;
   artistName: string;
   artistBio: string | null;
@@ -266,6 +271,7 @@ export class OrganizerRepository {
         checkerCount: input.checker_count,
         pressKitUrl: input.press_kit_url,
         artistBioImageUrl: input.artist_bio_image_url,
+        seatMapUrl: input.seat_map_url,
         ticketTypes: input.ticket_types as unknown as Prisma.InputJsonValue,
         status: ApprovalStatus.PENDING,
       },
@@ -747,6 +753,7 @@ function mapRequestDetail(
     artist_bio: request.artistBio ?? null,
     bio_status: request.bioStatus ?? null,
     artist_bio_image_url: request.artistBioImageUrl ?? null,
+    artists: request.artists ?? null,
     ticket_types: request.ticketTypes,
     reviewed_by: request.reviewedById,
     reviewed_at: request.reviewedAt?.toISOString(),
@@ -771,11 +778,14 @@ function mapConcertSummary(
     description: concert.description ?? undefined,
     artist_name: concert.artistName,
     artist_bio: concert.artistBio ?? undefined,
+    artist_bio_image_url: concert.artistBioImageUrl ?? undefined,
+    artists: concert.artists ?? null,
     status: concert.status,
     starts_at: concert.startsAt.toISOString(),
     ends_at: concert.endsAt.toISOString(),
     planned_publish_at: concert.plannedPublishAt?.toISOString(),
     cover_image_url: concert.coverImageUrl ?? undefined,
+    seat_map_url: concert.seatMapUrl ?? undefined,
     guest_drive_folder_id: concert.guestDriveFolderId ?? undefined,
     venue: {
       id: concert.venue.id,
@@ -850,6 +860,6 @@ export function toConcertUpdateData(
   };
 }
 
-function nullable(value: string | undefined): string | null | undefined {
+function nullable(value: string | null | undefined): string | null | undefined {
   return value === undefined ? undefined : value;
 }

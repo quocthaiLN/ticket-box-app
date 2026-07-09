@@ -30,10 +30,20 @@ const rootEnvPath = path.resolve(
 
 dotenv.config({ path: rootEnvPath });
 
+const optionalEnv = (name: string): string | undefined => {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+};
+
 export const env = {
   server: {
     port: process.env["PORT"] ?? "3000",
     nodeEnv: process.env["NODE_ENV"] ?? "development",
+    instanceId: process.env["INSTANCE_ID"] ?? "api-local",
+    trustedGatewayIps: (process.env["TRUSTED_GATEWAY_IPS"] ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean),
   },
 
   // Web (frontend SPA) — backend redirect tới đây sau khi xử lý payment return.
@@ -85,6 +95,12 @@ export const env = {
     holdDurationSeconds: Number(
       process.env["ORDER_HOLD_DURATION_SECONDS"] ?? 900,
     ),
+    rateLimitWhitelistEnabled:
+      process.env["ORDER_RATE_LIMIT_WHITELIST_ENABLED"] === "true",
+    rateLimitWhitelist: (process.env["ORDER_RATE_LIMIT_WHITELIST"] ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean),
   },
 
   // Worker — job dọn dẹp đơn giữ chỗ hết hạn (expire-holds)
@@ -109,6 +125,9 @@ export const env = {
     returnUrl:
       process.env["VNPAY_RETURN_URL"] ??
       "http://localhost:3000/v1/payment/return",
+    // Chỉ dùng khi demo bằng payment mock. Sandbox/production vẫn tạo URL
+    // VNPay cục bộ đúng contract thật và không gọi endpoint này.
+    mockPrepareUrl: optionalEnv("VNPAY_MOCK_PREPARE_URL"),
     timeout: process.env["NODE_ENV"] === "production" ? 5_000 : 10_000,
     // Resilience: circuit breaker + bulkhead
     failureThreshold: Number(process.env["VNPAY_CB_FAILURE_THRESHOLD"] ?? 5),

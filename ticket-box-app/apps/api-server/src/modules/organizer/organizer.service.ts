@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
 import { extractDriveFolderId } from "../../shared/utils/drive.js";
+import { buildConcertSlug } from "../../shared/utils/slug.js";
 import {
   OrganizerRepository,
   toConcertUpdateData,
@@ -55,10 +56,28 @@ export class OrganizerService {
     return this.repository.createRequest(organizerId, input);
   }
 
-  async uploadCoverImage(
+  uploadCoverImage(
     organizerId: string,
     file: Buffer,
     input: { contentType?: string; fileName?: string },
+  ) {
+    return this.uploadPublicImage(organizerId, file, input, "covers", "cover");
+  }
+
+  uploadSeatMapImage(
+    organizerId: string,
+    file: Buffer,
+    input: { contentType?: string; fileName?: string },
+  ) {
+    return this.uploadPublicImage(organizerId, file, input, "seat-maps", "seat-map");
+  }
+
+  private async uploadPublicImage(
+    organizerId: string,
+    file: Buffer,
+    input: { contentType?: string; fileName?: string },
+    folder: string,
+    defaultName: string,
   ) {
     if (!organizerId) {
       throw Errors.unauthorized();
@@ -78,12 +97,12 @@ export class OrganizerService {
 
     const uploadDir = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
-      "../../../public/uploads/covers",
+      `../../../public/uploads/${folder}`,
     );
     await mkdir(uploadDir, { recursive: true });
 
-    const safeBaseName = safeFileBaseName(input.fileName ?? "cover");
-    const objectKey = `uploads/covers/${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
+    const safeBaseName = safeFileBaseName(input.fileName ?? defaultName);
+    const objectKey = `uploads/${folder}/${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
     await writeFile(path.resolve(uploadDir, path.basename(objectKey)), file);
 
     return {
@@ -132,7 +151,13 @@ export class OrganizerService {
       throw venueNotFound(input.venue_id);
     }
 
-    return this.repository.updateDraftConcert(concertId, toConcertUpdateData(input));
+    // Đổi tên khi DRAFT: slug sinh lại theo title mới + suffix id, không cần redirect.
+    const data = toConcertUpdateData(input);
+    if (input.title) {
+      data.slug = buildConcertSlug(input.title, concertId);
+    }
+
+    return this.repository.updateDraftConcert(concertId, data);
   }
 
   // Gán/sửa thư mục Drive khách mời. Cho phép mọi trạng thái concert, nhưng chỉ

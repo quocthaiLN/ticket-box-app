@@ -1,4 +1,5 @@
 import { env } from '@ticketbox/config';
+import { ProviderBusinessError } from '../gateways/payment.gateway.js';
 
 // CLOSED: cho phép gọi; OPEN: chặn gọi; HALF_OPEN: cho một request thử khôi phục.
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
@@ -62,8 +63,13 @@ export class PaymentCircuitBreaker {
       this.onSuccess();
       return result;
     } catch (err) {
-      // Request lỗi làm tăng failure counter hoặc mở lại circuit đang thử khôi phục.
-      this.onFailure();
+      // Provider đã phản hồi nhưng từ chối nghiệp vụ vẫn chứng minh kết nối khỏe.
+      // Chỉ timeout, lỗi mạng và HTTP upstream mới được tính là lỗi circuit.
+      if (err instanceof ProviderBusinessError) {
+        this.onSuccess();
+      } else {
+        this.onFailure();
+      }
       throw err;
     }
   }

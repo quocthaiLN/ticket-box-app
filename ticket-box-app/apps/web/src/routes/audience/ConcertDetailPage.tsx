@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { SeatMapPanel } from "../../components/SeatMapPanel";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   formatCurrency,
@@ -23,7 +24,6 @@ import {
   type UiConcert,
 } from "../../lib/catalog-ui";
 import { getCatalogConcertDetail } from "../../services/catalog.service";
-import { createPendingCheckout, writePendingCheckout } from "./checkout-storage";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -32,7 +32,6 @@ export function ConcertDetailPage() {
   const navigate = useNavigate();
   const [concert, setConcert] = useState<UiConcert | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
-  const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
@@ -63,13 +62,6 @@ export function ConcertDetailPage() {
     return <CenteredState text="Không thể tải chi tiết concert." actionLabel="Về trang chủ" />;
   }
 
-  const hasAvailableTickets = concert.ticketTypes.some((ticketType) => {
-    const available = ticketType.availableQuantity;
-    return ticketType.status === "ON_SALE" && (available === null || available > 0);
-  });
-  const startTime = new Date(concert.startsAt);
-  const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
-
   function handleBuyTickets() {
     const currentConcert = concert;
     if (!currentConcert) return;
@@ -80,17 +72,43 @@ export function ConcertDetailPage() {
       return;
     }
 
-    const pending = createPendingCheckout(currentConcert.id);
-    writePendingCheckout({
-      ...pending,
-      concertTitle: currentConcert.title,
-      artistName: currentConcert.artistName,
-      coverImageUrl: currentConcert.coverImageUrl,
-      venueName: currentConcert.venue.name,
-      startsAt: currentConcert.startsAt,
-    });
-    navigate(`/concerts/${currentConcert.id}/seats`);
+    // Chưa tạo checkout trong browser ở bước này. Draft chỉ được chuyển sang
+    // trang checkout sau khi user chọn vé; order chỉ được lưu sau khi API tạo thành công.
+    navigate(`/concerts/${currentConcert.slug}/seats`);
   }
+
+  return (
+    <>
+      <ConcertDetailView concert={concert} onBuyTickets={handleBuyTickets} />
+      {showLoginPrompt && (
+        <LoginPrompt concertSlug={concert.slug} onClose={() => setShowLoginPrompt(false)} />
+      )}
+    </>
+  );
+}
+
+type ConcertDetailViewProps = {
+  concert: UiConcert;
+  onBuyTickets?: () => void;
+  // Preview Admin/Organizer: khóa nút mua vé bất kể tồn kho.
+  buyDisabledOverride?: boolean;
+  buyLabel?: string;
+};
+
+export function ConcertDetailView({
+  concert,
+  onBuyTickets,
+  buyDisabledOverride = false,
+  buyLabel = "Mua vé",
+}: ConcertDetailViewProps) {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"info" | "lineup" | "map">("info");
+  const hasAvailableTickets = concert.ticketTypes.some((ticketType) => {
+    const available = ticketType.availableQuantity;
+    return ticketType.status === "ON_SALE" && (available === null || available > 0);
+  });
+  const startTime = new Date(concert.startsAt);
+  const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
 
   return (
     <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -230,21 +248,35 @@ export function ConcertDetailPage() {
             )}
 
             {activeTab === "lineup" && (
-              <Panel title="Nghệ sĩ chính" icon={<Music className="h-4 w-4 text-[#F5C842]" />}>
-                <div className="flex flex-col gap-4 sm:flex-row">
-                  {concert.artistBioImageUrl && (
-                    <img
-                      src={concert.artistBioImageUrl}
-                      alt={concert.artistName}
-                      className="h-40 w-40 shrink-0 rounded-xl object-cover"
-                    />
-                  )}
-                  <div>
-                    <p className="mb-2 font-semibold text-[#F0EDEB]">{concert.artistName}</p>
-                    <p className="text-sm leading-relaxed text-[#B0B0C0]">
-                      {concert.artistBio || "Thông tin nghệ sĩ đang được cập nhật."}
-                    </p>
-                  </div>
+              <Panel
+                title={concert.artists.length > 1 ? `Lineup nghệ sĩ (${concert.artists.length})` : "Nghệ sĩ chính"}
+                icon={<Music className="h-4 w-4 text-[#F5C842]" />}
+              >
+                <div className="space-y-6">
+                  {concert.artists.map((artist, index) => (
+                    <div
+                      key={`${artist.name}-${index}`}
+                      className="flex flex-col gap-4 border-t border-white/[0.06] pt-6 first:border-t-0 first:pt-0 sm:flex-row"
+                    >
+                      {artist.imageUrl ? (
+                        <img
+                          src={artist.imageUrl}
+                          alt={artist.name}
+                          className="h-40 w-40 shrink-0 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-40 w-40 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/15 text-xs text-[#8585A0]">
+                          Chưa có ảnh
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-2 font-semibold text-[#F0EDEB]">{artist.name}</p>
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-[#B0B0C0]">
+                          {artist.bio || "Thông tin nghệ sĩ đang được cập nhật."}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Panel>
             )}
@@ -252,9 +284,11 @@ export function ConcertDetailPage() {
             {activeTab === "map" && (
               <div className="space-y-4">
                 {concert.seatMapUrl ? (
-                  <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111118]">
-                    <ImageWithFallback src={concert.seatMapUrl} alt="Sơ đồ ghế" className="max-h-[420px] w-full object-contain" />
-                  </div>
+                  <SeatMapPanel
+                    seatMapUrl={concert.seatMapUrl}
+                    zones={concert.seatZones}
+                    ticketTypes={concert.ticketTypes}
+                  />
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-[#111118] p-6">
                     <SeatMapVisualization zones={concert.seatZones} />
@@ -282,7 +316,7 @@ export function ConcertDetailPage() {
           <div id="ticket-list" className="sticky top-20 overflow-hidden rounded-2xl border border-white/10 bg-[#111118]">
             <div className="border-b border-white/10 px-5 py-4">
               <h2 className="text-sm font-semibold text-[#F0EDEB]">Giá vé</h2>
-              <p className="mt-0.5 text-xs text-[#8585A0]">Dữ liệu lấy từ Ticket Types và Inventory API.</p>
+              <p className="mt-0.5 text-xs text-[#8585A0]">Số lượng vé được cập nhật theo thời gian thực.</p>
             </div>
 
             <div className="space-y-2 p-4">
@@ -329,11 +363,11 @@ export function ConcertDetailPage() {
             <div className="px-4 pb-4">
               <button
                 type="button"
-                disabled={!hasAvailableTickets}
-                onClick={handleBuyTickets}
+                disabled={buyDisabledOverride || !hasAvailableTickets}
+                onClick={onBuyTickets}
                 className="w-full rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Mua vé
+                {buyLabel}
               </button>
             </div>
 
@@ -345,13 +379,6 @@ export function ConcertDetailPage() {
           </div>
         </aside>
       </div>
-
-      {showLoginPrompt && (
-        <LoginPrompt
-          concertId={concert.id}
-          onClose={() => setShowLoginPrompt(false)}
-        />
-      )}
     </div>
   );
 }
@@ -460,14 +487,14 @@ function SeatMapVisualization({ zones }: { zones: { id: string; name: string; co
           );
         })}
       </div>
-      <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ mô phỏng từ Seat Zone API.</p>
+      <p className="mt-4 text-center text-xs text-[#8585A0]">Sơ đồ minh họa các khu vực chỗ ngồi.</p>
     </div>
   );
 }
 
-function LoginPrompt({ concertId, onClose }: { concertId: string; onClose: () => void }) {
+function LoginPrompt({ concertSlug, onClose }: { concertSlug: string; onClose: () => void }) {
   function rememberRedirect() {
-    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertId}`);
+    sessionStorage.setItem("ticketbox.redirectAfterLogin", `/concerts/${concertSlug}`);
   }
 
   return (

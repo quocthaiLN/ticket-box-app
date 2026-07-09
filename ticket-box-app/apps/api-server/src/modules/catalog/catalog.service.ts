@@ -1,5 +1,7 @@
+import { randomUUID } from "crypto";
 import { getCatalogAssetUrl } from "@ticketbox/storage";
 import { Errors } from "../../shared/http/problem-details.js";
+import { buildConcertSlug } from "../../shared/utils/slug.js";
 import { CatalogRepository } from "./catalog.repository.js";
 import type {
   CreateConcertInput,
@@ -33,6 +35,16 @@ export class CatalogService {
 
   async getMetadata(concertId: string) {
     const metadata = await this.repository.getConcertMetadata(concertId);
+
+    if (!metadata) {
+      throw this.notFound("concert", concertId);
+    }
+
+    return metadata;
+  }
+
+  async getAdminMetadata(concertId: string) {
+    const metadata = await this.repository.getConcertMetadataAnyStatus(concertId);
 
     if (!metadata) {
       throw this.notFound("concert", concertId);
@@ -93,11 +105,14 @@ export class CatalogService {
       input.organizer_id ?? actorUserId,
     );
 
+    const concertId = randomUUID();
+
     return this.repository.createConcert({
+      id: concertId,
       venueId: input.venue_id,
       organizerId,
       title: input.title,
-      slug: input.slug,
+      slug: buildConcertSlug(input.slug ?? input.title, concertId),
       description: input.description,
       artistName: input.artist_name,
       artistBio: input.artist_bio,
@@ -116,10 +131,14 @@ export class CatalogService {
       this.assertTimeRange(input.starts_at, input.ends_at);
     }
 
+    // Đổi tên/slug chỉ xảy ra khi DRAFT nên không cần redirect URL cũ;
+    // suffix theo concert id giữ slug luôn unique.
+    const slugSource = input.slug ?? input.title;
+
     return this.repository.updateConcert(concertId, {
       venueId: input.venue_id,
       title: input.title,
-      slug: input.slug,
+      slug: slugSource ? buildConcertSlug(slugSource, concertId) : undefined,
       description: nullable(input.description),
       artistName: input.artist_name,
       artistBio: nullable(input.artist_bio),

@@ -1,4 +1,5 @@
 import { enqueueNotification } from "@ticketbox/queue";
+import type { NotificationJobData } from "@ticketbox/queue";
 import { notificationsRepository } from "./notifications.repository.js";
 import type {
   AdminNotificationsQuery,
@@ -17,7 +18,7 @@ export const notificationsService = {
     try {
       await enqueueNotification({
         notification_id: notification.id,
-        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        channel: notification.channel as NotificationJobData["channel"],
         recipient_user_id: notification.user_id ?? "",
         subject: (notification.payload.subject as string | undefined),
         body: (notification.payload.body as string | undefined) ?? "",
@@ -42,7 +43,7 @@ export const notificationsService = {
     try {
       await enqueueNotification({
         notification_id: notification.id,
-        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        channel: notification.channel as NotificationJobData["channel"],
         recipient_user_id: notification.user_id ?? "",
         subject: (notification.payload.subject as string | undefined),
         body: (notification.payload.body as string | undefined) ?? "",
@@ -70,7 +71,7 @@ export const notificationsService = {
     try {
       await enqueueNotification({
         notification_id: notification.id,
-        channel: (notification.channel as "EMAIL" | "PUSH" | "IN_APP"),
+        channel: notification.channel as NotificationJobData["channel"],
         recipient_user_id: notification.user_id ?? "",
         subject: (notification.payload.subject as string | undefined),
         body: (notification.payload.body as string | undefined) ?? "",

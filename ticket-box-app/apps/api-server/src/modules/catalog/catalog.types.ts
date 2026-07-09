@@ -35,11 +35,19 @@ export type ConcertSummaryDto = {
   };
 };
 
+// Nghệ sĩ trong lineup (cột JSONB `artists`); null/vắng → fallback field đơn.
+export type ConcertArtistDto = {
+  name: string;
+  bio: string;
+  image_url: string | null;
+};
+
 export type ConcertDetailDto = Omit<ConcertSummaryDto, "venue" | "ticket_price_range"> & {
   description?: string;
   venue: VenueDto;
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtistDto[];
   seat_map_url?: string;
 };
 
@@ -78,6 +86,7 @@ export type ConcertMetadataDto = {
   };
   artist_bio?: string;
   artist_bio_image_url?: string;
+  artists?: ConcertArtistDto[];
 };
 
 export type SeatMapDto = {

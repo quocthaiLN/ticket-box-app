@@ -1,5 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
-import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import {
+  invalidateConcertListCache,
+  invalidateConcertCache,
+  invalidateSeatMapCache,
+  invalidateTicketTypeCache,
+} from "@ticketbox/redis";
 import { collection, ok } from "../../shared/http/response.js";
 import {
   parseAdminConcertsQuery,
@@ -14,7 +19,6 @@ import {
   parseUpdateVenueBody
 } from "./catalog.schema.js";
 import { CatalogService } from "./catalog.service.js";
-import { catalogCacheKeys } from "./catalog.cache.js";
 
 export class CatalogController {
   constructor(private readonly service = new CatalogService()) {}
@@ -47,7 +51,9 @@ export class CatalogController {
 
   getMetadata = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600");
+      // TTL ngắn ở browser: metadata đổi ngay sau publish/duyệt bio — cache 1h từng
+      // làm audience thấy vé DRAFT cũ ("hết vé") dù DB đã mở bán. CDN vẫn giữ s-maxage.
+      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=300, stale-while-revalidate=60");
       res.json(ok(await this.service.getMetadata(req.params.concert_id), req.requestId));
     } catch (err) {
       next(err);
@@ -109,6 +115,15 @@ export class CatalogController {
           limit: query.limit
         })
       );
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  // Admin preview: metadata đầy đủ (kể cả DRAFT), không cache public.
+  getAdminConcertMetadata = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json(ok(await this.service.getAdminMetadata(req.params.concert_id), req.requestId));
     } catch (err) {
       next(err);
     }
@@ -226,34 +241,3 @@ export class CatalogController {
 
 // ── Cache invalidation helpers ─────────────────────────────────────────────
 
-async function invalidateConcertListCache(): Promise<void> {
-  await cacheDeletePattern("catalog:list:*").catch((e) =>
-    console.error("[catalog] cache list invalidation error:", e),
-  );
-}
-
-async function invalidateConcertCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.concert(concertId)),
-    cacheDelete(catalogCacheKeys.metadata(concertId)),
-    cacheDelete(catalogCacheKeys.seatMap(concertId)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-    cacheDeletePattern("catalog:list:*"),
-  ]);
-}
-
-async function invalidateSeatMapCache(concertId: string): Promise<void> {
-  await cacheDelete(catalogCacheKeys.seatMap(concertId)).catch((e) =>
-    console.error("[catalog] cache seatmap invalidation error:", e),
-  );
-}
-
-async function invalidateTicketTypeCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-  ]);
-}

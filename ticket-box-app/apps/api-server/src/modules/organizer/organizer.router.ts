@@ -14,9 +14,18 @@ organizerRouter.post(
   "/organizer/uploads/cover-image",
   express.raw({
     type: ["image/jpeg", "image/png", "image/webp", "image/gif"],
-    limit: "5mb",
+    limit: "10mb",
   }),
   controller.uploadCoverImage,
+);
+
+organizerRouter.post(
+  "/organizer/uploads/seat-map",
+  express.raw({
+    type: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+    limit: "10mb",
+  }),
+  controller.uploadSeatMapImage,
 );
 
 organizerRouter.post(

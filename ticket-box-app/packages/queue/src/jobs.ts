@@ -20,7 +20,13 @@ export type ExpireHoldsJobData = {
 // notifications
 // ---------------------------------------------------------------------------
 
-export type NotificationChannel = "EMAIL" | "PUSH" | "IN_APP";
+export type NotificationChannel =
+  | "EMAIL"
+  | "APP"
+  | "PUSH"
+  | "IN_APP"
+  | "SMS"
+  | "ZALO";
 
 export type NotificationJobData = {
   /** ID row trong bảng notifications */

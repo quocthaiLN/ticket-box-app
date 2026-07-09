@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { env } from '@ticketbox/config';
 import { postJson } from './http-client.js';
+import { ProviderBusinessError } from './payment.gateway.js';
 import type {
   CheckoutInput,
   CheckoutResult,
@@ -72,7 +73,7 @@ export class MomoGateway implements PaymentGateway {
     const res = await postJson<MomoCreateResponse>(endpoint, body, timeout);
     // Không có payUrl cũng được xem là thất bại dù HTTP request đã thành công.
     if (res.resultCode !== 0 || !res.payUrl) {
-      throw new Error(`MoMo create failed: ${res.resultCode} ${res.message}`);
+      throw new ProviderBusinessError(`MoMo create failed: ${res.resultCode} ${res.message}`);
     }
 
     // Ưu tiên reference MoMo trả về; fallback về requestId đã gửi để vẫn trace được.

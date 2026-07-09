@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ClipboardCopy,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -28,6 +29,7 @@ import {
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
+import { LongText } from "../../components/LongText";
 import type { Venue } from "../../lib/api-client";
 import {
   createOrganizerDeletionRequest,
@@ -41,13 +43,12 @@ import {
   listOrganizerConcertGuests,
   listOrganizerOrders,
   setOrganizerConcertDriveFolder,
+  uploadOrganizerSeatMapImage,
   listOrganizerRequests,
   listOrganizerVenues,
   normalizeTicketTypes,
   updateOrganizerConcert,
-  uploadOrganizerCoverImage,
   uploadOrganizerPressKit,
-  uploadOrganizerArtistImage,
   type ApprovalStatus,
   type CreateOrganizerRequestInput,
   type CreateOrganizerSeatZoneInput,
@@ -258,6 +259,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
                   requests={requests}
                   concerts={concerts}
                   orders={orders}
+                  checkers={checkers}
                   analytics={analytics}
                 />
               )}
@@ -307,12 +309,14 @@ function OrganizerDashboardView({
   requests,
   concerts,
   orders,
+  checkers,
   analytics,
 }: {
   stats: { revenue: number; sold: number; drafts: number; pending: number };
   requests: OrganizerRequestSummary[];
   concerts: OrganizerConcert[];
   orders: OrganizerOrder[];
+  checkers: OrganizerCheckerAccount[];
   analytics: Record<string, OrganizerAnalytics>;
 }) {
   const performance = concerts.map((concert) => toOrganizerConcertPerformanceView(concert, analytics[concert.id]));
@@ -320,6 +324,34 @@ function OrganizerDashboardView({
   const myConcerts = performance.slice(0, 4);
   const pendingRequests = requests.filter((request) => request.status === "PENDING").slice(0, 4);
   const monthlyRevenue = buildMonthlyRevenue(orders);
+  const [checkerConcertId, setCheckerConcertId] = useState<string>("all");
+  // Concert lấy từ chính danh sách checker để dropdown không hiện concert chưa có tài khoản.
+  const checkerConcerts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const checker of checkers) map.set(checker.concert_id, checker.concert_title);
+    return [...map.entries()].map(([id, title]) => ({ id, title }));
+  }, [checkers]);
+  const visibleCheckers =
+    checkerConcertId === "all"
+      ? checkers
+      : checkers.filter((checker) => checker.concert_id === checkerConcertId);
+  const checkerGroups = useMemo(() => groupCheckersByConcert(visibleCheckers), [visibleCheckers]);
+  // null = trạng thái mặc định (chỉ mở nhóm đầu); reset khi đổi bộ lọc concert.
+  const [openGroupIds, setOpenGroupIds] = useState<string[] | null>(null);
+
+  function changeCheckerFilter(concertId: string) {
+    setCheckerConcertId(concertId);
+    setOpenGroupIds(null);
+  }
+
+  function toggleCheckerGroup(concertId: string) {
+    setOpenGroupIds((current) => {
+      const base = current ?? (checkerGroups[0] ? [checkerGroups[0].concertId] : []);
+      return base.includes(concertId)
+        ? base.filter((id) => id !== concertId)
+        : [...base, concertId];
+    });
+  }
   const statCards = [
     { label: "Tổng doanh thu", value: formatMoney(stats.revenue), icon: <TrendingUp className="h-5 w-5" />, tone: "#F5C842" },
     { label: "Vé đã bán", value: stats.sold.toLocaleString("vi-VN"), icon: <Ticket className="h-5 w-5" />, tone: "#7B61FF" },
@@ -347,7 +379,7 @@ function OrganizerDashboardView({
             {topConcerts.map((concert, index) => (
               <div key={concert.id}>
                 <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="truncate text-xs text-[#F0EDEB]">{concert.title}</span>
+                  <span className="min-w-0 break-words text-xs text-[#F0EDEB]">{concert.title}</span>
                   <span className="shrink-0 text-xs text-[#F5C842]">{formatMoney(concert.revenue)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -369,7 +401,7 @@ function OrganizerDashboardView({
         </DashboardPanel>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         {pendingRequests.length > 0 && (
           <DashboardPanel>
             <div className="mb-4 flex items-center justify-between">
@@ -386,7 +418,7 @@ function OrganizerDashboardView({
                   <Link key={view.id} to="/organizer/requests" className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.05]">
                     <Clock className="h-4 w-4 shrink-0 text-[#F5C842]" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[#F0EDEB]">{view.title}</p>
+                      <p className="break-words text-sm font-medium text-[#F0EDEB]">{view.title}</p>
                       <p className="mt-1 text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-[#F5C842]/10 px-2 py-0.5 text-xs text-[#F5C842]">Chờ duyệt</span>
@@ -418,13 +450,13 @@ function OrganizerDashboardView({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[#F0EDEB]">{concert.title}</p>
+                  <p className="break-words text-sm font-medium text-[#F0EDEB]">{concert.title}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">
                     {concert.ticketsSold.toLocaleString("vi-VN")}/{concert.ticketsTotal.toLocaleString("vi-VN")} vé bán
                   </p>
                 </div>
                 <StatusBadge status={concert.status} />
-                <Link to={`/concerts/${concert.id}`} className="shrink-0 rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trang public">
+                <Link to={`/organizer/concerts/${concert.id}/preview`} className="shrink-0 rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
                   <Eye className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -445,8 +477,117 @@ function OrganizerDashboardView({
           </DashboardPanel>
         )}
       </div>
+
+      <div className="mt-6">
+        <DashboardPanel>
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#F0EDEB]">Tài khoản checker theo concert</h3>
+              <p className="mt-1 text-xs text-[#8585A0]">Mật khẩu chỉ hiện một lần lúc admin duyệt; dashboard này hiển thị đầy đủ email, tên và concert tương ứng.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={checkerConcertId}
+                onChange={(event) => changeCheckerFilter(event.target.value)}
+                className="rounded-lg border border-white/[0.08] bg-[#0D0D15] px-2.5 py-1.5 text-xs text-[#F0EDEB] outline-none"
+              >
+                <option value="all">Tất cả concert</option>
+                {checkerConcerts.map((concert) => (
+                  <option key={concert.id} value={concert.id}>{concert.title}</option>
+                ))}
+              </select>
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#7B61FF]/10 px-2.5 py-1 text-xs font-semibold text-[#C9BCFF]">
+                <UserCheck className="h-3.5 w-3.5" />
+                {visibleCheckers.length.toLocaleString("vi-VN")} tài khoản
+              </span>
+            </div>
+          </div>
+          {visibleCheckers.length > 0 ? (
+            <div className="max-h-[480px] space-y-2 overflow-y-auto pr-1">
+              {checkerGroups.map((group, index) => {
+                // Chọn concert cụ thể → mở luôn; "Tất cả" → mặc định chỉ mở nhóm đầu.
+                const open =
+                  checkerConcertId !== "all" ||
+                  (openGroupIds === null ? index === 0 : openGroupIds.includes(group.concertId));
+                return (
+                  <div key={group.concertId} className="overflow-hidden rounded-xl border border-white/[0.07]">
+                    <button
+                      type="button"
+                      onClick={() => toggleCheckerGroup(group.concertId)}
+                      className="flex w-full items-center justify-between gap-3 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
+                    >
+                      <span className="min-w-0 break-words text-sm font-medium text-[#F0EDEB]">{group.concertTitle}</span>
+                      <span className="flex shrink-0 items-center gap-2 text-xs text-[#8585A0]">
+                        {group.checkers.length} tài khoản
+                        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="divide-y divide-white/[0.05]">
+                        {group.checkers.map((checker) => (
+                          <div key={checker.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                            <span className="text-sm font-medium text-[#F0EDEB]">{checker.full_name || "Checker chưa đặt tên"}</span>
+                            <LongText value={checker.email} copyable className="min-w-0 text-xs text-[#C9BCFF]" />
+                            <span className="ml-auto flex shrink-0 items-center gap-2">
+                              <span className="rounded-full bg-[#7B61FF]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C9BCFF]">{checker.status}</span>
+                              <span className="text-[11px] text-[#8585A0]">{formatDate(checker.created_at)}</span>
+                              <CopyIdButton value={checker.user_id} />
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState text="Chưa có tài khoản checker nào. Tài khoản sẽ được tạo sau khi admin duyệt hồ sơ BTC." />
+          )}
+        </DashboardPanel>
+      </div>
     </div>
   );
+}
+
+// Nút copy User ID gọn cho hàng checker — ID dài không cần hiển thị trên dashboard.
+function CopyIdButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard bị chặn → bỏ qua
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy User ID: ${value}`}
+      className="rounded p-1 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]"
+    >
+      {copied ? <CheckCircle2 className="h-3 w-3 text-[#2DBE6C]" /> : <ClipboardCopy className="h-3 w-3" />}
+    </button>
+  );
+}
+
+function groupCheckersByConcert(checkers: OrganizerCheckerAccount[]) {
+  const groups = new Map<string, { concertId: string; concertTitle: string; checkers: OrganizerCheckerAccount[] }>();
+  for (const checker of checkers) {
+    const group = groups.get(checker.concert_id) ?? {
+      concertId: checker.concert_id,
+      concertTitle: checker.concert_title,
+      checkers: [],
+    };
+    group.checkers.push(checker);
+    groups.set(checker.concert_id, group);
+  }
+  return [...groups.values()];
 }
 
 function DashboardView({
@@ -501,7 +642,7 @@ function DashboardView({
                         title={`${concert.title}: ${formatMoney(concert.revenue)}`}
                       />
                     </div>
-                    <p className="w-full truncate text-center text-[11px] text-[#8585A0]">{concert.title}</p>
+                    <p className="w-full break-words text-center text-[11px] text-[#8585A0]">{concert.title}</p>
                   </div>
                 );
               })}
@@ -517,7 +658,7 @@ function DashboardView({
               <div key={concert.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{concert.title}</p>
+                    <p className="break-words text-sm font-semibold">{concert.title}</p>
                     <p className="mt-1 text-xs text-[#8585A0]">{concert.venueName} - {formatDate(concert.startsAt)}</p>
                   </div>
                   <span className="shrink-0 text-xs font-semibold text-[#F5C842]">{formatMoney(concert.revenue)}</span>
@@ -550,7 +691,7 @@ function DashboardView({
                 <Link key={view.id} to="/organizer/requests" className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 transition-colors hover:bg-white/[0.05]">
                   <Clock className="h-4 w-4 shrink-0 text-[#F5C842]" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{view.title}</p>
+                    <p className="break-words text-sm font-semibold">{view.title}</p>
                     <p className="mt-1 text-xs text-[#8585A0]">{view.artistName} - nộp {formatDate(view.submittedAt)}</p>
                   </div>
                   <ApprovalBadge status={view.status} />
@@ -710,7 +851,6 @@ function NewRequestForm({
         </div>
       </div>
       <div className="p-5">
-      {error && <Message text={error} error />}
       <div className="grid gap-3 md:grid-cols-2">
         <Field name="title" label="Tên concert" required />
         <Field name="artist_name" label="Nghệ sĩ / lineup" required />
@@ -748,6 +888,8 @@ function NewRequestForm({
           Hủy
         </button>
       </div>
+      {/* Báo lỗi đặt ngay dưới nút nộp để thấy ngay khi submit thất bại. */}
+      {error && <div className="mt-4"><Message text={error} error /></div>}
       </div>
     </form>
   );
@@ -818,18 +960,18 @@ function TabbedNewRequestForm({
   ];
 
   // Giữ File đã chọn; CHỈ upload lên Supabase khi bấm "Nộp hồ sơ" (tránh tạo file rác).
+  // Ảnh concert + ảnh nghệ sĩ không upload riêng nữa — hệ thống tách từ press kit
+  // (quy ước: ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).
   const [pressKitFile, setPressKitFile] = useState<File | null>(null);
-  const [artistImageFile, setArtistImageFile] = useState<File | null>(null);
-  const [artistImagePreview, setArtistImagePreview] = useState("");
+  // Ảnh sơ đồ chỗ ngồi — cùng cơ chế: giữ File, upload khi nộp hồ sơ.
+  const [seatMapFile, setSeatMapFile] = useState<File | null>(null);
 
   function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
     setPressKitFile(event.target.files?.[0] ?? null);
   }
 
-  function handleArtistImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setArtistImageFile(file);
-    setArtistImagePreview(file ? URL.createObjectURL(file) : "");
+  function handleSeatMapFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeatMapFile(event.target.files?.[0] ?? null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -875,12 +1017,12 @@ function TabbedNewRequestForm({
 
       // Upload file MỘT LẦN tại đây (sau khi form đã hợp lệ) → mỗi lần nộp đúng 1 file.
       let pressKitUrl: string | undefined;
-      let artistBioImageUrl: string | undefined;
       if (pressKitFile) {
         pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
       }
-      if (artistImageFile) {
-        artistBioImageUrl = (await uploadOrganizerArtistImage(artistImageFile)).url;
+      let seatMapUrl: string | undefined;
+      if (seatMapFile) {
+        seatMapUrl = (await uploadOrganizerSeatMapImage(seatMapFile)).url;
       }
 
       await onSubmit({
@@ -894,7 +1036,7 @@ function TabbedNewRequestForm({
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
         press_kit_url: pressKitUrl,
-        artist_bio_image_url: artistBioImageUrl,
+        seat_map_url: seatMapUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -960,8 +1102,6 @@ function TabbedNewRequestForm({
           </button>
         </div>
       </div>
-
-      {error && <Message text={error} error />}
 
       <div className="flex flex-wrap gap-1 border-b border-white/[0.08]">
         {sections.map((section) => (
@@ -1029,24 +1169,10 @@ function TabbedNewRequestForm({
                     <input type="file" accept="application/pdf" className="hidden" onChange={handlePressKitChange} />
                   </label>
                   {pressKitFile ? (
-                    <p className="text-xs text-[#2DBE6C]">✓ {pressKitFile.name} — sẽ tải lên khi nộp; AI tự sinh bio từ file này.</p>
+                    <p className="text-xs text-[#2DBE6C]">✓ {pressKitFile.name} — sẽ tải lên khi nộp; AI tự sinh giới thiệu concert + bio nghệ sĩ và tách ảnh từ file này.</p>
                   ) : (
-                    <p className="text-xs text-[#8585A0]">Tải PDF hồ sơ/press kit để hệ thống tự sinh bio nghệ sĩ (không bắt buộc).</p>
+                    <p className="text-xs text-[#8585A0]">Tải PDF press kit: hệ thống tự sinh giới thiệu concert + bio nghệ sĩ và tách ảnh (ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).</p>
                   )}
-                </div>
-              </EditorRow>
-              <EditorRow label="Ảnh nghệ sĩ (hiển thị cùng bio)">
-                <div className="flex items-center gap-3">
-                  {artistImagePreview ? (
-                    <img src={artistImagePreview} alt="Ảnh nghệ sĩ" className="h-16 w-16 rounded-lg object-cover" />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-white/15 text-xs text-[#8585A0]">Ảnh</div>
-                  )}
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
-                    <Upload className="h-4 w-4" />
-                    {artistImageFile ? "Đổi ảnh" : "Chọn ảnh"}
-                    <input type="file" accept="image/*" className="hidden" onChange={handleArtistImageChange} />
-                  </label>
                 </div>
               </EditorRow>
               <EditorRow label="Mô tả">
@@ -1058,6 +1184,23 @@ function TabbedNewRequestForm({
 
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
+            <div className="mb-4 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Sơ đồ chỗ ngồi (ảnh)</p>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                <Upload className="h-4 w-4" />
+                {seatMapFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleSeatMapFileChange} />
+              </label>
+              {seatMapFile ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
+                  <img src={URL.createObjectURL(seatMapFile)} alt="Xem trước sơ đồ chỗ ngồi" className="max-h-56 w-full rounded-lg object-contain" />
+                  <button type="button" onClick={() => setSeatMapFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ ảnh</button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[#8585A0]">JPEG/PNG/WebP/GIF ≤ 10MB. Ảnh nên chú thích rõ màu và tên từng hạng vé — khán giả sẽ đối chiếu khi chọn vé.</p>
+              )}
+            </div>
             <div className="space-y-3">
               {zones.map((zone) => (
                 <div key={zone.id} className="rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
@@ -1135,6 +1278,9 @@ function TabbedNewRequestForm({
           Hủy
         </button>
       </div>
+
+      {/* Báo lỗi đặt NGAY DƯỚI nút nộp để người dùng thấy ngay, không phải cuộn lên đầu form. */}
+      {error && <Message text={error} error />}
     </form>
   );
 }
@@ -1163,7 +1309,7 @@ function OrganizerRequestCard({
             <ApprovalBadge status={view.status} />
           </div>
           <h2 className="text-sm font-semibold text-[#F0EDEB]">{view.title}</h2>
-          <p className="mt-0.5 truncate text-xs text-[#8585A0]">
+          <p className="mt-0.5 break-words text-xs text-[#8585A0]">
             {view.artistName} · {venue?.name ?? "Chưa rõ địa điểm"} · {formatDate(view.startsAt)}
           </p>
         </div>
@@ -1278,8 +1424,8 @@ function RequestCard({
             <ApprovalBadge status={view.status} />
             <span className="text-xs text-[#8585A0]">Nộp {formatDate(view.submittedAt)}</span>
           </div>
-          <h2 className="truncate text-sm font-semibold">{view.title}</h2>
-          <p className="mt-1 truncate text-xs text-[#8585A0]">{view.artistName} - {formatDate(view.startsAt)}</p>
+          <h2 className="break-words text-sm font-semibold">{view.title}</h2>
+          <p className="mt-1 break-words text-xs text-[#8585A0]">{view.artistName} - {formatDate(view.startsAt)}</p>
         </div>
         <p className="text-xs text-[#8585A0]">{view.gateCount} cổng / {view.checkerCount} nhân sự soát vé</p>
         <span className="text-[#8585A0]">{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
@@ -1479,8 +1625,6 @@ function OrganizerConcertEditor({
     concert.status === "PUBLISHED" ? "guests" : "basic",
   );
   const [submitting, setSubmitting] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [coverUploadError, setCoverUploadError] = useState("");
   const [zoneError, setZoneError] = useState("");
   const [ticketError, setTicketError] = useState("");
   const [form, setForm] = useState({
@@ -1492,7 +1636,10 @@ function OrganizerConcertEditor({
     endsAt: toDateTimeLocal(concert.ends_at),
     venueId: concert.venue.id,
     coverImageUrl: concert.cover_image_url ?? "",
+    seatMapUrl: concert.seat_map_url ?? "",
   });
+  const [seatMapUploading, setSeatMapUploading] = useState(false);
+  const [seatMapError, setSeatMapError] = useState("");
   const [tickets, setTickets] = useState<EditableTicketType[]>(
     (concert.ticket_types ?? []).map((ticket) => ({
       id: ticket.id,
@@ -1555,20 +1702,36 @@ function OrganizerConcertEditor({
     }
   }
 
-  async function handleCoverUpload(event: ChangeEvent<HTMLInputElement>) {
+  // Upload xong lưu seat_map_url vào concert luôn (gọi API trực tiếp, không đi qua
+  // nút "Lưu thay đổi" của tab Thông tin cơ bản — luồng đó lọc bỏ chuỗi rỗng nên
+  // không thể dùng để gỡ ảnh).
+  async function handleSeatMapUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-
-    setCoverUploadError("");
-    setCoverUploading(true);
+    setSeatMapError("");
+    setSeatMapUploading(true);
     try {
-      const upload = await uploadOrganizerCoverImage(file);
-      setForm((current) => ({ ...current, coverImageUrl: upload.url }));
+      const upload = await uploadOrganizerSeatMapImage(file);
+      await updateOrganizerConcert(concert.id, { seat_map_url: upload.url });
+      setForm((current) => ({ ...current, seatMapUrl: upload.url }));
     } catch (err) {
-      setCoverUploadError(err instanceof Error ? err.message : "Không thể upload ảnh bìa.");
+      setSeatMapError(err instanceof Error ? err.message : "Không thể upload ảnh sơ đồ.");
     } finally {
-      setCoverUploading(false);
+      setSeatMapUploading(false);
+    }
+  }
+
+  async function handleSeatMapRemove() {
+    setSeatMapError("");
+    setSeatMapUploading(true);
+    try {
+      await updateOrganizerConcert(concert.id, { seat_map_url: null });
+      setForm((current) => ({ ...current, seatMapUrl: "" }));
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ ảnh sơ đồ.");
+    } finally {
+      setSeatMapUploading(false);
     }
   }
 
@@ -1784,26 +1947,8 @@ function OrganizerConcertEditor({
                 </select>
               </EditorRow>
               <EditorRow label="Ảnh bìa (URL)">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
-                  <label
-                    className="inline-flex min-h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#7B61FF]/25 bg-[#7B61FF]/10 text-[#B8AAFF] transition-colors hover:bg-[#7B61FF]/15"
-                    title={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
-                    aria-label={coverUploading ? "Đang tải ảnh" : "Tải ảnh từ máy"}
-                  >
-                    {coverUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      className="hidden"
-                      disabled={coverUploading}
-                      onChange={(event) => void handleCoverUpload(event)}
-                    />
-                  </label>
-                </div>
-                {coverUploadError && (
-                  <p className="mt-2 text-xs text-[#E8315B]">{coverUploadError}</p>
-                )}
+                {/* Ảnh bìa lấy tự động từ press kit (ảnh trang 1); ô URL chỉ là phương án chữa cháy. */}
+                <input className={editorInputClass} style={editorInputStyle} placeholder="Tự tách từ press kit — chỉ nhập URL khi cần thay thế" value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
                 {form.coverImageUrl && (
                   <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
                     <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
@@ -1824,6 +1969,34 @@ function OrganizerConcertEditor({
 
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
+            <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-[#F0EDEB]">Sơ đồ hạng vé (ảnh)</h4>
+                {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
+              </div>
+              <p className="mb-3 text-xs text-[#8585A0]">
+                Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
+                  <Upload className="h-4 w-4" />
+                  {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapUpload} />
+                </label>
+                {form.seatMapUrl && (
+                  <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                    Gỡ ảnh
+                  </button>
+                )}
+              </div>
+              {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
+              {form.seatMapUrl && (
+                <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
+                  <img src={form.seatMapUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
+                </div>
+              )}
+            </div>
+
             {zoneError && (
               <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
                 {zoneError}
@@ -1877,7 +2050,7 @@ function OrganizerConcertEditor({
                       <div className="min-w-0">
                         <div className="mb-2 flex items-center gap-2">
                           <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
-                          <h4 className="truncate text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
+                          <h4 className="break-words text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
                         </div>
                         {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
                       </div>
@@ -1983,7 +2156,7 @@ function OrganizerConcertEditor({
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: ticketDotColor(index) }} />
-                          <span className="truncate text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
+                          <span className="break-words text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
                         </div>
                         <div className="flex shrink-0 gap-2 text-[#8585A0]">
                           <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
@@ -2098,7 +2271,7 @@ function OrganizerConcertCard({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Link to={`/concerts/${concert.id}`} className="rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem public">
+              <Link to={`/organizer/concerts/${concert.id}/preview`} className="rounded-lg p-1.5 text-[#8585A0] transition-colors hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
                 <Eye className="h-4 w-4" />
               </Link>
               {canEdit && (
@@ -2282,9 +2455,9 @@ function GuestSection({ concert }: { concert: OrganizerConcert }) {
             <div className="space-y-1.5">
               {guests.map((guest) => (
                 <div key={guest.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs">
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 break-words">
                     <b className="text-[#F0EDEB]">{guest.full_name}</b>
-                    <span className="text-[#8585A0]"> · {guest.email}</span>
+                    <span className="break-all text-[#8585A0]"> · {guest.email}</span>
                   </span>
                   <span className="shrink-0 text-[#8585A0]">{guestStatusLabel(guest.status)}</span>
                 </div>
@@ -2377,7 +2550,7 @@ function ConcertCard({
             <StatusBadge status={view.status} />
             <span className="text-xs text-[#8585A0]">{formatDate(view.startsAt)} - {view.venueName}</span>
           </div>
-          <h2 className="truncate text-base font-semibold">{view.title}</h2>
+          <h2 className="break-words text-base font-semibold">{view.title}</h2>
           <p className="mt-1 text-sm text-[#8585A0]">{view.artistName}</p>
           <div className="mt-4 flex flex-wrap gap-4">
             <InlineMetric icon={<BarChart3 className="h-3.5 w-3.5" />} label={formatMoney(view.revenue)} tone="#2DBE6C" />
@@ -2395,7 +2568,7 @@ function ConcertCard({
           </div>
         </div>
         <div className="flex items-start justify-end gap-2">
-          <Link to={`/concerts/${concert.id}`} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]" title="Mở trang công khai">
+          <Link to={`/organizer/concerts/${concert.id}/preview`} className="rounded-lg p-2 text-[#8585A0] hover:bg-white/10 hover:text-[#F0EDEB]" title="Xem trước">
             <Eye className="h-4 w-4" />
           </Link>
           {concert.status === "DRAFT" && (
@@ -2745,7 +2918,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
       <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+      <p className="mt-1 break-words text-sm font-semibold">{value}</p>
     </div>
   );
 }

@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { cacheDelete, cacheDeletePattern } from "@ticketbox/redis";
+import { invalidateConcertCache } from "@ticketbox/redis";
 import {
   uploadPressKit as storePressKit,
   uploadArtistImage as storeArtistImage,
 } from "@ticketbox/storage";
 import { collection, ok } from "../../shared/http/response.js";
-import { Errors } from "../../shared/http/problem-details.js";
-import { catalogCacheKeys } from "../catalog/catalog.cache.js";
+import { ApiError, Errors } from "../../shared/http/problem-details.js";
 import {
   parseCreateDeletionRequestBody,
   parseCreateOrganizerSeatZoneBody,
@@ -17,6 +16,25 @@ import {
   parseUpdateOrganizerConcertBody,
 } from "./organizer.schema.js";
 import { OrganizerService } from "./organizer.service.js";
+
+// Bọc thao tác Supabase Storage: lỗi hạ tầng (project sai/bị xóa, DNS, key hết hạn)
+// trả 503 kèm thông điệp rõ ràng thay vì 500 chung chung.
+async function storageCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[organizer] Supabase storage error:", message);
+    throw new ApiError({
+      title: "Storage unavailable",
+      status: 503,
+      code: "storage_unavailable",
+      detail:
+        "Không tải được file lên kho lưu trữ (Supabase). Kiểm tra SUPABASE_URL/SERVICE_ROLE_KEY và bucket trong .env — " +
+        message,
+    });
+  }
+}
 
 export class OrganizerController {
   constructor(private readonly service = new OrganizerService()) {}
@@ -64,7 +82,9 @@ export class OrganizerController {
         throw Errors.fieldValidationError("file", "Empty PDF upload.");
       }
       // Gom file theo organizer (concert chưa tồn tại lúc upload); UUID đảm bảo không trùng.
-      const objectKey = await storePressKit(`${organizerId}/${randomUUID()}.pdf`, buffer);
+      const objectKey = await storageCall(() =>
+        storePressKit(`${organizerId}/${randomUUID()}.pdf`, buffer),
+      );
       res.status(201).json(ok({ object_key: objectKey }, req.requestId));
     } catch (err) {
       next(err);
@@ -81,12 +101,42 @@ export class OrganizerController {
       }
       const contentType = req.headers["content-type"] ?? "image/jpeg";
       // Gom ảnh theo organizer; UUID đảm bảo không trùng.
-      const data = await storeArtistImage(
-        `${organizerId}/${randomUUID()}.${imageExtension(contentType)}`,
-        buffer,
-        contentType,
+      const data = await storageCall(() =>
+        storeArtistImage(
+          `${organizerId}/${randomUUID()}.${imageExtension(contentType)}`,
+          buffer,
+          contentType,
+        ),
       );
       res.status(201).json(ok(data, req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  uploadSeatMapImage = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const upload = await this.service.uploadSeatMapImage(
+        currentUserId(res),
+        Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        {
+          contentType: req.headers["content-type"],
+          fileName:
+            typeof req.headers["x-file-name"] === "string"
+              ? req.headers["x-file-name"]
+              : undefined,
+        },
+      );
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res
+        .status(201)
+        .json(
+          ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId),
+        );
     } catch (err) {
       next(err);
     }
@@ -337,14 +387,3 @@ function toCollection<T extends { id: string }>(
   });
 }
 
-async function invalidateConcertCache(concertId: string): Promise<void> {
-  await Promise.allSettled([
-    cacheDelete(catalogCacheKeys.concert(concertId)),
-    cacheDelete(catalogCacheKeys.metadata(concertId)),
-    cacheDelete(catalogCacheKeys.seatMap(concertId)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
-    cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
-    cacheDelete(catalogCacheKeys.inventory(concertId)),
-    cacheDeletePattern("catalog:list:*"),
-  ]);
-}

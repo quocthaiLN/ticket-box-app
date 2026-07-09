@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, ChevronLeft, Clock, CreditCard, ExternalLink, Loader2, QrCode, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   createOrder,
   createPayment,
@@ -9,9 +9,11 @@ import {
   type OrderDetail,
   type PaymentProvider,
 } from "../../services/order.service";
+import { getApiErrorCode } from "../../lib/api-client";
 import {
   clearPendingCheckout,
   formatCountdown,
+  readHeldCheckouts,
   readPendingCheckout,
   remainingSeconds,
   writePendingCheckout,
@@ -20,14 +22,36 @@ import {
 
 type CheckoutStep = "review" | "payment" | "processing" | "success";
 
+// Thông báo tiếng Việt theo mã lỗi — không hiển thị detail thô của server
+// (tiếng Anh + UUID nội bộ) cho người dùng cuối.
+const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
+  SALE_WINDOW_CLOSED: "Vé chưa tới giờ mở bán hoặc đã hết thời gian bán. Vui lòng kiểm tra giờ mở bán trên trang sự kiện.",
+  TICKET_TYPE_NOT_ON_SALE: "Loại vé này hiện không mở bán. Vui lòng chọn lại vé trên trang sự kiện.",
+  TICKET_TYPE_NOT_FOUND: "Loại vé không còn tồn tại. Vui lòng chọn lại vé trên trang sự kiện.",
+  TICKET_SOLD_OUT: "Rất tiếc, loại vé này vừa hết. Vui lòng chọn loại vé khác.",
+  PER_USER_LIMIT_EXCEEDED: "Bạn đã đạt giới hạn số vé được mua cho loại vé này.",
+  ORDER_NOT_HELD: "Đơn hàng đã hết hạn giữ vé. Vui lòng chọn vé và tạo đơn mới.",
+};
+
+function checkoutErrorMessage(err: unknown, fallback: string): string {
+  const code = getApiErrorCode(err);
+  if (code && CHECKOUT_ERROR_MESSAGES[code]) return CHECKOUT_ERROR_MESSAGES[code];
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const [pending, setPending] = useState<PendingCheckout | null>(() => readPendingCheckout());
+  const location = useLocation();
+  const checkoutDraft = (location.state as { checkoutDraft?: PendingCheckout } | null)?.checkoutDraft;
+  const [pending, setPending] = useState<PendingCheckout | null>(() => checkoutDraft ?? readPendingCheckout());
   const [step, setStep] = useState<CheckoutStep>("review");
-  const [timeLeft, setTimeLeft] = useState(() => remainingSeconds(readPendingCheckout()?.expiresAt ?? 0));
+  const [timeLeft, setTimeLeft] = useState(() => remainingSeconds((checkoutDraft ?? readPendingCheckout())?.expiresAt ?? 0));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const [failedProviders, setFailedProviders] = useState<PaymentProvider[]>([]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [heldCheckouts, setHeldCheckouts] = useState<PendingCheckout[]>(() => readHeldCheckouts());
 
   useEffect(() => {
     if (!pending || pending.items.length === 0) {
@@ -39,17 +63,17 @@ export function CheckoutPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const current = readPendingCheckout();
-      if (!current) return;
-      const remaining = remainingSeconds(current.expiresAt);
+      if (!pending) return;
+      const remaining = remainingSeconds(pending.expiresAt);
       setTimeLeft(remaining);
       if (remaining <= 0) window.clearInterval(timer);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [pending]);
 
   useEffect(() => {
     if (!pending?.orderId) return;
+    setOrder(null);
     let stopped = false;
     const poll = async () => {
       try {
@@ -57,7 +81,8 @@ export function CheckoutPage() {
         if (stopped) return;
         setOrder(detail);
         if (detail.status === "CONFIRMED") {
-          clearPendingCheckout();
+          clearPendingCheckout(detail.id);
+          setHeldCheckouts(readHeldCheckouts());
           setStep("success");
         } else if (detail.status === "CANCELLED" || detail.status === "EXPIRED") {
           setStep("payment");
@@ -84,6 +109,7 @@ export function CheckoutPage() {
     if (!pending || pending.items.length === 0) return;
     setBusy(true);
     setError("");
+    setPaymentError("");
     setStep("processing");
     try {
       const result = await createOrder(
@@ -103,10 +129,11 @@ export function CheckoutPage() {
       };
       writePendingCheckout(nextPending);
       setPending(nextPending);
+      setHeldCheckouts(readHeldCheckouts());
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo đơn hàng.");
+      setError(checkoutErrorMessage(err, "Không thể tạo đơn hàng."));
       setStep("payment");
     } finally {
       setBusy(false);
@@ -117,24 +144,54 @@ export function CheckoutPage() {
     if (!pending?.orderId) return;
     setBusy(true);
     setError("");
+    setPaymentError("");
     setStep("processing");
     try {
       const paymentIdempotencyKey = pending.paymentIdempotencyKey ?? newIdempotencyKey();
-      const result = await createPayment(pending.orderId, pending.paymentProvider, paymentIdempotencyKey);
-      const nextPending = {
+      const pendingPayment = {
         ...pending,
         paymentIdempotencyKey,
+      };
+
+      // Persist before the request so a retry/reload reuses the same operation key
+      // even when the backend succeeds but its response never reaches the browser.
+      writePendingCheckout(pendingPayment);
+      setPending(pendingPayment);
+      setHeldCheckouts(readHeldCheckouts());
+
+      const result = await createPayment(
+        pending.orderId,
+        pendingPayment.paymentProvider,
+        paymentIdempotencyKey,
+      );
+      const nextPending = {
+        ...pendingPayment,
         checkoutUrl: result.checkout_url,
         expiresAt: new Date(result.hold_expires_at).getTime(),
       };
       writePendingCheckout(nextPending);
       setPending(nextPending);
+      setHeldCheckouts(readHeldCheckouts());
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
       // Redirect in the current tab so browser popup policies cannot block checkout.
       window.location.assign(result.checkout_url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo yêu cầu thanh toán.");
+      if (getApiErrorCode(err) === "PAYMENT_PROVIDER_UNAVAILABLE") {
+        const failedProvider = pending.paymentProvider;
+        const nextFailed = failedProviders.includes(failedProvider)
+          ? failedProviders
+          : [...failedProviders, failedProvider];
+        setFailedProviders(nextFailed);
+        setPaymentError(
+          nextFailed.length === 2
+            ? "Các cổng thanh toán đang tạm thời không khả dụng. Vé vẫn được giữ, vui lòng thử lại."
+            : `${failedProvider === "MOMO" ? "MoMo" : "VNPAY"} đang tạm thời không khả dụng.`,
+        );
+      } else {
+        setPaymentError("");
+        setError(checkoutErrorMessage(err, "Không thể tạo yêu cầu thanh toán."));
+      }
       setStep("payment");
     } finally {
       setBusy(false);
@@ -149,7 +206,8 @@ export function CheckoutPage() {
       const detail = await getOrder(pending.orderId);
       setOrder(detail);
       if (detail.status === "CONFIRMED") {
-        clearPendingCheckout();
+        clearPendingCheckout(detail.id);
+        setHeldCheckouts(readHeldCheckouts());
         setStep("success");
       }
     } catch (err) {
@@ -160,11 +218,36 @@ export function CheckoutPage() {
   }
 
   function updateProvider(provider: PaymentProvider) {
-    if (!pending || pending.orderId) return;
-    const next = { ...pending, paymentProvider: provider };
-    writePendingCheckout(next);
+    if (!pending || pending.checkoutUrl) return;
+    const next = {
+      ...pending,
+      paymentProvider: provider,
+      paymentIdempotencyKey: undefined,
+    };
+    if (next.orderId) writePendingCheckout(next);
     setPending(next);
+    if (next.orderId) setHeldCheckouts(readHeldCheckouts());
+    setError("");
+    setPaymentError("");
   }
+
+  function selectHeldCheckout(checkout: PendingCheckout) {
+    writePendingCheckout(checkout);
+    setPending(checkout);
+    setOrder(null);
+    setTimeLeft(remainingSeconds(checkout.expiresAt));
+    setStep("payment");
+    setError("");
+    setPaymentError("");
+    setFailedProviders([]);
+  }
+
+  const otherHeldCheckouts = useMemo(
+    () => heldCheckouts.filter(
+      (checkout) => checkout.orderId !== pending?.orderId && checkout.expiresAt > Date.now(),
+    ),
+    [heldCheckouts, pending?.orderId, timeLeft],
+  );
 
   if (!pending) return null;
 
@@ -172,7 +255,7 @@ export function CheckoutPage() {
     return <SuccessState order={order} />;
   }
 
-  if (isExpired) {
+  if (isExpired && otherHeldCheckouts.length === 0) {
     return <ExpiredState concertId={pending.concertId} />;
   }
 
@@ -203,6 +286,28 @@ export function CheckoutPage() {
           </div>
         )}
 
+        {otherHeldCheckouts.length > 0 && (
+          <section className="mb-5 rounded-2xl border border-[#F5C842]/25 bg-[#F5C842]/10 p-4">
+            <p className="text-sm font-semibold text-[#F5C842]">
+              Bạn còn {otherHeldCheckouts.length} đơn vé đang giữ
+            </p>
+            <p className="mt-1 text-xs text-[#8585A0]">Mỗi đơn cần được thanh toán riêng trước khi hết thời gian giữ vé.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {otherHeldCheckouts.map((checkout) => (
+                <button
+                  key={checkout.orderId}
+                  type="button"
+                  onClick={() => selectHeldCheckout(checkout)}
+                  className="rounded-lg border border-[#F5C842]/25 bg-[#08080E]/40 px-3 py-2 text-left text-xs text-[#F0EDEB] hover:border-[#F5C842]/60"
+                >
+                  <span className="block font-semibold">{checkout.items.reduce((sum, item) => sum + item.quantity, 0)} vé · {formatMoney(checkout.totalPrice)}</span>
+                  <span className="mt-0.5 block text-[#8585A0]">Còn {formatCountdown(remainingSeconds(checkout.expiresAt))}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="mb-8 flex items-center gap-2">
           <StepDot active={step === "review"} done={step !== "review"} label="1. Xem lại" />
           <div className="h-px flex-1 bg-white/10" />
@@ -215,7 +320,7 @@ export function CheckoutPage() {
               <div className="flex items-center gap-3">
                 {pending.coverImageUrl && <img src={pending.coverImageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />}
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{pending.concertTitle}</p>
+                  <p className="break-words text-sm font-semibold">{pending.concertTitle}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">{pending.artistName}</p>
                   <p className="mt-1 text-xs text-[#8585A0]">{pending.venueName}</p>
                 </div>
@@ -228,7 +333,7 @@ export function CheckoutPage() {
                   <div key={item.ticketTypeId} className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2.5 w-2.5 rounded-sm" style={{ background: item.zoneColor }} />
-                      <span className="truncate text-sm">{item.ticketTypeName}</span>
+                      <span className="break-words text-sm">{item.ticketTypeName}</span>
                       <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-xs text-[#8585A0]">x{item.quantity}</span>
                     </div>
                     <span className="text-sm">{formatMoney(item.quantity * item.unitPrice)}</span>
@@ -245,7 +350,7 @@ export function CheckoutPage() {
               <div className="space-y-2">
                 <PaymentOption
                   active={pending.paymentProvider === "VNPAY"}
-                  disabled={Boolean(pending.orderId)}
+                  disabled={Boolean(pending.checkoutUrl)}
                   icon={<CreditCard className="h-5 w-5" />}
                   label="VNPAY"
                   sublabel="Thẻ ATM, QR, Internet Banking"
@@ -254,10 +359,10 @@ export function CheckoutPage() {
                 />
                 <PaymentOption
                   active={pending.paymentProvider === "MOMO"}
-                  disabled={Boolean(pending.orderId)}
+                  disabled={Boolean(pending.checkoutUrl)}
                   icon={<Smartphone className="h-5 w-5" />}
                   label="MoMo"
-                  sublabel="Ví điện tử MoMo sandbox"
+                  sublabel="Thanh toán qua ví điện tử MoMo"
                   tone="#A50064"
                   onClick={() => updateProvider("MOMO")}
                 />
@@ -269,7 +374,7 @@ export function CheckoutPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <StatusTile label="Đơn hàng" value={orderStatus ?? "HELD"} tone={statusTone(orderStatus)} />
                   <StatusTile label="Thanh toán" value={paymentStatus ?? "PENDING"} tone={statusTone(paymentStatus)} />
-                  <StatusTile label="Mã đơn" value={pending.orderId.slice(0, 8)} tone="#7B61FF" />
+                  <StatusTile label="Mã đơn" value={pending.orderId} tone="#7B61FF" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
                   {pending.checkoutUrl && (
@@ -316,10 +421,35 @@ export function CheckoutPage() {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  {!pending.checkoutUrl && (
+                  {!pending.checkoutUrl && paymentError && (
+                    <div className="rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 p-3">
+                      <p className="text-sm text-[#E8315B]">{paymentError}</p>
+                      <div className="mt-3 grid gap-2">
+                        {failedProviders.length === 1 && (
+                          <button
+                            type="button"
+                            onClick={() => updateProvider(failedProviders[0] === "MOMO" ? "VNPAY" : "MOMO")}
+                            disabled={busy}
+                            className="rounded-lg bg-[#F0EDEB] px-3 py-2.5 text-sm font-semibold text-[#111118] disabled:opacity-50"
+                          >
+                            Chuyển sang {failedProviders[0] === "MOMO" ? "VNPAY" : "MoMo"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={submitPayment}
+                          disabled={busy || isExpired}
+                          className="rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-[#F0EDEB] disabled:opacity-50"
+                        >
+                          {busy ? "Đang thử lại..." : `Thử lại ${providerLabel}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!pending.checkoutUrl && !paymentError && (
                     <button type="button" onClick={submitPayment} disabled={busy || isExpired} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:opacity-50">
                       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                      Gửi yêu cầu thanh toán qua {providerLabel}
+                      {failedProviders.includes(pending.paymentProvider) ? "Thử lại" : "Gửi yêu cầu thanh toán qua"} {providerLabel}
                     </button>
                   )}
                   <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">
@@ -415,7 +545,7 @@ function StatusTile({ label, value, tone }: { label: string; value: string; tone
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <p className="text-xs text-[#8585A0]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold" style={{ color: tone }}>{statusLabel(value)}</p>
+      <p className="mt-1 break-all text-sm font-semibold" style={{ color: tone }}>{statusLabel(value)}</p>
     </div>
   );
 }

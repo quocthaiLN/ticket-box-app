@@ -4,6 +4,7 @@ import {
   createOrder,
   expireOrder,
   getOrder,
+  getTicketQuota,
   listAdminOrders,
 } from './order.service.js';
 import type { AdminOrdersQuery, AppRequest, CreateOrderRequest } from './order.type.js';
@@ -30,6 +31,21 @@ export async function getOrderHandler(req: AppRequest, res: Response, next: Next
     const orderId = req.params['order_id'] as string;
 
     const data = await getOrder(orderId, userId);
+
+    res.set('Cache-Control', 'no-store').json({
+      data,
+      meta: { request_id: req.requestId },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getTicketQuotaHandler(req: AppRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = res.locals['auth']?.user_id as string;
+    const concertId = req.params['concert_id'] as string;
+    const data = await getTicketQuota(userId, concertId);
 
     res.set('Cache-Control', 'no-store').json({
       data,
