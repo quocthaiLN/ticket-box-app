@@ -1,5 +1,11 @@
 import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { getCatalogAssetUrl } from "@ticketbox/storage";
+import {
+  cacheSingleFlight,
+  catalogCacheKeys,
+  catalogCacheTtlSeconds,
+} from "@ticketbox/redis";
 import { Errors } from "../../shared/http/problem-details.js";
 import { buildConcertSlug } from "../../shared/utils/slug.js";
 import { CatalogRepository } from "./catalog.repository.js";
@@ -20,11 +26,20 @@ export class CatalogService {
   constructor(private readonly repository = new CatalogRepository()) {}
 
   listPublishedConcerts(query: ListConcertsQuery) {
-    return this.repository.listPublishedConcerts(query);
+    const key = catalogCacheKeys.list(hashQuery(query));
+    return cacheSingleFlight(
+      key,
+      () => this.repository.listPublishedConcerts(query),
+      catalogCacheTtlSeconds.list,
+    );
   }
 
   async getPublishedConcert(concertId: string) {
-    const concert = await this.repository.getPublishedConcertById(concertId);
+    const concert = await cacheSingleFlight(
+      catalogCacheKeys.concert(concertId),
+      () => this.repository.getPublishedConcertById(concertId),
+      catalogCacheTtlSeconds.concert,
+    );
 
     if (!concert) {
       throw this.notFound("concert", concertId);
@@ -34,7 +49,12 @@ export class CatalogService {
   }
 
   async getMetadata(concertId: string) {
-    const metadata = await this.repository.getConcertMetadata(concertId);
+    const metadata = await cacheSingleFlight(
+      catalogCacheKeys.metadata(concertId),
+      () => this.repository.getConcertMetadata(concertId),
+      // Dùng 3600s thay vì 86400s để an toàn hơn với invalidation hiện tại
+      3600,
+    );
 
     if (!metadata) {
       throw this.notFound("concert", concertId);
@@ -54,7 +74,11 @@ export class CatalogService {
   }
 
   async getSeatMap(concertId: string) {
-    const seatMap = await this.repository.getSeatMap(concertId);
+    const seatMap = await cacheSingleFlight(
+      catalogCacheKeys.seatMap(concertId),
+      () => this.repository.getSeatMap(concertId),
+      catalogCacheTtlSeconds.seatMap,
+    );
 
     if (!seatMap) {
       throw this.notFound("concert", concertId);
@@ -64,11 +88,19 @@ export class CatalogService {
   }
 
   listTicketTypes(concertId: string, includeClosed: boolean) {
-    return this.repository.listTicketTypes(concertId, includeClosed);
+    return cacheSingleFlight(
+      catalogCacheKeys.ticketTypes(concertId, includeClosed),
+      () => this.repository.listTicketTypes(concertId, includeClosed),
+      catalogCacheTtlSeconds.ticketTypes,
+    );
   }
 
   getInventory(concertId: string) {
-    return this.repository.getInventorySnapshot(concertId);
+    return cacheSingleFlight(
+      catalogCacheKeys.inventory(concertId),
+      () => this.repository.getInventorySnapshot(concertId),
+      catalogCacheTtlSeconds.inventory,
+    );
   }
 
   listVenues(query: ListConcertsQuery) {
@@ -290,4 +322,29 @@ function nullable(value: string | undefined): string | null | undefined {
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
+ * Serialize query object theo thứ tự key cố định rồi hash MD5 để tạo cache key ổn định.
+ * Tránh hai request cùng params nhưng khác thứ tự tạo ra hai cache key khác nhau.
+ */
+function hashQuery(query: Record<string, unknown>): string {
+  // Thứ tự key cố định: q, city, from, to, limit, cursor, sort
+  const ORDERED_KEYS = ["q", "city", "from", "to", "limit", "cursor", "sort"] as const;
+  const normalized: Record<string, unknown> = {};
+  for (const k of ORDERED_KEYS) {
+    if (query[k] !== undefined && query[k] !== null && query[k] !== "") {
+      normalized[k] = query[k];
+    }
+  }
+  // Thêm bất kỳ key nào không nằm trong danh sách trên (theo thứ tự alphabet)
+  for (const k of Object.keys(query).sort()) {
+    if (!(ORDERED_KEYS as readonly string[]).includes(k) && query[k] !== undefined) {
+      normalized[k] = query[k];
+    }
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(normalized))
+    .digest("hex")
+    .slice(0, 16);
 }

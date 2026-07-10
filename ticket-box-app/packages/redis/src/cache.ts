@@ -130,3 +130,70 @@ export async function getSetNX(
 
   return result === "OK";
 }
+
+/**
+ * In-process inflight map — mỗi entry là một Promise đang fetch DB cho key đó.
+ * Tận dụng single-threaded event loop của Node.js: Map.get/set giữa 2 điểm await
+ * là atomic, không cần distributed lock hay polling.
+ */
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+/**
+ * Single-flight cache wrapper — chống cache stampede bằng in-process Promise deduplication.
+ *
+ * Cơ chế hoạt động (tận dụng Node.js single-threaded event loop):
+ *   1. GET cache → hit → trả về ngay (zero overhead).
+ *   2. Cache miss → kiểm tra inflight map (atomic, không await ở giữa):
+ *      a. Đã có Promise đang chạy → await Promise đó → đọc lại cache → trả về.
+ *         Không gọi DB thêm lần nào. Không poll, không delay nhân tạo.
+ *      b. Chưa có → tạo Promise mới, đăng ký vào map → fetch DB → SET cache → return.
+ *   3. Nếu Promise đang chạy gặp lỗi (DB down) → waiter tự fetch DB trực tiếp.
+ *
+ * Lưu ý:
+ * - Dedup chỉ trong phạm vi 1 process. Nếu scale nhiều instance, mỗi instance
+ *   vẫn có thể cùng lúc đập DB một lần — chấp nhận được so với N×VU requests.
+ * - Redis vẫn được dùng để lưu cache data (GET/SET), chỉ bỏ distributed lock.
+ *
+ * @param key        Cache key chính.
+ * @param fetcher    Hàm fetch dữ liệu từ DB khi cache miss.
+ * @param ttlSeconds TTL của cache data (giây). Default 300.
+ */
+export async function cacheSingleFlight<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
+): Promise<T> {
+  // ── Bước 1: Thử lấy từ cache ──────────────────────────────────────────────
+  const cached = await cacheGet<T>(key);
+  if (cached !== null) return cached;
+
+  // ── Bước 2: Kiểm tra inflight (ATOMIC — không có await giữa get và set) ───
+  // Node.js single-threaded: giữa dòng này và inflightRequests.set() bên dưới,
+  // không có code nào khác chạy xen vào, nên tuyệt đối an toàn.
+  const existing = inflightRequests.get(key) as Promise<T> | undefined;
+
+  if (existing) {
+    // ── 2a. Đã có request đang fetch — chờ nó xong rồi lấy từ cache ─────────
+    await existing.catch(() => {
+      // Nếu request đang chạy bị lỗi, bỏ qua — sẽ tự fetch ở bước 2b
+    });
+    const retried = await cacheGet<T>(key);
+    if (retried !== null) return retried;
+    // Vẫn miss (parallel request thất bại) → tiếp tục tạo request mới ở bước 2b
+  }
+
+  // ── 2b. Chưa có (hoặc parallel request vừa thất bại) — tạo Promise mới ────
+  const promise = (async (): Promise<T> => {
+    const fresh = await fetcher();
+    await cacheSet(key, fresh, ttlSeconds);
+    return fresh;
+  })();
+
+  // Đăng ký vào map TRƯỚC khi await bất kỳ điều gì (atomic với get ở trên)
+  inflightRequests.set(key, promise);
+
+  // Dọn map khi promise xong (success hoặc error) — fire-and-forget
+  void promise.finally(() => inflightRequests.delete(key));
+
+  return promise;
+}

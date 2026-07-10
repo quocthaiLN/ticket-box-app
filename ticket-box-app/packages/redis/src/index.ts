@@ -9,6 +9,7 @@ export {
   cacheDelete,
   cacheDeletePattern,
   cacheAside,
+  cacheSingleFlight,
   getSetNX,
 } from "./cache.js";
 export {

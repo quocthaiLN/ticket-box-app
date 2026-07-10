@@ -38,15 +38,22 @@ export async function invalidateConcertCache(concertId: string): Promise<void> {
 }
 
 export async function invalidateSeatMapCache(concertId: string): Promise<void> {
-  await cacheDelete(catalogCacheKeys.seatMap(concertId)).catch((err) =>
+  // Xóa cả metadata vì metadata chứa seat_zones
+  await Promise.allSettled([
+    cacheDelete(catalogCacheKeys.seatMap(concertId)),
+    cacheDelete(catalogCacheKeys.metadata(concertId)),
+  ]).catch((err) =>
     console.error("[catalog-cache] seat map invalidation error:", err),
   );
 }
 
 export async function invalidateTicketTypeCache(concertId: string): Promise<void> {
+  // Xóa thêm metadata (chứa ticket_types) và catalog:list:* (price range lấy từ ticket types)
   await Promise.allSettled([
     cacheDelete(catalogCacheKeys.ticketTypes(concertId, false)),
     cacheDelete(catalogCacheKeys.ticketTypes(concertId, true)),
     cacheDelete(catalogCacheKeys.inventory(concertId)),
+    cacheDelete(catalogCacheKeys.metadata(concertId)),
+    cacheDeletePattern("catalog:list:*"),
   ]);
 }
