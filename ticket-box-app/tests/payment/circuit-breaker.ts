@@ -41,8 +41,10 @@ type OrderData = { orderId: string; token: string };
 type SetupData = { orders: OrderData[]; runId: string };
 
 export function setup(): SetupData {
-  if (totalIterations < 12) {
-    fail(`PAYMENT_CIRCUIT_TOTAL_ITERATIONS (${totalIterations}) phải ít nhất là 12.`);
+  // Cần đủ iterations cho: failureThreshold lỗi + vài OPEN + 2 cooldown probe + 3 normal
+  const minIterations = failureThreshold + 7 + 3;
+  if (totalIterations < minIterations) {
+    fail(`PAYMENT_CIRCUIT_TOTAL_ITERATIONS (${totalIterations}) phải ít nhất là ${minIterations} khi failureThreshold=${failureThreshold}.`);
   }
   if (failureThreshold < 1 || failureThreshold > 10) {
     fail(`PAYMENT_CIRCUIT_FAILURE_THRESHOLD (${failureThreshold}) phải từ 1 đến 10.`);
@@ -120,6 +122,11 @@ export function setup(): SetupData {
   return { orders, runId };
 }
 
+// Các mốc iteration dùng computed position thay vì magic number,
+// để tự động điều chỉnh theo failureThreshold.
+const ITER_FIRST_COOLDOWN = failureThreshold + 5;  // Bước chờ cooldown lần 1 (probe lỗi)
+const ITER_RECOVERY     = failureThreshold + 6;  // Bước reset mock + chờ cooldown lần 2 (probe ok)
+
 export default function (data: SetupData): void {
   const iteration = __ITER;
   const orderInfo = data.orders[iteration];
@@ -128,18 +135,16 @@ export default function (data: SetupData): void {
     fail(`Iteration ${iteration} không tìm thấy thông tin order.`);
   }
 
-  console.log(`[Iteration ${iteration + 1}/${totalIterations}]`);
+  console.log(`[Iteration ${iteration + 1}/${totalIterations}] (failureThreshold=${failureThreshold}, firstCooldown@${ITER_FIRST_COOLDOWN}, recovery@${ITER_RECOVERY})`);
 
-  // Thực hiện các kịch bản dựa theo chỉ số iteration:
-
-  if (iteration === 10) {
-    // KỊCH BẢN CB-1: Chờ cooldown để OPEN -> HALF_OPEN
-    console.log(`Waiting ${cooldownSeconds} seconds (cooldown) to allow circuit to transition to HALF_OPEN...`);
+  if (iteration === ITER_FIRST_COOLDOWN) {
+    // KỊCH BẢN CB-1: Chờ cooldown để OPEN -> HALF_OPEN, probe vẫn lỗi -> OPEN lại
+    console.log(`Waiting ${cooldownSeconds}s (cooldown) to allow circuit to transition to HALF_OPEN...`);
     sleep(cooldownSeconds);
   }
 
-  if (iteration === 11) {
-    // KỊCH BẢN CB-2: Khôi phục cổng MOMO hoạt động lại bình thường
+  if (iteration === ITER_RECOVERY) {
+    // KỊCH BẢN CB-2: Reset MoMo mock + chờ cooldown, probe thành công -> CLOSED
     console.log(`Rescuing MOMO: Setting MOMO mock mode back to '${recoveryMode}'...`);
     const recoveryRes = http.post(
       `${MOMO_MOCK_CONTROL_URL}/__control/momo`,
@@ -149,8 +154,7 @@ export default function (data: SetupData): void {
     if (recoveryRes.status !== 200) {
       fail(`Không thể khôi phục MOMO mock: HTTP ${recoveryRes.status}`);
     }
-    // Chờ cooldown tiếp theo trước khi gọi request khôi phục mạch
-    console.log(`Waiting ${cooldownSeconds} seconds (cooldown) to allow transition to HALF_OPEN for recovery...`);
+    console.log(`Waiting ${cooldownSeconds}s (cooldown) to allow HALF_OPEN for recovery...`);
     sleep(cooldownSeconds);
   }
 
@@ -181,42 +185,43 @@ export default function (data: SetupData): void {
   console.log(`Request Status: ${response.status} | Circuit Breaker State: ${cbState}`);
 
   if (iteration < failureThreshold - 1) {
-    // Các lỗi trước ngưỡng chưa mở mạch.
+    // Các lỗi trước ngưỡng: lỗi nhưng CB vẫn CLOSED.
     check(response, {
-      "Request trước ngưỡng trả PAYMENT_PROVIDER_UNAVAILABLE": (res) =>
+      [`[i=${iteration+1}] Request trước ngưỡng trả 503 PAYMENT_PROVIDER_UNAVAILABLE`]: (res) =>
         res.status === 503 && (res.json() as { code: string }).code === "PAYMENT_PROVIDER_UNAVAILABLE",
-      "Circuit Breaker vẫn ở trạng thái CLOSED": () => cbState === "CLOSED",
+      [`[i=${iteration+1}] Circuit Breaker vẫn CLOSED`]: () => cbState === "CLOSED",
     });
   } else if (iteration === failureThreshold - 1) {
-    // Request đạt ngưỡng sẽ mở mạch ngay sau lỗi.
+    // Lỗi đạt ngưỡng: CB mở ngay sau request này.
     check(response, {
-      "Request đạt ngưỡng trả status 503": (res) => res.status === 503,
-      "Circuit Breaker mở khi đủ ngưỡng lỗi": () => cbState === "OPEN",
+      [`[i=${iteration+1}] Request đạt ngưỡng trả 503`]: (res) => res.status === 503,
+      [`[i=${iteration+1}] Circuit Breaker MỞ (OPEN)`]: () => cbState === "OPEN",
     });
-  } else if (iteration >= failureThreshold && iteration <= 9) {
-    // Các request tiếp theo bị circuit OPEN chặn ngay.
+  } else if (iteration >= failureThreshold && iteration < ITER_FIRST_COOLDOWN) {
+    // CB đang OPEN: bị chặn ngay, không gọi MoMo.
     check(response, {
-      "Request sau ngưỡng bị chặn ngay lập tức (status 503)": (res) => res.status === 503,
-      "Mã code lỗi đúng Circuit Open": (res) => (res.json() as { code: string }).code === "PAYMENT_PROVIDER_UNAVAILABLE",
-      "Circuit Breaker đã chuyển sang trạng thái OPEN": () => cbState === "OPEN",
+      [`[i=${iteration+1}] CB OPEN chặn ngay (503)`]: (res) => res.status === 503,
+      [`[i=${iteration+1}] Mã lỗi đúng PAYMENT_PROVIDER_UNAVAILABLE`]: (res) =>
+        (res.json() as { code: string }).code === "PAYMENT_PROVIDER_UNAVAILABLE",
+      [`[i=${iteration+1}] Circuit Breaker vẫn OPEN`]: () => cbState === "OPEN",
     });
-  } else if (iteration === 10) {
-    // Request 11: HALF_OPEN probe vẫn lỗi nên quay lại OPEN.
+  } else if (iteration === ITER_FIRST_COOLDOWN) {
+    // Probe HALF_OPEN thất bại (MoMo vẫn lỗi) -> quay OPEN.
     check(response, {
-      "Request thăm dò ở HALF_OPEN thất bại (status >= 400)": (res) => res.status >= 400,
-      "Circuit Breaker quay trở lại OPEN ngay lập tức": () => cbState === "OPEN",
+      [`[i=${iteration+1}] Probe HALF_OPEN thất bại (>= 400)`]: (res) => res.status >= 400,
+      [`[i=${iteration+1}] CB quay lại OPEN ngay`]: () => cbState === "OPEN",
     });
-  } else if (iteration === 11) {
-    // Request 12: MoMo đã hồi phục, HALF_OPEN probe thành công và đóng mạch.
+  } else if (iteration === ITER_RECOVERY) {
+    // Probe HALF_OPEN thành công (MoMo đã hồi phục) -> CLOSED.
     check(response, {
-      "Request thăm dò khi VNPAY hồi phục thành công (status 201)": (res) => res.status === 201,
-      "Circuit Breaker được khôi phục về CLOSED": () => cbState === "CLOSED",
+      [`[i=${iteration+1}] Probe HALF_OPEN thành công (201)`]: (res) => res.status === 201,
+      [`[i=${iteration+1}] Circuit Breaker đóng lại (CLOSED)`]: () => cbState === "CLOSED",
     });
   } else {
-    // Các requests còn lại chạy bình thường thành công
+    // Các request bình thường sau khi CB đóng.
     check(response, {
-      "Các request sau hoạt động ổn định (status 201)": (res) => res.status === 201,
-      "Circuit Breaker duy trì CLOSED": () => cbState === "CLOSED",
+      [`[i=${iteration+1}] Hoạt động ổn định (201)`]: (res) => res.status === 201,
+      [`[i=${iteration+1}] Circuit Breaker duy trì CLOSED`]: () => cbState === "CLOSED",
     });
   }
 }

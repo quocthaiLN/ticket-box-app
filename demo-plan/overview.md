@@ -10,6 +10,7 @@
 # Danh sách 
 
 ### Demo functional requirement
+Note: Khi demo phần functional requirment này không cần chạy mock payment
 #### THÁI
 #### 1. Khán giả đăng ký OTP, đăng nhập và điều hướng mua vé - Thái
 #### 2. Khán giả khám phá catalog concert public
@@ -46,11 +47,20 @@
 ### Demo non-function requirment
 
 #### 80k request xem thông tin concert
+- catalog.md
+- demo tránh botspam
+- demo ko tránh botspam
 
 #### 80k user đặt vé đảm bảo ko sập + Giới hạn vé per-user khó enforce dưới tải cao + Ko over sell
+- order.md
+- demo tránh botspam
+- demo ko tránh botspam
 
 #### Cổng thanh toán lỗi
+- payment.md
 
 #### Soát vé Offline
+- checkin.md
 
 #### Xử lý dữ liệu lỗi của file danh sách khách mời CSV
+- guest-list.md

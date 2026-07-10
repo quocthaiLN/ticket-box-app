@@ -39,7 +39,7 @@ function getTrustedClientIp(req: Request): string {
   return normalizeIp(forwardedIp) || peerIp || "unknown";
 }
 
-function isOrderRateLimitWhitelisted(req: Request): boolean {
+function isLoadTestRateLimitWhitelisted(req: Request): boolean {
   if (!env.order.rateLimitWhitelistEnabled) return false;
 
   const sourceIp = getTrustedClientIp(req);
@@ -136,7 +136,7 @@ export const orderRateLimit = rateLimit({
   name: "orders",
   limit: 10,
   windowSec: 60,
-  skipFn: (req) => isOrderRateLimitWhitelisted(req),
+  skipFn: (req) => isLoadTestRateLimitWhitelisted(req),
 });
 
 /** Giới hạn webhook: 60 req / 60s per IP — chống webhook flood */
@@ -154,6 +154,7 @@ export const publicReadRateLimit = rateLimit({
   name: "public-read",
   limit: 200,
   windowSec: 60,
+  skipFn: (req) => isLoadTestRateLimitWhitelisted(req),
   keyFn: (req) => {
     return `ip:${getTrustedClientIp(req)}`;
   },
