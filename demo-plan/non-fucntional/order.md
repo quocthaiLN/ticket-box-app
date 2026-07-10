@@ -52,6 +52,7 @@ npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 docker exec -i ticketbox-redis redis-cli flushall
 npm run db:seed
 npm run generate:tokens -w @ticketbox/tests
+npm run db:studio
 ```
 
 ### Bước 2: Cấu hình server

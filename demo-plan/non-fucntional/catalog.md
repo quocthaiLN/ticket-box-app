@@ -19,6 +19,7 @@ Whitelist này áp dụng cho cả order load test và catalog public read trong
 npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 docker exec -i ticketbox-redis redis-cli flushall
 npm run db:seed
+npm run db:studio
 ```
 
 Catalog test không cần `tokens.json` vì request chưa đăng nhập.
