@@ -8,6 +8,7 @@ import {
   Prisma,
 } from "@ticketbox/database";
 import { Errors } from "../../shared/http/problem-details.js";
+import { verifyQrSignature } from "../tickets/ticket.qr.js";
 import type {
   OfflineSyncItemRequest,
   OfflineSyncItemStatus,
@@ -31,6 +32,8 @@ type ItemProcessResult = {
   message: string;
   ticket_id?: string | null;
   guest_id?: string | null;
+  error_code?: string | null;
+  errorCode?: string | null;
 };
 
 type GuestRow = {
@@ -145,9 +148,10 @@ async function getOrCreateBatch(input: OfflineSyncRequest): Promise<BatchContext
     throw Errors.invalidOfflineBatch();
   }
 
+  const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
   const device = await prisma.checkinDevice.findFirst({
     where: {
-      id: input.device_id,
+      ...(isUuid(input.device_id) ? { id: input.device_id } : { deviceCode: input.device_id }),
       concertId,
       gateId,
       status: DeviceStatus.ACTIVE,
@@ -163,7 +167,7 @@ async function getOrCreateBatch(input: OfflineSyncRequest): Promise<BatchContext
   const batch = await prisma.offlineCheckinBatch.create({
     data: {
       batchToken: input.batch_id,
-      deviceId: input.device_id,
+      deviceId: device.id,
       staffId: resolveStaffId(input.staff_user_id, device.staffId),
       concertId,
       gateId,
@@ -194,6 +198,8 @@ async function replayBatch(batch: BatchContext): Promise<OfflineSyncResponse> {
     message: row.errorMessage ?? row.errorCode ?? row.result,
     ticket_id: row.ticketId,
     guest_id: row.guestId,
+    error_code: row.errorCode,
+    errorCode: row.errorCode,
   }));
 
   return {
@@ -210,11 +216,47 @@ async function processTicketItem(
   item: OfflineSyncItemRequest,
 ): Promise<ItemProcessResult> {
   const scannedAt = new Date(item.scanned_at);
-  const qrTokenHash = item.qr_payload_hash ?? item.qr_token ?? item.ticket_code;
+  let qrTokenHash = item.qr_payload_hash ?? item.qr_token ?? item.ticket_code;
+  let ticketId = item.ticket_id;
+
+  // Verify signature if qr_token is a JSON payload
+  let payload: Record<string, unknown> | undefined;
+  if (item.qr_token) {
+    try {
+      const parsed = JSON.parse(item.qr_token);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        payload = parsed as Record<string, unknown>;
+      }
+    } catch {}
+  }
+
+  const signature = payload
+    ? ((payload.qr_signature ?? payload.qrSignature) as string | undefined)
+    : undefined;
+
+  if (payload && signature) {
+    if (!verifyQrSignature(payload, signature)) {
+      return recordOfflineItem(batch, item, {
+        status: "INVALID_TICKET",
+        message: "QR signature is invalid.",
+        qrTokenHash,
+        errorCode: "QR_SIGNATURE_INVALID",
+      });
+    }
+    // Override with verified payload values to ensure correctness and prevent tampering
+    const verifiedToken = (payload.qr_token ?? payload.qrToken) as string | undefined;
+    if (verifiedToken) {
+      qrTokenHash = verifiedToken;
+    }
+    const verifiedTicketId = (payload.ticket_id ?? payload.ticketId) as string | undefined;
+    if (verifiedTicketId) {
+      ticketId = verifiedTicketId;
+    }
+  }
 
   try {
     const ticket = await checkInTicketAtGate({
-      ticketId: item.ticket_id,
+      ticketId,
       qrTokenHash,
       concertId: batch.concertId,
       gateId: batch.gateId,
@@ -468,6 +510,8 @@ async function recordOfflineItemTx(
     message: result.message,
     ticket_id: row.ticketId,
     guest_id: row.guestId,
+    error_code: row.errorCode ?? result.errorCode,
+    errorCode: row.errorCode ?? result.errorCode,
   };
 }
 

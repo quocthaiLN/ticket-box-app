@@ -141,14 +141,16 @@ export type OfflineSyncResponse = {
   status: "PENDING" | "SYNCING" | "DONE" | "FAILED";
   accepted_item_count: number;
   conflict_item_count: number;
-  results: Array<{
-    client_item_id: string;
-    status: OfflineSyncItemStatus;
-    message: string;
-    ticket_id?: string | null;
-    guest_id?: string | null;
-  }>;
-};
+    results: Array<{
+      client_item_id: string;
+      status: OfflineSyncItemStatus;
+      message: string;
+      ticket_id?: string | null;
+      guest_id?: string | null;
+      error_code?: string | null;
+      errorCode?: string | null;
+    }>;
+  };
 
 export type OfflineBatchResponse = {
   batch_id: string;
