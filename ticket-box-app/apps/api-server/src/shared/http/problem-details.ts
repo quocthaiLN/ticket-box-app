@@ -9,7 +9,10 @@ export type ProblemDetails = {
 };
 
 export class ApiError extends Error {
-  constructor(public problem: Omit<ProblemDetails, "request_id">) {
+  constructor(
+    public problem: Omit<ProblemDetails, "request_id">,
+    public headers: Record<string, string> = {},
+  ) {
     super(problem.detail);
   }
 }

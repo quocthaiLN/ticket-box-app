@@ -3,6 +3,8 @@ import type { NextFunction, Request, Response } from "express";
 import {
   getIdempotencyResponse,
   setIdempotencyResponse,
+  acquireIdempotencyClaim,
+  releaseIdempotencyClaim,
 } from "@ticketbox/redis";
 import { Errors } from "../http/problem-details.js";
 
@@ -49,6 +51,19 @@ export function idempotencyMiddleware(scope: string) {
         return;
       }
 
+      const claimToken = await acquireIdempotencyClaim(scopedKey);
+      if (claimToken === null) {
+        next(Errors.idempotencyInProgress());
+        return;
+      }
+
+      let claimReleased = false;
+      const releaseClaim = (): void => {
+        if (!claimToken || claimReleased) return;
+        claimReleased = true;
+        void releaseIdempotencyClaim(scopedKey, claimToken);
+      };
+
       const originalJson = res.json.bind(res);
       res.json = (body: unknown): Response => {
         if (res.statusCode < 400) {
@@ -56,7 +71,9 @@ export function idempotencyMiddleware(scope: string) {
             status: res.statusCode,
             body,
             created_at: new Date().toISOString(),
-          }).catch(() => { });
+          }).finally(releaseClaim);
+        } else {
+          releaseClaim();
         }
         return originalJson(body);
       };

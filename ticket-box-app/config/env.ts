@@ -101,6 +101,20 @@ export const env = {
       .split(",")
       .map((ip) => ip.trim())
       .filter(Boolean),
+    admissionEnabled:
+      process.env["ORDER_ADMISSION_ENABLED"] !== "false",
+    admissionConcurrencyPerConcert: Math.max(
+      1,
+      Number(process.env["ORDER_ADMISSION_CONCURRENCY_PER_CONCERT"] ?? 10),
+    ),
+    admissionLeaseMs: Math.max(
+      1_000,
+      Number(process.env["ORDER_ADMISSION_LEASE_MS"] ?? 60_000),
+    ),
+    admissionRetryAfterSeconds: Math.max(
+      1,
+      Number(process.env["ORDER_ADMISSION_RETRY_AFTER_SECONDS"] ?? 1),
+    ),
   },
 
   // Worker — job dọn dẹp đơn giữ chỗ hết hạn (expire-holds)

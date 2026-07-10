@@ -48,6 +48,7 @@ const createdOrders = new Counter("orders_created");
 const rejectedOrders = new Counter("orders_rejected");
 const soldOutOrders = new Counter("orders_sold_out");
 const rateLimitedOrders = new Counter("orders_rate_limited");
+const capacityLimitedOrders = new Counter("orders_capacity_limited");
 const invalidOrders = new Counter("orders_invalid");
 const systemErrors = new Counter("orders_system_errors");
 const requestedTickets = new Counter("tickets_requested");
@@ -254,22 +255,28 @@ export default function ({ tokens }: SetupData): void {
   const created = response.status === 201;
   const code = responseCode(response);
   const soldOut = response.status === 409 && code === "TICKET_SOLD_OUT";
-  const rateLimited = response.status === 429;
+  const capacityLimited =
+    response.status === 429 && code === "ORDER_CAPACITY_REACHED";
+  const rateLimited = response.status === 429 && !capacityLimited;
   const systemError = response.status >= 500;
-  const invalid = !created && !soldOut && !rateLimited && !systemError;
-  const expected = created || soldOut;
+  const invalid =
+    !created && !soldOut && !capacityLimited && !rateLimited && !systemError;
+  // Admission control là backpressure có chủ đích trong burst test, không phải
+  // lỗi database. Theo dõi bằng metric riêng thay vì gộp vào 429 rate-limit.
+  const expected = created || soldOut || capacityLimited;
 
   createdOrders.add(created ? 1 : 0);
   rejectedOrders.add(created ? 0 : 1);
   soldOutOrders.add(soldOut ? 1 : 0);
   rateLimitedOrders.add(rateLimited ? 1 : 0);
+  capacityLimitedOrders.add(capacityLimited ? 1 : 0);
   invalidOrders.add(invalid ? 1 : 0);
   systemErrors.add(systemError ? 1 : 0);
   reservedTickets.add(created ? totalQuantity : 0);
   unexpectedResponses.add(!expected);
 
   check(response, {
-    "kết quả hợp lệ (201 hoặc sold out)": () => expected,
+    "kết quả hợp lệ (201, sold out hoặc backpressure)": () => expected,
     "response có order_id": (res) => {
       if (!created) return true;
       try {

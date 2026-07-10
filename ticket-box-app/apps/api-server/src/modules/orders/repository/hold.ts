@@ -11,29 +11,6 @@ import { withSerializableRetry } from "./serializable-retry.js";
 // orders.createOrderHeld. Caller chỉ là wrapper mỏng, map typed error sang HTTP.
 // ---------------------------------------------------------------------------
 
-type UserTicketCounterRow = {
-  heldQuantity: number;
-  paidQuantity: number;
-};
-
-type ReservedInventoryRow = {
-  availableQuantityAfter: number;
-};
-
-type HeldOrderTicketTypeRow = {
-  id: string;
-  concertId: string;
-  totalQuantity: number;
-  heldQuantity: number;
-  soldQuantity: number;
-  maxPerUser: number;
-  price: string;
-  currency: string;
-  saleStartAt: Date;
-  saleEndAt: Date;
-  status: string;
-};
-
 export type InventoryReservationErrorCode =
   | "INVALID_QUANTITY"
   | "INVALID_EXPIRATION"
@@ -90,6 +67,8 @@ export type CreateHeldOrderResult = {
   items: CreateHeldOrderItemResult[];
 };
 
+type QueryClient = Pick<PrismaClient, "$queryRaw">;
+
 // ---------------------------------------------------------------------------
 // Kết quả CTE cho trường hợp N=1 ticket type.
 // ---------------------------------------------------------------------------
@@ -107,12 +86,36 @@ type SingleItemCteRow = {
   currency: string | null;
 };
 
+type MultiItemCteResultItem = {
+  orderItemId: string;
+  ticketTypeId: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+  availableQuantityAfter: number;
+};
+
+type MultiItemCteRow = {
+  orderId: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  totalAmount: string | null;
+  currency: string | null;
+  itemCount: bigint;
+  typeCount: bigint;
+  invalidSaleCount: bigint;
+  invalidWindowCount: bigint;
+  counterCount: bigint;
+  reservedCount: bigint;
+  items: MultiItemCteResultItem[];
+};
+
 // ---------------------------------------------------------------------------
 // Tạo order + giữ vé bằng 1 CTE duy nhất cho N=1 ticket type.
 // Giảm 6 round-trip tuần tự xuống còn 1 round-trip.
 // ---------------------------------------------------------------------------
 async function createHeldOrderSingleItem(
-  tx: Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0],
+  tx: QueryClient,
   input: CreateHeldOrderInput,
   item: CreateHeldOrderItemInput,
   now: Date,
@@ -311,233 +314,213 @@ async function createHeldOrderSingleItem(
   };
 }
 
+
 // ---------------------------------------------------------------------------
-// Fallback: luồng tuần tự gốc cho N > 1 ticket type.
+// N > 1 ticket type: một DB round-trip. Tất cả hot row được lock theo UUID,
+// sau đó quota, order, inventory và order item được xử lý trong cùng một CTE.
+// Nếu một bước không đủ số item, caller ném lỗi để rollback toàn transaction.
 // ---------------------------------------------------------------------------
-async function createHeldOrderMultiItem(
-  tx: Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0],
+async function createHeldOrderMultiItemCte(
+  tx: QueryClient,
   input: CreateHeldOrderInput,
   sortedItems: CreateHeldOrderItemInput[],
   now: Date,
 ): Promise<CreateHeldOrderResult> {
-  const ticketTypeIds = sortedItems.map((i) => i.ticketTypeId);
-
-  const ticketTypes = await tx.$queryRaw<HeldOrderTicketTypeRow[]>(Prisma.sql`
+  const serializedItems = JSON.stringify(sortedItems);
+  const rows = await tx.$queryRaw<MultiItemCteRow[]>(Prisma.sql`
+    WITH
+      input_items AS MATERIALIZED (
+        SELECT
+          item."ticketTypeId"::uuid AS ticket_type_id,
+          item.quantity::integer AS quantity
+        FROM jsonb_to_recordset(${serializedItems}::jsonb)
+          AS item("ticketTypeId" text, quantity integer)
+        ORDER BY item."ticketTypeId"::uuid
+      ),
+      locked_ticket_types AS MATERIALIZED (
+        SELECT
+          tt.id,
+          tt.concert_id,
+          tt.total_quantity,
+          tt.held_quantity,
+          tt.sold_quantity,
+          tt.max_per_user,
+          tt.price,
+          tt.currency,
+          tt.sale_start_at,
+          tt.sale_end_at,
+          tt.status
+        FROM ticket_types tt
+        JOIN input_items i ON i.ticket_type_id = tt.id
+        ORDER BY tt.id
+        FOR UPDATE OF tt
+      ),
+      validation AS (
+        SELECT
+          (SELECT COUNT(*) FROM input_items)::bigint AS item_count,
+          COUNT(*)::bigint AS type_count,
+          COUNT(*) FILTER (
+            WHERE concert_id <> ${input.concertId}::uuid
+               OR status <> ${TicketTypeStatus.ON_SALE}::ticket_type_status
+          )::bigint AS invalid_sale_count,
+          COUNT(*) FILTER (
+            WHERE sale_start_at > ${now} OR sale_end_at < ${now}
+          )::bigint AS invalid_window_count
+        FROM locked_ticket_types
+      ),
+      upsert_counter AS (
+        INSERT INTO user_ticket_type_counters (
+          user_id, ticket_type_id, held_quantity, paid_quantity
+        )
+        SELECT ${input.userId}::uuid, i.ticket_type_id, i.quantity, 0
+        FROM input_items i
+        JOIN locked_ticket_types tt ON tt.id = i.ticket_type_id
+        WHERE (SELECT item_count = type_count FROM validation)
+          AND (SELECT invalid_sale_count = 0 FROM validation)
+          AND (SELECT invalid_window_count = 0 FROM validation)
+          AND i.quantity <= tt.max_per_user
+        ON CONFLICT (user_id, ticket_type_id) DO UPDATE
+          SET held_quantity = user_ticket_type_counters.held_quantity + EXCLUDED.held_quantity
+          WHERE user_ticket_type_counters.held_quantity
+                  + user_ticket_type_counters.paid_quantity
+                  + EXCLUDED.held_quantity
+                <= (
+                  SELECT max_per_user
+                  FROM locked_ticket_types
+                  WHERE id = EXCLUDED.ticket_type_id
+                )
+        RETURNING ticket_type_id
+      ),
+      new_order AS (
+        INSERT INTO orders (
+          id, user_id, concert_id, idempotency_key, status,
+          hold_expires_at, total_amount, currency, created_at, updated_at
+        )
+        SELECT
+          gen_random_uuid(),
+          ${input.userId}::uuid,
+          ${input.concertId}::uuid,
+          ${input.idempotencyKey},
+          'HELD'::order_status,
+          ${input.holdExpiresAt},
+          SUM(tt.price * i.quantity),
+          MIN(tt.currency),
+          ${now},
+          ${now}
+        FROM input_items i
+        JOIN locked_ticket_types tt ON tt.id = i.ticket_type_id
+        HAVING (SELECT COUNT(*) FROM upsert_counter)
+                 = (SELECT item_count FROM validation)
+        RETURNING id, created_at, updated_at, total_amount, currency
+      ),
+      reserved AS (
+        UPDATE ticket_types tt
+        SET held_quantity = tt.held_quantity + i.quantity
+        FROM input_items i
+        WHERE tt.id = i.ticket_type_id
+          AND tt.concert_id = ${input.concertId}::uuid
+          AND tt.status = ${TicketTypeStatus.ON_SALE}::ticket_type_status
+          AND tt.sale_start_at <= ${now}
+          AND tt.sale_end_at >= ${now}
+          AND tt.total_quantity - tt.held_quantity - tt.sold_quantity >= i.quantity
+          AND EXISTS (SELECT 1 FROM new_order)
+        RETURNING
+          tt.id AS ticket_type_id,
+          tt.total_quantity - tt.held_quantity - tt.sold_quantity AS available_after
+      ),
+      new_order_items AS (
+        INSERT INTO order_items (
+          id, order_id, ticket_type_id, quantity, unit_price, line_total, created_at
+        )
+        SELECT
+          gen_random_uuid(),
+          (SELECT id FROM new_order),
+          i.ticket_type_id,
+          i.quantity,
+          tt.price,
+          tt.price * i.quantity,
+          ${now}
+        FROM input_items i
+        JOIN locked_ticket_types tt ON tt.id = i.ticket_type_id
+        WHERE (SELECT COUNT(*) FROM reserved)
+                = (SELECT item_count FROM validation)
+        RETURNING id, ticket_type_id, quantity, unit_price, line_total
+      )
     SELECT
-      id,
-      concert_id AS "concertId",
-      total_quantity AS "totalQuantity",
-      held_quantity AS "heldQuantity",
-      sold_quantity AS "soldQuantity",
-      max_per_user AS "maxPerUser",
-      price::text AS "price",
-      currency,
-      sale_start_at AS "saleStartAt",
-      sale_end_at AS "saleEndAt",
-      status::text AS "status"
-    FROM ticket_types
-    WHERE id = ANY(${ticketTypeIds}::uuid[])
-    ORDER BY id
+      (SELECT id FROM new_order) AS "orderId",
+      (SELECT created_at FROM new_order) AS "createdAt",
+      (SELECT updated_at FROM new_order) AS "updatedAt",
+      (SELECT total_amount::text FROM new_order) AS "totalAmount",
+      (SELECT currency FROM new_order) AS "currency",
+      v.item_count AS "itemCount",
+      v.type_count AS "typeCount",
+      v.invalid_sale_count AS "invalidSaleCount",
+      v.invalid_window_count AS "invalidWindowCount",
+      (SELECT COUNT(*) FROM upsert_counter)::bigint AS "counterCount",
+      (SELECT COUNT(*) FROM reserved)::bigint AS "reservedCount",
+      COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'orderItemId', oi.id,
+            'ticketTypeId', oi.ticket_type_id,
+            'quantity', oi.quantity,
+            'unitPrice', oi.unit_price::text,
+            'lineTotal', oi.line_total::text,
+            'availableQuantityAfter', r.available_after
+          )
+          ORDER BY oi.ticket_type_id
+        )
+        FROM new_order_items oi
+        JOIN reserved r ON r.ticket_type_id = oi.ticket_type_id
+      ), '[]'::jsonb) AS items
+    FROM validation v
   `);
 
-  if (ticketTypes.length !== ticketTypeIds.length) {
+  const row = rows[0];
+  const itemCount = Number(row.itemCount);
+
+  if (Number(row.typeCount) !== itemCount) {
     throw new InventoryReservationError(
       "TICKET_TYPE_NOT_FOUND",
       "One or more ticket types not found.",
     );
   }
-
-  const typeMap = new Map(ticketTypes.map((t) => [t.id, t]));
-
-  // Validate trạng thái, thời gian bán, và số lượng còn lại.
-  for (const item of sortedItems) {
-    const tt = typeMap.get(item.ticketTypeId)!;
-
-    if (tt.concertId !== input.concertId) {
-      throw new InventoryReservationError(
-        "TICKET_TYPE_NOT_ON_SALE",
-        `Ticket type ${item.ticketTypeId} does not belong to concert.`,
-      );
-    }
-    if (tt.status !== TicketTypeStatus.ON_SALE) {
-      throw new InventoryReservationError(
-        "TICKET_TYPE_NOT_ON_SALE",
-        `Ticket type ${item.ticketTypeId} is not on sale.`,
-      );
-    }
-    if (now < tt.saleStartAt || now > tt.saleEndAt) {
-      throw new InventoryReservationError(
-        "SALE_WINDOW_CLOSED",
-        `Ticket type ${item.ticketTypeId} is outside the sale window.`,
-      );
-    }
-
-    const available =
-      tt.totalQuantity - tt.heldQuantity - tt.soldQuantity;
-    if (available < item.quantity) {
-      throw new InventoryReservationError(
-        "INSUFFICIENT_INVENTORY",
-        `Not enough available tickets for type ${item.ticketTypeId}.`,
-      );
-    }
+  if (Number(row.invalidSaleCount) > 0) {
+    throw new InventoryReservationError(
+      "TICKET_TYPE_NOT_ON_SALE",
+      "One or more ticket types are not on sale for this concert.",
+    );
   }
-
-  // Tăng quota atomically. Mỗi user có counter riêng nên bước này không
-  // tạo hot row giữa các user khác nhau.
-  for (const item of sortedItems) {
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO user_ticket_type_counters (user_id, ticket_type_id, held_quantity, paid_quantity)
-      VALUES (${input.userId}::uuid, ${item.ticketTypeId}::uuid, 0, 0)
-      ON CONFLICT (user_id, ticket_type_id) DO NOTHING
-    `);
-
-    const tt = typeMap.get(item.ticketTypeId)!;
-    const counters = await tx.$queryRaw<UserTicketCounterRow[]>(Prisma.sql`
-      UPDATE user_ticket_type_counters
-      SET held_quantity = held_quantity + ${item.quantity}
-      WHERE user_id = ${input.userId}::uuid
-        AND ticket_type_id = ${item.ticketTypeId}::uuid
-        AND held_quantity + paid_quantity + ${item.quantity} <= ${tt.maxPerUser}
-      RETURNING
-        held_quantity AS "heldQuantity",
-        paid_quantity AS "paidQuantity"
-    `);
-
-    if (counters.length === 0) {
-      throw new InventoryReservationError(
-        "MAX_PER_USER_EXCEEDED",
-        `Purchase would exceed per-user limit for ticket type ${item.ticketTypeId}.`,
-      );
-    }
+  if (Number(row.invalidWindowCount) > 0) {
+    throw new InventoryReservationError(
+      "SALE_WINDOW_CLOSED",
+      "One or more ticket types are outside the sale window.",
+    );
   }
-
-  // Tổng tiền.
-  let totalAmount = new Prisma.Decimal(0);
-  for (const item of sortedItems) {
-    const tt = typeMap.get(item.ticketTypeId)!;
-    totalAmount = totalAmount.plus(
-      new Prisma.Decimal(tt.price).times(item.quantity),
+  if (Number(row.counterCount) !== itemCount) {
+    throw new InventoryReservationError(
+      "MAX_PER_USER_EXCEEDED",
+      "Purchase would exceed the per-user limit for one or more ticket types.",
+    );
+  }
+  if (Number(row.reservedCount) !== itemCount || !row.orderId) {
+    throw new InventoryReservationError(
+      "INSUFFICIENT_INVENTORY",
+      "Not enough available tickets for one or more ticket types.",
     );
   }
 
-  const currency = typeMap.get(sortedItems[0].ticketTypeId)!.currency;
-
-  // Tạo order.
-  const order = await tx.order.create({
-    data: {
-      userId: input.userId,
-      concertId: input.concertId,
-      idempotencyKey: input.idempotencyKey,
-      status: OrderStatus.HELD,
-      holdExpiresAt: input.holdExpiresAt,
-      totalAmount,
-      currency,
-    },
-  });
-
-  const items: CreateHeldOrderItemResult[] = [];
-
-  for (const item of sortedItems) {
-    const tt = typeMap.get(item.ticketTypeId)!;
-    const unitPrice = new Prisma.Decimal(tt.price);
-    const lineTotal = unitPrice.times(item.quantity);
-
-    const orderItem = await tx.orderItem.create({
-      data: {
-        orderId: order.id,
-        ticketTypeId: item.ticketTypeId,
-        quantity: item.quantity,
-        unitPrice,
-        lineTotal,
-      },
-    });
-
-    // Conditional UPDATE là điểm quyết định inventory. Ở READ COMMITTED,
-    // PostgreSQL sẽ chờ transaction đang giữ row kết thúc rồi đánh giá
-    // lại WHERE trên phiên bản mới nhất, nhờ đó không oversell và không
-    // tạo serialization failure 40001 như SELECT FOR UPDATE trước đây.
-    const reserved = await tx.$queryRaw<ReservedInventoryRow[]>(Prisma.sql`
-      UPDATE ticket_types
-      SET held_quantity = held_quantity + ${item.quantity}
-      WHERE id = ${item.ticketTypeId}::uuid
-        AND concert_id = ${input.concertId}::uuid
-        AND status = ${TicketTypeStatus.ON_SALE}::ticket_type_status
-        AND sale_start_at <= ${now}
-        AND sale_end_at >= ${now}
-        AND total_quantity - held_quantity - sold_quantity >= ${item.quantity}
-      RETURNING
-        total_quantity - held_quantity - sold_quantity AS "availableQuantityAfter"
-    `);
-
-    if (reserved.length === 0) {
-      // Initial validation đã phân loại not-found/status/window. Nếu row
-      // đổi trong lúc transaction chạy, đọc lại để giữ đúng API error;
-      // trường hợp thông thường ở flash sale là inventory vừa hết.
-      const [current] = await tx.$queryRaw<HeldOrderTicketTypeRow[]>(Prisma.sql`
-        SELECT
-          id,
-          concert_id AS "concertId",
-          total_quantity AS "totalQuantity",
-          held_quantity AS "heldQuantity",
-          sold_quantity AS "soldQuantity",
-          max_per_user AS "maxPerUser",
-          price::text AS "price",
-          currency,
-          sale_start_at AS "saleStartAt",
-          sale_end_at AS "saleEndAt",
-          status::text AS "status"
-        FROM ticket_types
-        WHERE id = ${item.ticketTypeId}::uuid
-      `);
-
-      if (!current) {
-        throw new InventoryReservationError(
-          "TICKET_TYPE_NOT_FOUND",
-          `Ticket type ${item.ticketTypeId} not found.`,
-        );
-      }
-      if (
-        current.concertId !== input.concertId ||
-        current.status !== TicketTypeStatus.ON_SALE
-      ) {
-        throw new InventoryReservationError(
-          "TICKET_TYPE_NOT_ON_SALE",
-          `Ticket type ${item.ticketTypeId} is not on sale.`,
-        );
-      }
-      if (now < current.saleStartAt || now > current.saleEndAt) {
-        throw new InventoryReservationError(
-          "SALE_WINDOW_CLOSED",
-          `Ticket type ${item.ticketTypeId} is outside the sale window.`,
-        );
-      }
-      throw new InventoryReservationError(
-        "INSUFFICIENT_INVENTORY",
-        `Not enough available tickets for type ${item.ticketTypeId}.`,
-      );
-    }
-
-    items.push({
-      orderItemId: orderItem.id,
-      ticketTypeId: item.ticketTypeId,
-      quantity: item.quantity,
-      unitPrice: unitPrice.toString(),
-      lineTotal: lineTotal.toString(),
-      availableQuantityAfter: reserved[0].availableQuantityAfter,
-    });
-  }
-
   return {
-    orderId: order.id,
-    userId: order.userId,
-    concertId: order.concertId,
-    status: order.status,
-    totalAmount: order.totalAmount.toString(),
-    currency: order.currency,
-    holdExpiresAt: order.holdExpiresAt!,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    items,
+    orderId: row.orderId,
+    userId: input.userId,
+    concertId: input.concertId,
+    status: OrderStatus.HELD,
+    totalAmount: row.totalAmount!,
+    currency: row.currency!,
+    holdExpiresAt: input.holdExpiresAt,
+    createdAt: row.createdAt!,
+    updatedAt: row.updatedAt!,
+    items: row.items,
   };
 }
 
@@ -581,29 +564,19 @@ export async function createHeldOrder(
     );
   }
 
-  // Sort để mọi transaction cập nhật nhiều ticket type theo cùng thứ tự.
+  // Sort để mọi statement cập nhật nhiều ticket type theo cùng thứ tự.
   const sortedItems = [...input.items].sort((a, b) =>
     a.ticketTypeId.localeCompare(b.ticketTypeId),
   );
 
-  return withSerializableRetry(() =>
-    db.$transaction(
-      async (tx) => {
-        // N=1: dùng đường CTE tối ưu (1 round-trip).
-        if (sortedItems.length === 1) {
-          return createHeldOrderSingleItem(tx, input, sortedItems[0], now);
-        }
-        // N>1: fallback về luồng tuần tự đã kiểm chứng.
-        return createHeldOrderMultiItem(tx, input, sortedItems, now);
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-        // Prisma mặc định chỉ chờ 2 giây để lấy transaction từ pool. Trong
-        // flash sale, transaction ngắn vẫn có thể phải xếp hàng; cho phép chờ
-        // có giới hạn thay vì biến queueing hợp lệ thành P2028/HTTP 500.
-        maxWait: 10_000,
-        timeout: 15_000,
-      },
-    ),
-  );
+  // Mỗi nhánh là đúng một data-modifying CTE. PostgreSQL tự chạy một SQL
+  // statement trong transaction nguyên tử, nên không bọc bằng Prisma
+  // interactive transaction: timer của nó tính cả thời gian chờ hot-row lock
+  // và từng gây P2028 dù câu SQL cuối cùng vẫn hoàn tất.
+  return withSerializableRetry(() => {
+    if (sortedItems.length === 1) {
+      return createHeldOrderSingleItem(db, input, sortedItems[0], now);
+    }
+    return createHeldOrderMultiItemCte(db, input, sortedItems, now);
+  });
 }

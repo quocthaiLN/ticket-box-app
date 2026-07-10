@@ -29,7 +29,7 @@ services:
     volumes:
       - ./tests:/tests
     environment:
-      - BASE_URL=http://100.108.205.81:3000/v1
+      - BASE_URL=http://host.docker.internal:3000/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
     entrypoint: [ "k6" ]

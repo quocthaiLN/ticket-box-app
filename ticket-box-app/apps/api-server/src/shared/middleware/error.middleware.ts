@@ -3,6 +3,9 @@ import { ApiError, problem } from "../http/problem-details.js";
 
 export const errorMiddleware: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ApiError) {
+    for (const [name, value] of Object.entries(err.headers)) {
+      res.setHeader(name, value);
+    }
     res
       .status(err.problem.status)
       .type("application/problem+json")

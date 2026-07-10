@@ -1,4 +1,9 @@
-import { cacheGet as get, cacheSet as set } from "@ticketbox/redis";
+import {
+  acquireSemaphore,
+  releaseSemaphore,
+  type SemaphoreLease,
+} from "@ticketbox/redis";
+import { env } from "@ticketbox/config";
 import { Prisma } from "@ticketbox/database";
 import {
   cancelOrderById,
@@ -21,9 +26,41 @@ import type {
   TicketQuotaResponse,
 } from "./order.type.js";
 
-const IDEMPOTENCY_TTL = 86400; // 24 hours
-const idempotencyCacheKey = (userId: string, key: string) =>
-  `idempotency:checkout:${userId}:${key}`;
+const orderAdmissionKey = (concertId: string) =>
+  `semaphore:orders:concert:${concertId}`;
+
+async function acquireOrderAdmission(concertId: string): Promise<SemaphoreLease | null> {
+  if (!env.order.admissionEnabled) return null;
+
+  const result = await acquireSemaphore(
+    orderAdmissionKey(concertId),
+    env.order.admissionConcurrencyPerConcert,
+    env.order.admissionLeaseMs,
+  );
+
+  if (result.status === "FULL") {
+    throw new ApiError(
+      {
+        title: "Order capacity reached",
+        status: 429,
+        code: "ORDER_CAPACITY_REACHED",
+        detail: `Too many orders are being processed for this concert. Retry after ${env.order.admissionRetryAfterSeconds} second(s).`,
+      },
+      { "Retry-After": String(env.order.admissionRetryAfterSeconds) },
+    );
+  }
+
+  if (result.status === "UNAVAILABLE") {
+    throw new ApiError({
+      title: "Order service unavailable",
+      status: 503,
+      code: "ORDER_ADMISSION_UNAVAILABLE",
+      detail: "Order admission control is temporarily unavailable.",
+    });
+  }
+
+  return result.lease;
+}
 
 // mapOrderWithDetailsToResponse dùng để chuyển dữ liệu đơn hàng lấy từ repository sang đúng cấu trúc API OrderDetailResponse.
 function mapOrderWithDetailsToResponse(
@@ -93,20 +130,9 @@ export async function createOrder(
   idempotencyKey: string,
 ): Promise<CreateOrderResponse> {
   const t0 = Date.now();
+  const admissionLease = await acquireOrderAdmission(req.concert_id);
 
-  // Trả lại kết quả cũ nếu yêu cầu cùng idempotency key đã được xử lý.
-  const cacheKey = idempotencyCacheKey(userId, idempotencyKey);
-  const cached = await get(cacheKey);
   const t1 = Date.now();
-
-  if (cached) {
-    console.log(JSON.stringify({
-      event: "createOrder",
-      cache_hit: true,
-      cache_lookup_ms: t1 - t0,
-    }));
-    return cached as CreateOrderResponse;
-  }
 
   // Khai báo kết quả của createOrder
   let orderResult: Awaited<ReturnType<typeof createOrderHeld>>;
@@ -121,7 +147,7 @@ export async function createOrder(
       err.code === "P2002" &&
       (err.meta?.target as string[] | undefined)?.includes("idempotency_key")
     ) {
-      const existingOrder = await getOrderByIdempotencyKey(idempotencyKey);
+      const existingOrder = await getOrderByIdempotencyKey(userId, idempotencyKey);
       if (!existingOrder) throw err;
 
       const details = await getOrderWithDetails(existingOrder.id);
@@ -142,11 +168,14 @@ export async function createOrder(
         })),
       };
 
-      await set(cacheKey, response, IDEMPOTENCY_TTL);
       return response;
     }
 
     throw err;
+  } finally {
+    if (admissionLease) {
+      await releaseSemaphore(admissionLease);
+    }
   }
 
   const { order, items } = orderResult;
@@ -168,17 +197,13 @@ export async function createOrder(
 
   const t2 = Date.now();
 
-  // Lưu response để các lần gửi lại cùng key không tạo đơn mới.
-  await set(cacheKey, response, IDEMPOTENCY_TTL);
-
   const t3 = Date.now();
 
   console.log(JSON.stringify({
     event: "createOrder",
-    cache_hit: false,
-    cache_lookup_ms: t1 - t0,
+    admission_ms: t1 - t0,
     tx_ms: t2 - t1,
-    cache_write_ms: t3 - t2,
+    response_map_ms: t3 - t2,
     total_ms: t3 - t0,
   }));
 

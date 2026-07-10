@@ -9,11 +9,8 @@ import {
   NotificationChannel,
   NotificationType,
 } from "@ticketbox/database";
-import { cacheDelete } from "@ticketbox/redis";
+import { cacheDelete, catalogCacheKeys } from "@ticketbox/redis";
 import { Errors } from "../../shared/http/problem-details.js";
-
-// Xóa cache tồn kho sau khi trạng thái giữ/bán vé thay đổi.
-const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
 // Các kiểu dữ liệu rút gọn cho từng truy vấn đọc.
 type OrderForRetryRow = {
@@ -209,7 +206,7 @@ export async function confirmOrderPayment(
   orderId: string,
 ): Promise<ConfirmOrderPaymentResult> {
   // Thu thập dữ liệu sau transaction để xóa cache và gửi notification.
-  let affectedTicketTypeIds: string[] = [];
+  let affectedConcertId: string | null = null;
   let issuedTickets: ConfirmOrderPaymentResult["issuedTickets"] = [];
   let issuedNotifications: ConfirmOrderPaymentResult["issuedNotifications"] =
     [];
@@ -405,7 +402,7 @@ export async function confirmOrderPayment(
       issuedTickets = createdTickets;
       issuedNotifications = createdNotifications;
       // Ghi nhận các loại vé bị thay đổi để xóa cache sau khi commit.
-      affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
+      affectedConcertId = items[0]?.concertId ?? null;
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -418,9 +415,9 @@ export async function confirmOrderPayment(
   );
 
   // Cache không được xóa thành công không làm rollback thanh toán đã commit.
-  await Promise.allSettled(
-    affectedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
-  );
+  if (affectedConcertId) {
+    await cacheDelete(catalogCacheKeys.inventory(affectedConcertId));
+  }
 
   return { issuedNotifications, issuedTickets };
 }
@@ -432,7 +429,7 @@ export async function failPayment(
   failureReason: string,
 ): Promise<void> {
   // Chỉ xóa cache cho các loại vé thực sự được giải phóng.
-  let affectedTicketTypeIds: string[] = [];
+  let affectedConcertId: string | null = null;
 
   await prisma.$transaction(
     async (tx) => {
@@ -458,10 +455,11 @@ export async function failPayment(
       // Khóa order đang HELD và lấy số lượng từng ticket type phải trả. Điều kiện
       // HELD tránh hủy nhầm order đã CONFIRMED hoặc đã bị cancel/expire trước đó.
       const items = await tx.$queryRaw<
-        Array<{ ticketTypeId: string; quantity: number }>
+        Array<{ concertId: string; ticketTypeId: string; quantity: number }>
       >(Prisma.sql`
       SELECT
         o.status::text AS "orderStatus",
+        o.concert_id AS "concertId",
         oi.ticket_type_id AS "ticketTypeId",
         oi.quantity
       FROM orders o
@@ -500,7 +498,7 @@ export async function failPayment(
       }
 
       // Chỉ lưu ticket type duy nhất; cache được xóa một lần cho mỗi loại vé.
-      affectedTicketTypeIds = [...new Set(items.map((i) => i.ticketTypeId))];
+      affectedConcertId = items[0]?.concertId ?? null;
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -512,7 +510,7 @@ export async function failPayment(
   );
 
   // Xóa cache tồn kho sau khi transaction giải phóng hold đã commit.
-  await Promise.allSettled(
-    affectedTicketTypeIds.map((id) => cacheDelete(inventoryCacheKey(id))),
-  );
+  if (affectedConcertId) {
+    await cacheDelete(catalogCacheKeys.inventory(affectedConcertId));
+  }
 }
