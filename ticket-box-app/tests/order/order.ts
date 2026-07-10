@@ -33,65 +33,15 @@ type TicketOption = {
   weight: number;
 };
 
-type ConcertOption = {
-  concertId: string;
-  weight: number;
-  tickets: TicketOption[];
-};
+const TARGET_CONCERT_ID = "00000000-0000-0000-0000-000000000201";
 
-// ID và max_per_user lấy từ packages/database/prisma/seed.mjs. Trọng số ưu
-// tiên GA/CAT và concert phổ biến, nhưng vẫn tạo traffic cho VIP/SVIP.
-// Riêng concert 201 có seed nhỏ để tạo nhánh sold-out có chủ đích.
-const concerts: ConcertOption[] = [
-  {
-    concertId: "00000000-0000-0000-0000-000000000201",
-    weight: 20,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000501", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000502", maxPerUser: 2, weight: 12 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000503", maxPerUser: 4, weight: 28 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000504", maxPerUser: 4, weight: 55 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000202",
-    weight: 45,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000506", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000507", maxPerUser: 4, weight: 12 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000508", maxPerUser: 4, weight: 23 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000509", maxPerUser: 6, weight: 25 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000510", maxPerUser: 6, weight: 35 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000203",
-    weight: 20,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000511", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000512", maxPerUser: 2, weight: 15 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000513", maxPerUser: 4, weight: 30 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000514", maxPerUser: 4, weight: 50 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000204",
-    weight: 3,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000516", maxPerUser: 2, weight: 10 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000517", maxPerUser: 2, weight: 30 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000518", maxPerUser: 4, weight: 60 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000205",
-    weight: 12,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000521", maxPerUser: 2, weight: 8 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000522", maxPerUser: 2, weight: 22 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000523", maxPerUser: 4, weight: 70 },
-    ],
-  },
+// ID và max_per_user lấy từ packages/database/prisma/seed.mjs. Load test order
+// chỉ bắn vào một concert đang mở bán để đo đúng tranh chấp giữ vé của concert đó.
+const ticketOptions: TicketOption[] = [
+  { ticketTypeId: "00000000-0000-0000-0000-000000000501", maxPerUser: 2, weight: 4 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000502", maxPerUser: 2, weight: 10 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000503", maxPerUser: 4, weight: 24 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000504", maxPerUser: 4, weight: 62 },
 ];
 
 const createdOrders = new Counter("orders_created");
@@ -260,16 +210,12 @@ export default function ({ tokens }: SetupData): void {
     fail(`Không có access token cho iteration ${iteration}.`);
   }
 
-  const concert = weightedChoice(
-    concerts,
-    deterministicRandom(iteration, 1),
-  );
   const itemCount = randomItemCount(
     deterministicRandom(iteration, 2),
-    concert.tickets.length,
+    ticketOptions.length,
   );
   const selectedTickets = selectTickets(
-    concert.tickets,
+    ticketOptions,
     itemCount,
     iteration,
   );
@@ -288,7 +234,7 @@ export default function ({ tokens }: SetupData): void {
   const response = http.post(
     `${BASE_URL}/orders`,
     JSON.stringify({
-      concert_id: concert.concertId,
+      concert_id: TARGET_CONCERT_ID,
       items,
     }),
     {
@@ -299,7 +245,7 @@ export default function ({ tokens }: SetupData): void {
       },
       tags: {
         name: "POST /v1/orders",
-        concert_id: concert.concertId,
+        concert_id: TARGET_CONCERT_ID,
         cart_size: String(items.length),
       },
     },

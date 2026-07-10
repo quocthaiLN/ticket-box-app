@@ -29,7 +29,8 @@
     "db:generate": "prisma generate --schema=packages/database/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema=packages/database/prisma/schema.prisma",
     "db:seed": "node --env-file=.env packages/database/prisma/seed.mjs",
-    "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma"
+    "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma",
+    "verify:order-loadtest": "npm run verify:order-loadtest -w @ticketbox/tests"
   },
   "devDependencies": {
     "@types/node": "^25.9.1"

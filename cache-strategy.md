@@ -137,3 +137,10 @@ Nhóm B — biến động (cache ngắn, TTL 5s):
 | p95 `/ticket-types` | 3.27s | ~341ms |
 | p95 `/inventory` | 3.33s | ~493ms |
 | PostgreSQL query volume | 50 000 req | ~số concert × 5 lần (warm) |
+
+Khi test lần cuối với mã nguồn hiện tại thì có kết quả    
+checks_total.......: 150000 5930.579338/s
+checks_succeeded...: 99.40% 149107 out of 150000
+checks_failed......: 0.59%  893 out of 150000
+Đa số các lỗi bên dưới đều xuất hiện ở khoảng đầu của test
+WARN[0001] Request Failed                                error="Get \"http://host.docker.internal:3000/v1/concerts/00000000-0000-0000-0000-000000000202/inventory\": dial tcp 192.168.65.254:3000: connect: connection refused"

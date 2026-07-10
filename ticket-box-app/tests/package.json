@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:tokens": "node --env-file=../.env ./generate-tokens/generate-tokens.mjs",
+    "verify:order-loadtest": "node ./order/verify-order-loadtest.mjs",
     "test": "vitest run --reporter=verbose",
     "test:watch": "vitest"
   },

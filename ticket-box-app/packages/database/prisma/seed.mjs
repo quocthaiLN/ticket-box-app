@@ -68,16 +68,16 @@ const concerts = [
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 10),
-      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 30),
-      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 80),
+      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 50),
+      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 100),
+      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 150),
       zone("GA", "General Admission", "Khu đứng tự do.", 200),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 10, 1, 3, 2),
-      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 30, 2, 8, 2),
-      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 80, 3, 17, 4),
-      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 200, 5, 45, 4),
+      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 50, 0, 0, 2),
+      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 100, 0, 0, 2),
+      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 150, 0, 0, 4),
+      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 200, 0, 0, 4),
     ],
   },
   {
@@ -228,6 +228,7 @@ const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex *
 const organizerRequestId = (index) => fixedId(701 + index);
 const deletionRequestId = (index) => fixedId(721 + index);
 const checkerAccountId = (index) => fixedId(741 + index);
+const LOAD_TEST_CONCERT_ID = "00000000-0000-0000-0000-000000000201";
 
 function zone(code, name, description, capacity) {
   return { code, name, description, capacity };
@@ -609,7 +610,20 @@ async function seedOrganizerWorkflow() {
 }
 
 async function seedDemoTickets() {
-  const publishedConcerts = concerts.filter((concert) => concert.status === "PUBLISHED" && concert.tickets.length > 0);
+  await prisma.ticket.deleteMany({ where: { concertId: LOAD_TEST_CONCERT_ID } });
+  await prisma.payment.deleteMany({ where: { order: { concertId: LOAD_TEST_CONCERT_ID } } });
+  await prisma.orderItem.deleteMany({ where: { order: { concertId: LOAD_TEST_CONCERT_ID } } });
+  await prisma.order.deleteMany({ where: { concertId: LOAD_TEST_CONCERT_ID } });
+  await prisma.userTicketTypeCounter.deleteMany({
+    where: { ticketType: { concertId: LOAD_TEST_CONCERT_ID } },
+  });
+
+  const publishedConcerts = concerts.filter(
+    (concert) =>
+      concert.status === "PUBLISHED" &&
+      concert.tickets.length > 0 &&
+      concert.id !== LOAD_TEST_CONCERT_ID,
+  );
 
   for (const [index, concert] of publishedConcerts.slice(0, 3).entries()) {
     const sourceConcertIndex = concerts.findIndex((item) => item.id === concert.id);
@@ -732,76 +746,6 @@ async function seedDemoTickets() {
     });
   }
 
-  // Bổ sung các ticket phụ cho concert 1 (anh-sang-man-dem) phục vụ demo
-  const asmConcert = publishedConcerts[0];
-  if (asmConcert) {
-    const sourceConcertIndex = concerts.findIndex((item) => item.id === asmConcert.id);
-    const ticketIndex = Math.min(1, asmConcert.tickets.length - 1);
-    const ticketSeed = asmConcert.tickets[ticketIndex];
-    const ticketType = ticketTypeId(sourceConcertIndex, ticketIndex);
-    const sourceZoneIndex = asmConcert.zones.findIndex((item) => item.code === ticketSeed.zoneCode);
-    const amount = ticketSeed.price;
-
-    const extraTickets = [
-      { id: fixedId(801), orderId: fixedId(811), orderItemId: fixedId(821), qrTokenHash: `qr-seed-${asmConcert.slug}-002`, status: "ISSUED" },
-      { id: fixedId(802), orderId: fixedId(812), orderItemId: fixedId(822), qrTokenHash: `qr-seed-${asmConcert.slug}-cancelled`, status: "CANCELLED" },
-      { id: fixedId(803), orderId: fixedId(813), orderItemId: fixedId(823), qrTokenHash: `qr-seed-${asmConcert.slug}-refunded`, status: "REFUNDED" },
-    ];
-
-    for (const ext of extraTickets) {
-      await prisma.order.upsert({
-        where: { id: ext.orderId },
-        create: {
-          id: ext.orderId,
-          userId: userIds.audience,
-          concertId: asmConcert.id,
-          idempotencyKey: `seed-order-${ext.id}`,
-          status: "CONFIRMED",
-          totalAmount: amount,
-          currency: "VND",
-          confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
-        },
-        update: {
-          status: "CONFIRMED",
-        },
-      });
-
-      await prisma.orderItem.upsert({
-        where: { id: ext.orderItemId },
-        create: {
-          id: ext.orderItemId,
-          orderId: ext.orderId,
-          ticketTypeId: ticketType,
-          quantity: 1,
-          unitPrice: amount,
-          lineTotal: amount,
-        },
-        update: {},
-      });
-
-      await prisma.ticket.upsert({
-        where: { id: ext.id },
-        create: {
-          id: ext.id,
-          orderId: ext.orderId,
-          orderItemId: ext.orderItemId,
-          userId: userIds.audience,
-          concertId: asmConcert.id,
-          ticketTypeId: ticketType,
-          seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
-          gateId: gateId(sourceConcertIndex, sourceZoneIndex),
-          qrTokenHash: ext.qrTokenHash,
-          qrPayload: null,
-          qrSignature: null,
-          status: ext.status,
-          issuedAt: new Date("2026-06-08T10:05:00+07:00"),
-        },
-        update: {
-          status: ext.status,
-        },
-      });
-    }
-  }
 }
 
 async function seedOperations() {

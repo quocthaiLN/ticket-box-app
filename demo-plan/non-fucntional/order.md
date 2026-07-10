@@ -27,14 +27,10 @@ docker compose run --rm k6 run /tests/order/order.ts
 ### Bước 4: Đọc số lượng vé sau load test
 
 ```bash
-docker exec -i ticketbox-postgres psql -U ticketbox -d ticketbox -c "select c.title as concert, tt.name as ticket_type, tt.total_quantity as ve_dang_ban, tt.held_quantity as ve_dang_giu, tt.sold_quantity as ve_da_ban, (tt.total_quantity - tt.held_quantity - tt.sold_quantity) as ve_con_lai from ticket_types tt join concerts c on c.id = tt.concert_id order by c.title, tt.name;"
+npm run verify:order-loadtest
 ```
 
-```bash
-docker exec -i ticketbox-postgres psql -U ticketbox -d ticketbox -c "select sum(total_quantity) as tong_ve_dang_ban, sum(held_quantity) as tong_ve_dang_giu, sum(sold_quantity) as tong_ve_da_ban, sum(total_quantity - held_quantity - sold_quantity) as tong_ve_con_lai from ticket_types;"
-```
-
-Ghi chú: load test order chỉ tạo lệnh giữ vé qua `POST /orders`, nên số vé bị tác động trực tiếp là `held_quantity`. `sold_quantity` chỉ tăng sau khi đơn được thanh toán thành công.
+Ghi chú: chạy trong folder `ticket-box-app`. Script hiển thị 3 cột: `ticket_type`, `total_quantity`, `held_quantity`. Nếu ticket type nào có `held_quantity > total_quantity`, script trả exit code `1`.
 
 ### Bước 5: Tắt whitelist
 
@@ -116,14 +112,10 @@ docker compose run --rm k6 run /tests/order/order.ts
 ### Bước 6: Đọc số lượng vé trên server sau load test
 
 ```bash
-docker exec -i ticketbox-postgres psql -U ticketbox -d ticketbox -c "select c.title as concert, tt.name as ticket_type, tt.total_quantity as ve_dang_ban, tt.held_quantity as ve_dang_giu, tt.sold_quantity as ve_da_ban, (tt.total_quantity - tt.held_quantity - tt.sold_quantity) as ve_con_lai from ticket_types tt join concerts c on c.id = tt.concert_id order by c.title, tt.name;"
+npm run verify:order-loadtest
 ```
 
-```bash
-docker exec -i ticketbox-postgres psql -U ticketbox -d ticketbox -c "select sum(total_quantity) as tong_ve_dang_ban, sum(held_quantity) as tong_ve_dang_giu, sum(sold_quantity) as tong_ve_da_ban, sum(total_quantity - held_quantity - sold_quantity) as tong_ve_con_lai from ticket_types;"
-```
-
-Ghi chú: chạy lệnh này trên server, nơi container `ticketbox-postgres` đang chạy. Với riêng bài order load test, `held_quantity` là số vé đang được giữ; `sold_quantity` chỉ tăng sau thanh toán.
+Ghi chú: chạy lệnh này trên server trong folder `ticket-box-app`, nơi container `ticketbox-postgres` đang chạy. Script hiển thị 3 cột: `ticket_type`, `total_quantity`, `held_quantity`. Nếu ticket type nào có `held_quantity > total_quantity`, script trả exit code `1`.
 
 ### Bước 7: Tắt whitelist
 
