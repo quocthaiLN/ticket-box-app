@@ -6,7 +6,7 @@ import { SharedArray } from "k6/data";
 
 // Đọc toàn bộ danh sách JWT token đã được sinh sẵn từ file JSON
 const allTokens = new SharedArray("loadtest_tokens", function () {
-  return JSON.parse(open("./tokens.json"));
+  return JSON.parse(open("../generate-tokens/tokens.json"));
 });
 
 function getEnv(name: string, fallback: string): string {
@@ -246,7 +246,7 @@ export function setup(): SetupData {
     .map((t) => t.token);
 
   if (tokens.length !== USER_COUNT) {
-    fail(`Chỉ lấy được ${tokens.length}/${USER_COUNT} access token từ file tokens.json.`);
+    fail(`Chỉ lấy được ${tokens.length}/${USER_COUNT} access token từ file generate-tokens/tokens.json.`);
   }
 
   return { tokens };

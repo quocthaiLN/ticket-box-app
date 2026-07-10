@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 async function main() {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    throw new Error("JWT_SECRET environment variable is not defined in .env");
+    throw new Error("JWT_SECRET is not defined. Run this through the npm script so it loads ticket-box-app/.env.");
   }
 
   console.log("Fetching load test users from database...");
@@ -70,7 +70,7 @@ async function main() {
   fs.writeFileSync(path.join(__dirname, "tokens_client_1.json"), JSON.stringify(client1Data, null, 2), "utf-8");
   fs.writeFileSync(path.join(__dirname, "tokens_client_2.json"), JSON.stringify(client2Data, null, 2), "utf-8");
   fs.writeFileSync(path.join(__dirname, "tokens_client_3.json"), JSON.stringify(client3Data, null, 2), "utf-8");
-  
+
   // Ghi thêm file tổng hợp tokens.json phòng trường hợp test 1 máy
   fs.writeFileSync(path.join(__dirname, "tokens.json"), JSON.stringify(tokenData, null, 2), "utf-8");
 

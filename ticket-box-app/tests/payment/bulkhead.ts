@@ -19,7 +19,7 @@ const ticketTypeId = getEnv("PAYMENT_BULKHEAD_TICKET_TYPE_ID", "00000000-0000-00
 
 // Load tokens.json đã sinh sẵn
 const allTokens = new SharedArray("loadtest_tokens", function () {
-  return JSON.parse(open("../order/tokens.json"));
+  return JSON.parse(open("../generate-tokens/tokens.json"));
 });
 
 export const options = {

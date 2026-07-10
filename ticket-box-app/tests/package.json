@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:tokens": "node --env-file=../.env ./generate-tokens/generate-tokens.mjs",
     "test": "vitest run --reporter=verbose",
     "test:watch": "vitest"
   },
