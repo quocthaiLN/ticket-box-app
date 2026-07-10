@@ -569,14 +569,25 @@ export async function createHeldOrder(
     a.ticketTypeId.localeCompare(b.ticketTypeId),
   );
 
-  // Mỗi nhánh là đúng một data-modifying CTE. PostgreSQL tự chạy một SQL
-  // statement trong transaction nguyên tử, nên không bọc bằng Prisma
-  // interactive transaction: timer của nó tính cả thời gian chờ hot-row lock
-  // và từng gây P2028 dù câu SQL cuối cùng vẫn hoàn tất.
-  return withSerializableRetry(() => {
-    if (sortedItems.length === 1) {
-      return createHeldOrderSingleItem(db, input, sortedItems[0], now);
-    }
-    return createHeldOrderMultiItemCte(db, input, sortedItems, now);
-  });
+  // CTE là nguyên tử ở cấp SQL statement, nhưng các kiểm tra kết quả bên dưới
+  // statement vẫn có thể ném InventoryReservationError. Phải giữ transaction
+  // mở đến khi các kiểm tra đó hoàn tất; nếu không, order/counter được tạo bởi
+  // CTE sẽ commit dù inventory reservation thất bại.
+  return withSerializableRetry(() =>
+    db.$transaction(
+      async (tx) => {
+        if (sortedItems.length === 1) {
+          return createHeldOrderSingleItem(tx, input, sortedItems[0], now);
+        }
+        return createHeldOrderMultiItemCte(tx, input, sortedItems, now);
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        maxWait: 10_000,
+        // Nhỏ hơn admission lease mặc định 60 giây để lease không hết hạn khi
+        // transaction còn giữ lock. Timeout luôn rollback toàn bộ thay đổi.
+        timeout: 55_000,
+      },
+    ),
+  );
 }

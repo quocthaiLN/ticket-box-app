@@ -54,27 +54,45 @@ try {
   console.log(tableOutput);
 
   const rawOutput = await runPsql(["-t", "-A", "-F", "\t"], sql);
-  const oversoldRows = rawOutput
+  const inventoryRows = rawOutput
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => {
-      const [ticketType, totalQuantity, heldQuantity] = line.split("\t");
+      const [
+        ticketType,
+        totalQuantity,
+        inventoryHeldQuantity,
+        soldQuantity,
+        heldOrderItemQuantity,
+        ledgerGap,
+        heldOrdersWithoutItems,
+      ] = line.split("\t");
 
       return {
         ticketType,
         totalQuantity: Number(totalQuantity.trim()),
-        heldQuantity: Number(heldQuantity.trim()),
+        inventoryHeldQuantity: Number(inventoryHeldQuantity.trim()),
+        soldQuantity: Number(soldQuantity.trim()),
+        heldOrderItemQuantity: Number(heldOrderItemQuantity.trim()),
+        ledgerGap: Number(ledgerGap.trim()),
+        heldOrdersWithoutItems: Number(heldOrdersWithoutItems.trim()),
       };
-    })
-    .filter((row) => row.heldQuantity > row.totalQuantity);
+    });
 
-  if (oversoldRows.length > 0) {
-    console.error("FAIL: oversell detected.");
-    console.table(oversoldRows);
+  const invalidRows = inventoryRows.filter(
+    (row) =>
+      row.inventoryHeldQuantity + row.soldQuantity > row.totalQuantity ||
+      row.ledgerGap !== 0 ||
+      row.heldOrdersWithoutItems !== 0,
+  );
+
+  if (invalidRows.length > 0) {
+    console.error("FAIL: order inventory invariant violated.");
+    console.table(invalidRows);
     process.exit(1);
   }
 
-  console.log("PASS: held quantity does not exceed total quantity.");
+  console.log("PASS: physical inventory and HELD-order ledger are consistent.");
 } catch (error) {
   console.error("FAIL: unable to verify order load test inventory.");
   console.error(error instanceof Error ? error.message : error);

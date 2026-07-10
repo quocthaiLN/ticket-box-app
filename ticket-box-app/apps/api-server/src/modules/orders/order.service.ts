@@ -135,18 +135,23 @@ export async function createOrder(
   const t1 = Date.now();
 
   // Khai báo kết quả của createOrder
+
+  // Khai báo kết quả của createOrder
   let orderResult: Awaited<ReturnType<typeof createOrderHeld>>;
 
   try {
     // Tạo đơn hàng ở trạng thái giữ chỗ và trừ tồn kho tương ứng.
     orderResult = await createOrderHeld(userId, req, idempotencyKey);
   } catch (err: unknown) {
-    // Xử lý trường hợp hai yêu cầu đồng thời dùng cùng idempotency key ở mức redis - siêu hiếm - lấy order đã được tạo trước ở mức database
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002" &&
-      (err.meta?.target as string[] | undefined)?.includes("idempotency_key")
-    ) {
+    // Xử lý trường hợp hai yêu cầu đồng thời dùng cùng idempotency key ở mức database - siêu hiếm - lấy order đã được tạo trước ở mức database
+    const targetFields = err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+      ? (err.meta?.target as string[] | undefined)
+      : undefined;
+    const isIdempotencyConflict = targetFields?.some(field =>
+      field.toLowerCase().includes("idempotency")
+    );
+
+    if (isIdempotencyConflict) {
       const existingOrder = await getOrderByIdempotencyKey(userId, idempotencyKey);
       if (!existingOrder) throw err;
 

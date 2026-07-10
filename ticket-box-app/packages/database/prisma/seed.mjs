@@ -919,7 +919,7 @@ async function seedLoadTestUsers() {
   const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 10);
 
   const data = [];
-  for (let i = 1; i <= 100000; i++) {
+  for (let i = 1; i <= 80000; i++) {
     const index = String(i).padStart(4, "0");
     data.push({
       email: `loadtest${index}@ticketbox.test`,
