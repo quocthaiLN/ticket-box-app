@@ -8,9 +8,20 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   db = await SQLite.openDatabaseAsync('ticketbox_checker.db');
   
   // Run Migrations to setup SQLite tables
+  await db.execAsync('PRAGMA journal_mode = WAL;');
+
+  // Kiểm tra tính nhất quán của schema (nếu thiếu cột qr_payload_hash thì tái tạo bảng)
+  try {
+    await db.execAsync('SELECT qr_payload_hash FROM offline_queue LIMIT 1;');
+  } catch (error) {
+    console.log('Phát hiện schema SQLite cũ hoặc thiếu cột qr_payload_hash, tiến hành tái tạo các bảng...');
+    await db.execAsync('DROP TABLE IF EXISTS allowed_seat_zones;');
+    await db.execAsync('DROP TABLE IF EXISTS tickets;');
+    await db.execAsync('DROP TABLE IF EXISTS guests;');
+    await db.execAsync('DROP TABLE IF EXISTS offline_queue;');
+  }
+
   await db.execAsync(`
-    PRAGMA journal_mode = WAL;
-    
     CREATE TABLE IF NOT EXISTS allowed_seat_zones (
       id TEXT PRIMARY KEY,
       code TEXT NOT NULL,
