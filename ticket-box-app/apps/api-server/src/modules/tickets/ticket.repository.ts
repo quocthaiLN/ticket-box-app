@@ -62,7 +62,7 @@ export async function listTicketsForUser(userId: string, query: TicketListQuery)
       ${query.concert_id ? Prisma.sql`AND t.concert_id = ${query.concert_id}::uuid` : Prisma.empty}
       ${query.status ? Prisma.sql`AND t.status = ${query.status}::"ticket_status"` : Prisma.empty}
       ${query.cursor ? Prisma.sql`AND t.id > ${query.cursor}::uuid` : Prisma.empty}
-    ORDER BY t.id
+    ORDER BY t.issued_at DESC, t.id DESC
     LIMIT ${limit + 1}
   `);
 

@@ -1,4 +1,4 @@
-import { Ban, Calendar, CheckCircle, Download, QrCode, Ticket as TicketIcon, X } from "lucide-react";
+import { Ban, Calendar, CheckCircle, Download, Loader2, QrCode, Ticket as TicketIcon, X } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -25,6 +25,128 @@ export function MyTicketsPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [selectedTicket, setSelectedTicket] = useState<TicketListItem | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (ticket: TicketListItem) => {
+    if (downloadingId) return;
+    setDownloadingId(ticket.id);
+    try {
+      const qrData = await getMyTicketQr(ticket.id);
+      const qrContent = JSON.stringify({ ...qrData.payload, qr_signature: qrData.qr_signature });
+
+      const qrDataUrl = await QRCode.toDataURL(qrContent, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 300,
+        color: { dark: "#08080E", light: "#FFFFFF" },
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 600;
+      canvas.height = 900;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not get canvas context");
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, 900);
+      gradient.addColorStop(0, "#111118");
+      gradient.addColorStop(1, "#08080E");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 600, 900);
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 20, 560, 860);
+
+      const brandGradient = ctx.createLinearGradient(20, 0, 580, 0);
+      brandGradient.addColorStop(0, "#F5C842");
+      brandGradient.addColorStop(1, "#E8315B");
+      ctx.fillStyle = brandGradient;
+      ctx.fillRect(20, 20, 560, 10);
+
+      ctx.textBaseline = "top";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#F5C842";
+      ctx.font = "bold 24px serif";
+      ctx.fillText("TICKETBOX", 300, 55);
+
+      ctx.fillStyle = "#F0EDEB";
+      ctx.font = "bold 28px sans-serif";
+      const words = ticket.concert_title.split(" ");
+      let line = "";
+      let y = 110;
+      const maxWidth = 500;
+      const lineHeight = 36;
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + " ";
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, 300, y);
+          line = words[n] + " ";
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, 300, y);
+
+      const infoStartY = y + 60;
+
+      const drawDetail = (label: string, value: string, detailY: number) => {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#8585A0";
+        ctx.font = "14px sans-serif";
+        ctx.fillText(label.toUpperCase(), 60, detailY);
+
+        ctx.fillStyle = "#F0EDEB";
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillText(value, 60, detailY + 22);
+      };
+
+      drawDetail("Loại vé / Ticket Type", ticket.ticket_type_name, infoStartY);
+      drawDetail("Khu vực / Zone", `Khu ${ticket.zone_code}`, infoStartY + 65);
+      drawDetail("Ngày phát hành / Issued Date", formatDate(ticket.issued_at), infoStartY + 130);
+      drawDetail("Mã vé / Ticket ID", `#${ticket.id}`, infoStartY + 195);
+
+      const lineY = infoStartY + 270;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(40, lineY);
+      ctx.lineTo(560, lineY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const qrImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        qrImg.onload = () => {
+          ctx.drawImage(qrImg, 175, lineY + 30, 250, 250);
+          resolve();
+        };
+        qrImg.onerror = reject;
+        qrImg.src = qrDataUrl;
+      });
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#8585A0";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("Xuất trình mã này tại cổng soát vé.", 300, lineY + 300);
+
+      const finalDataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = finalDataUrl;
+      const cleanTitle = ticket.concert_title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+      link.download = `ticket-${cleanTitle}-${ticket.id.slice(0, 8)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Lỗi khi tải vé:", err);
+      alert("Không thể tải vé. Vui lòng thử lại sau.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +175,15 @@ export function MyTicketsPage() {
   );
 
   const filteredTickets = useMemo(
-    () => tickets.filter((ticket) => activeTab === "all" || ticket.status === activeTab),
+    () =>
+      tickets
+        .filter((ticket) => activeTab === "all" || ticket.status === activeTab)
+        .sort((a, b) => {
+          const timeA = new Date(a.issued_at).getTime();
+          const timeB = new Date(b.issued_at).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          return b.id.localeCompare(a.id);
+        }),
     [activeTab, tickets],
   );
 
@@ -105,7 +235,13 @@ export function MyTicketsPage() {
         {filteredTickets.length > 0 && (
           <div className="space-y-4">
             {filteredTickets.map((ticket) => (
-              <TicketCard key={ticket.id} ticket={ticket} onViewQr={() => setSelectedTicket(ticket)} />
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                onViewQr={() => setSelectedTicket(ticket)}
+                onDownload={() => handleDownload(ticket)}
+                isDownloading={downloadingId === ticket.id}
+              />
             ))}
           </div>
         )}
@@ -116,7 +252,17 @@ export function MyTicketsPage() {
   );
 }
 
-function TicketCard({ ticket, onViewQr }: { ticket: TicketListItem; onViewQr: () => void }) {
+function TicketCard({
+  ticket,
+  onViewQr,
+  onDownload,
+  isDownloading,
+}: {
+  ticket: TicketListItem;
+  onViewQr: () => void;
+  onDownload: () => void;
+  isDownloading: boolean;
+}) {
   return (
     <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#111118]">
       <div className="h-1" style={{ background: statusColor(ticket.status) }} />
@@ -130,19 +276,36 @@ function TicketCard({ ticket, onViewQr }: { ticket: TicketListItem; onViewQr: ()
             <StatusBadge status={ticket.status} />
           </div>
           <div className="flex flex-wrap gap-3 text-xs text-[#8585A0]">
-            <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-[#F5C842]" />Phát hành {formatDate(ticket.issued_at)}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-[#F5C842]" />Phát hành {formatDate(ticket.issued_at)}
+            </span>
             <span>{ticket.ticket_type_name}</span>
             <span>Khu {ticket.zone_code}</span>
           </div>
         </div>
         <div className="flex gap-2 sm:flex-col">
-          <button type="button" onClick={onViewQr} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E8315B]/30 bg-[#E8315B]/10 px-3 py-2 text-xs font-semibold text-[#E8315B]">
+          <button
+            type="button"
+            onClick={onViewQr}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E8315B]/30 bg-[#E8315B]/10 px-3 py-2 text-xs font-semibold text-[#E8315B]"
+          >
             <QrCode className="h-3.5 w-3.5" />
             Xem QR
           </button>
-          <button type="button" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-[#8585A0]">
-            <Download className="h-3.5 w-3.5" />
-            Tải về
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={isDownloading}
+            className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-[#8585A0] ${
+              isDownloading ? "opacity-50 cursor-not-allowed" : "hover:bg-white/10"
+            }`}
+          >
+            {isDownloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F5C842]" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {isDownloading ? "Đang tải..." : "Tải về"}
           </button>
         </div>
       </div>

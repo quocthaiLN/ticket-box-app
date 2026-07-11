@@ -29,7 +29,7 @@ VNPAY_QUERYDR_URL=http://localhost:4102/vnpay/merchant_webapi/api/transaction
 npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
 docker exec -i ticketbox-redis redis-cli flushall
 npm run db:seed
-node --env-file=.env tests/order/generate-tokens.mjs
+npm run generate:tokens -w @ticketbox/tests
 ```
 
 ---
@@ -38,7 +38,7 @@ node --env-file=.env tests/order/generate-tokens.mjs
 
 ```powershell
 # Terminal 1: API server
-npm run dev
+npm run dev:api
 
 # Terminal 2: MoMo mock
 npm run dev:payment:momo
