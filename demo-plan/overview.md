@@ -41,7 +41,7 @@ Note: Khi demo phần functional requirment này không cần chạy mock paymen
 ---
 #### QUANG
 #### 22. Soát vé e-ticket bằng checker web/mobile, online
-
+#### 23. Soát vé e-ticket bằng checker web/mobile, offline
 ---
 
 ### Demo non-function requirment
@@ -64,3 +64,6 @@ Note: Khi demo phần functional requirment này không cần chạy mock paymen
 
 #### Xử lý dữ liệu lỗi của file danh sách khách mời CSV
 - guest-list.md
+
+#### Chống trừ tiền 2 lần
+
