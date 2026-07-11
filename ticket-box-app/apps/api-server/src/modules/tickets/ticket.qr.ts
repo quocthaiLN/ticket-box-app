@@ -25,10 +25,18 @@ export function buildQrPayload(
 // Canonical hoá payload (bỏ field chữ ký, sort key) để ký và verify luôn khớp.
 function canonicalize(payload: Record<string, unknown>): Buffer {
   const clone = { ...payload };
-  delete clone['qr_signature'];
-  delete clone['qrSignature'];
+  const allowedKeys = new Set([
+    'ticket_id',
+    'concert_id',
+    'ticket_type_id',
+    'seat_zone_id',
+    'gate_id',
+    'issued_at',
+    'qr_token',
+  ]);
   const sorted = Object.fromEntries(
     Object.keys(clone)
+      .filter((k) => allowedKeys.has(k))
       .sort()
       .map((k) => [k, clone[k]]),
   );
