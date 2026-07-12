@@ -1189,7 +1189,7 @@ function TabbedNewRequestForm({
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
                 <Upload className="h-4 w-4" />
                 {seatMapFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleSeatMapFileChange} />
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" className="hidden" onChange={handleSeatMapFileChange} />
               </label>
               {seatMapFile ? (
                 <div className="mt-2 space-y-2">
@@ -1981,7 +1981,7 @@ function OrganizerConcertEditor({
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
                   <Upload className="h-4 w-4" />
                   {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapUpload} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapUpload} />
                 </label>
                 {form.seatMapUrl && (
                   <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">

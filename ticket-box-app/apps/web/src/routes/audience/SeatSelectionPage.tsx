@@ -25,9 +25,31 @@ export function SeatSelectionPage() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [checkoutDraft, setCheckoutDraft] = useState<PendingCheckout | null>(null);
 
-  // Click khu trên sơ đồ → cuộn tới và highlight card hạng vé của khu đó.
+  // Click khu trên sơ đồ → chọn thêm 1 vé hợp lệ rồi cuộn tới card hạng vé.
   function selectZone(zoneId: string) {
     setSelectedZoneId(zoneId);
+
+    const ticketType = concert?.ticketTypes.find((candidate) => {
+      const available = candidate.availableQuantity;
+      const remaining = ticketQuotas[candidate.id]?.remaining_quantity ?? candidate.maxPerUser;
+      const max = Math.max(0, Math.min(remaining, available ?? remaining));
+      return candidate.seatZoneId === zoneId
+        && candidate.status !== "SOLD_OUT"
+        && available !== 0
+        && max > 0
+        && !isBeforeSaleStart(candidate);
+    });
+
+    if (ticketType) {
+      const available = ticketType.availableQuantity ?? ticketType.maxPerUser;
+      const remaining = ticketQuotas[ticketType.id]?.remaining_quantity ?? ticketType.maxPerUser;
+      const max = Math.max(0, Math.min(remaining, available));
+      setQuantities((current) => ({
+        ...current,
+        [ticketType.id]: Math.min(max, (current[ticketType.id] ?? 0) + 1),
+      }));
+    }
+
     const target = document.querySelector(`[data-zone-id="${zoneId}"]`);
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -162,7 +184,7 @@ export function SeatSelectionPage() {
 
           <div className="rounded-2xl border border-white/10 bg-[#111118] p-5">
             <h2 className="mb-1 text-sm font-semibold">Sơ đồ chỗ ngồi</h2>
-            <p className="mb-4 text-xs text-[#8585A0]">Đối chiếu khu vực trên sơ đồ và bấm chip hạng vé để chọn nhanh.</p>
+            <p className="mb-4 text-xs text-[#8585A0]">Bấm vào khu vực trên sơ đồ hoặc chip hạng vé để chọn thêm 1 vé và chuyển nhanh đến hạng vé.</p>
             <SeatMapPanel
               seatMapUrl={concert.seatMapUrl}
               zones={concert.seatZones}

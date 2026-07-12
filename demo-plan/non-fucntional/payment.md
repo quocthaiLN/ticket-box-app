@@ -140,7 +140,8 @@ MOMO_CB_RESET_TIMEOUT=10000
 **Chạy:**
 ```bash
 # Chạy trong container k6 hoặc local
-k6 run --env-file=tests/.env tests/payment/circuit-breaker.ts
+docker compose run --rm k6 run --env-file=tests/.env tests/payment/circuit-breaker.ts
+docker compose run --rm k6 run /tests/payment/circuit-breaker.ts
 ```
 
 **Log quan sát trên terminal:**

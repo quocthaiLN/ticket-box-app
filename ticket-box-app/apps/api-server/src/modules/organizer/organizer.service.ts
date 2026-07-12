@@ -87,7 +87,7 @@ export class OrganizerService {
     if (!extension) {
       throw Errors.fieldValidationError(
         "file",
-        "Only JPEG, PNG, WebP, or GIF images are supported.",
+        "Only JPEG, PNG, WebP, GIF, or SVG images are supported.",
       );
     }
 
@@ -364,6 +364,7 @@ function extensionForImageType(contentType?: string) {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/gif": ".gif",
+    "image/svg+xml": ".svg",
   };
   return normalized ? extensions[normalized] : undefined;
 }

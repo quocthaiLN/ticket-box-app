@@ -314,7 +314,7 @@ async function seedCatalog() {
         plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
-        seatMapUrl: null,
+        seatMapUrl: `/uploads/seat-maps/${concertIndex + 1}.svg`,
       },
       update: {
         venueId: concert.venueId,
@@ -329,7 +329,7 @@ async function seedCatalog() {
         plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
-        seatMapUrl: null,
+        seatMapUrl: `/uploads/seat-maps/${concertIndex + 1}.svg`,
       },
     });
 

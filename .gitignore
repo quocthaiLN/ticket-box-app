@@ -7,6 +7,11 @@ dist/
 *.log
 ticket-box-app/packages/database/src/generated/prisma/
 ticket-box-app/apps/api-server/public/uploads/
+!ticket-box-app/apps/api-server/public/uploads/
+ticket-box-app/apps/api-server/public/uploads/*
+!ticket-box-app/apps/api-server/public/uploads/seat-maps/
+ticket-box-app/apps/api-server/public/uploads/seat-maps/*
+!ticket-box-app/apps/api-server/public/uploads/seat-maps/[1-6].svg
 ticket-box-app/apps/*/tsconfig.tsbuildinfo
 z-doc-cua-thai
 scripts/
