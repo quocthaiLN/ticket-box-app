@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 850" width="100%" height="100%" style="background-color: #0b0c10; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  
+  <!-- ĐỊNH NGHĨA HIỆU ỨNG ÁNH SÁNG & GRADIENT -->
+  <defs>
+    <!-- Hiệu ứng đèn Neon phát sáng cho Sân khấu nghệ thuật -->
+    <filter id="stage-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <!-- Gradient chuyển màu Sân khấu ấm cúng và sang trọng -->
+    <linearGradient id="stage-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff416c" />
+      <stop offset="50%" stop-color="#ff4b2b" />
+      <stop offset="100%" stop-color="#ff416c" />
+    </linearGradient>
+
+    <!-- Gradients mờ cho nền các khu vực ghế ngồi -->
+    <linearGradient id="vip-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#ffd700" stop-opacity="0.05" />
+    </linearGradient>
+    
+    <linearGradient id="cat1-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.05" />
+    </linearGradient>
+
+    <linearGradient id="cat2-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b8c6db" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#b8c6db" stop-opacity="0.03" />
+    </linearGradient>
+  </defs>
+
+  <!-- TIÊU ĐỀ KHÁN PHÒNG -->
+  <text x="400" y="45" text-anchor="middle" fill="#ffffff" font-size="24" font-weight="bold" letter-spacing="3">SƠ ĐỒ KHÔNG GIAN ĐÊM NHẠC</text>
+  <text x="400" y="70" text-anchor="middle" fill="#66748f" font-size="13" font-weight="600" letter-spacing="1">INTIMATE THEATRE PLAN</text>
+
+  <!-- ================= THEATRE STAGE (SÂN KHẤU NGHỆ THUẬT) ================= -->
+  <g transform="translate(0, 110)">
+    <!-- Ánh sáng lan tỏa từ cạnh sân khấu -->
+    <ellipse cx="400" cy="40" rx="180" ry="15" fill="#ff4b2b" opacity="0.35" filter="url(#stage-glow)" />
+    <!-- Sân khấu thiết kế bo cong mềm mại (Semi-circular stage) -->
+    <path d="M 240,40 Q 400,75 560,40 L 520,0 L 280,0 Z" fill="url(#stage-grad)" />
+    <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="900" letter-spacing="5">STAGE / SÂN KHẤU</text>
+  </g>
+
+  <!-- ================= PHÂN PHỐI HÀNG GHẾ KHÁN GIẢ ================= -->
+
+  <!-- 1. VIP HÀNG ĐẦU (Chỉ Độc Quyền 60 Chỗ - Sát Sân Khấu, Giao Lưu Nghệ Sĩ) -->
+  <g id="zone-vip">
+    <path d="M 270,180 Q 400,215 530,180 L 555,270 Q 400,310 245,270 Z" fill="url(#vip-grad)" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="4 2"/>
+    <text x="400" y="230" text-anchor="middle" fill="#ffd700" font-size="18" font-weight="bold" letter-spacing="1">VIP HÀNG ĐẦU</text>
+    <text x="400" y="255" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="600">60 Chỗ (Gần gũi &amp; Giao lưu cùng nghệ sĩ)</text>
+  </g>
+
+  <!-- 2. CAT 1 (200 Ghế Hàng Giữa - Tầm Nhìn Trực Diện Cân Đối) -->
+  <g id="zone-cat1">
+    <path d="M 225,290 Q 400,330 575,290 L 620,470 Q 400,520 180,470 Z" fill="url(#cat1-grad)" stroke="#00f2fe" stroke-width="2.5"/>
+    <text x="400" y="385" text-anchor="middle" fill="#00f2fe" font-size="20" font-weight="bold" letter-spacing="1">CAT 1</text>
+    <text x="400" y="415" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">200 Ghế hàng giữa tiêu chuẩn</text>
+  </g>
+
+  <!-- 3. CAT 2 (320 Ghế Hàng Sau - Góc Nhìn Tổng Thể Khán Phòng) -->
+  <g id="zone-cat2">
+    <path d="M 165,495 Q 400,545 635,495 L 680,700 Q 400,760 120,700 Z" fill="url(#cat2-grad)" stroke="#b8c6db" stroke-width="2"/>
+    <text x="400" y="590" text-anchor="middle" fill="#b8c6db" font-size="22" font-weight="bold" letter-spacing="1">CAT 2</text>
+    <text x="400" y="620" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="600">320 Ghế hàng sau</text>
+  </g>
+
+  <!-- ================= KHU CHÚ THÍCH PHÍA DƯỚI (LEGEND) ================= -->
+  <g transform="translate(100, 750)">
+    <!-- Khung viền chung nhỏ gọn -->
+    <rect x="0" y="0" width="600" height="65" rx="12" fill="#121318" stroke="#23252f" stroke-width="1.5"/>
+    
+    <!-- Chú thích: VIP -->
+    <g transform="translate(35, 0)">
+      <circle cx="15" cy="32" r="8" fill="#ffd700" />
+      <text x="32" y="37" fill="#ffffff" font-size="13" font-weight="bold">VIP Hàng Đầu</text>
+      <text x="32" y="52" fill="#66748f" font-size="11">60 vé</text>
+    </g>
+
+    <!-- Chú thích: CAT 1 -->
+    <g transform="translate(245, 0)">
+      <circle cx="15" cy="32" r="8" fill="#00f2fe" />
+      <text x="32" y="37" fill="#ffffff" font-size="13" font-weight="bold">CAT 1</text>
+      <text x="32" y="52" fill="#66748f" font-size="11">200 vé</text>
+    </g>
+
+    <!-- Chú thích: CAT 2 -->
+    <g transform="translate(435, 0)">
+      <circle cx="15" cy="32" r="8" fill="#b8c6db" />
+      <text x="32" y="37" fill="#ffffff" font-size="13" font-weight="bold">CAT 2</text>
+      <text x="32" y="52" fill="#66748f" font-size="11">320 vé</text>
+    </g>
+  </g>
+
+</svg>

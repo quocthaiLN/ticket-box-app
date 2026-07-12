@@ -37,6 +37,23 @@ export class GuestListRepository {
     return { concert_id: concertId, status: "SCAN_ENQUEUED", queue_job_id: queueJobId };
   }
 
+  // Tra guest theo (concert, mã mời) cho link tải vé trong email — mã mời là bí mật
+  // của khách nên endpoint public không cần auth; guest CANCELLED coi như không tồn tại.
+  async findGuestForInviteTicket(concertId: string, code: string) {
+    return prisma.guestList.findFirst({
+      where: {
+        concertId,
+        code,
+        status: { not: GuestStatus.CANCELLED },
+      },
+      select: {
+        fullName: true,
+        code: true,
+        concert: { select: { title: true } },
+      },
+    });
+  }
+
   // Trạng thái 1 job import (số dòng thành công/lỗi, trạng thái cuối).
   async getImportJob(jobId: string): Promise<GuestImportJobStatus> {
     const job = await prisma.guestImportJob.findUnique({ where: { id: jobId } });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Alert, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import NetInfo from '@react-native-community/netinfo';
 import { SetupScreen } from './src/screens/SetupScreen';
@@ -9,6 +9,8 @@ import { QueueScreen } from './src/screens/QueueScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { executeQueueSync } from './src/services/sync';
 import { DEFAULT_API_BASE_URL } from './src/services/api';
+
+LogBox.ignoreAllLogs();
 
 type ScreenName = 'setup' | 'scan' | 'history' | 'queue';
 

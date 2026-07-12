@@ -4,7 +4,7 @@
 
 - Luồng hiện tại tách thành hai bước: `POST /orders` tạo order `HELD`, sau đó `POST /orders/{order_id}/payments` tạo payment `PENDING` và URL thanh toán.
 - Tồn kho khả dụng được tính bằng `total_quantity - held_quantity - sold_quantity`.
-- Các kiểm tra tồn kho, giới hạn mỗi người và tạo order chạy trong cùng transaction `SERIALIZABLE`.
+- Các kiểm tra tồn kho, giới hạn mỗi người và tạo order chạy trong cùng transaction `ReadCommitted` với cập nhật tồn kho có điều kiện để tránh oversell.
 - Theo đặc tả, các API order của người mua chỉ dành cho `AUDIENCE`; endpoint expire chỉ dành cho worker/internal service.
 
 ## 1. Xác thực và phân quyền

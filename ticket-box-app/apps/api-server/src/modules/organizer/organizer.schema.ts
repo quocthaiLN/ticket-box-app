@@ -66,8 +66,10 @@ export type CreateOrganizerRequestInput = {
   checker_count: number;
   press_kit_url?: string;
   artist_bio_image_url?: string;
-  // Ảnh sơ đồ chỗ ngồi (upload qua /organizer/uploads/seat-map trước khi nộp hồ sơ).
+  // File SVG sơ đồ chỗ ngồi (trang mua vé) — upload qua /organizer/uploads/seat-map-svg.
   seat_map_url?: string;
+  // Ảnh sơ đồ PNG/JPEG (trang thông tin concert) — upload qua /organizer/uploads/seat-map-image.
+  seat_map_image_url?: string;
   ticket_types: OrganizerRequestTicketTypeInput[];
 };
 
@@ -83,6 +85,7 @@ export type UpdateOrganizerConcertInput = {
   planned_publish_at?: string;
   cover_image_url?: string;
   seat_map_url?: string | null;
+  seat_map_image_url?: string | null;
   guest_drive_folder_id?: string;
 };
 
@@ -123,7 +126,8 @@ export function parseCreateOrganizerRequestBody(body: unknown): CreateOrganizerR
     checker_count: requiredPositiveInt(value.checker_count, "checker_count"),
     press_kit_url: asOptionalString(value.press_kit_url),
     artist_bio_image_url: asOptionalString(value.artist_bio_image_url),
-    seat_map_url: asOptionalString(value.seat_map_url),
+    seat_map_url: optionalSvgUrl(value.seat_map_url),
+    seat_map_image_url: optionalRasterImageUrl(value.seat_map_image_url),
     ticket_types: ticketTypes,
   };
 }
@@ -176,8 +180,10 @@ export function parseUpdateOrganizerConcertBody(body: unknown): UpdateOrganizerC
     ends_at: optionalDateString(value.ends_at, "ends_at"),
     planned_publish_at: optionalDateString(value.planned_publish_at, "planned_publish_at"),
     cover_image_url: asOptionalString(value.cover_image_url),
-    // null = organizer gỡ ảnh sơ đồ (xóa hẳn), khác với undefined = không đổi.
-    seat_map_url: value.seat_map_url === null ? null : asOptionalString(value.seat_map_url),
+    // null = organizer gỡ file sơ đồ (xóa hẳn), khác với undefined = không đổi.
+    seat_map_url: value.seat_map_url === null ? null : optionalSvgUrl(value.seat_map_url),
+    seat_map_image_url:
+      value.seat_map_image_url === null ? null : optionalRasterImageUrl(value.seat_map_image_url),
     guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }
@@ -275,6 +281,27 @@ function asOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+// seat_map_url chỉ nhận file .svg (sơ đồ tương tác trang mua vé).
+function optionalSvgUrl(value: unknown) {
+  const url = asOptionalString(value);
+  if (url !== undefined && !/\.svg([?#].*)?$/i.test(url)) {
+    throw validationError("seat_map_url", "seat_map_url must point to an .svg file.");
+  }
+  return url;
+}
+
+// seat_map_image_url chỉ nhận ảnh raster (PNG/JPEG/WebP/GIF) — không nhận SVG.
+function optionalRasterImageUrl(value: unknown) {
+  const url = asOptionalString(value);
+  if (url !== undefined && /\.svg([?#].*)?$/i.test(url)) {
+    throw validationError(
+      "seat_map_image_url",
+      "seat_map_image_url must be a raster image (PNG/JPEG/WebP/GIF), not SVG.",
+    );
+  }
+  return url;
 }
 
 function parseGuestDriveFolderId(value: unknown): string | undefined {

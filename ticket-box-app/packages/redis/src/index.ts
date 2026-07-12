@@ -9,11 +9,14 @@ export {
   cacheDelete,
   cacheDeletePattern,
   cacheAside,
+  cacheSingleFlight,
   getSetNX,
 } from "./cache.js";
 export {
   getIdempotencyResponse,
   setIdempotencyResponse,
+  acquireIdempotencyClaim,
+  releaseIdempotencyClaim,
   addToDenylist,
   isTokenRevoked,
   type IdempotencyRecord,
@@ -33,3 +36,9 @@ export {
   invalidateSeatMapCache,
   invalidateTicketTypeCache,
 } from "./catalog-cache.js";
+export {
+  acquireSemaphore,
+  releaseSemaphore,
+  type SemaphoreLease,
+  type SemaphoreAcquireResult,
+} from "./semaphore.js";

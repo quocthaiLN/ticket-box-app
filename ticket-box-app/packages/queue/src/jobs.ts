@@ -80,6 +80,18 @@ export type GuestImportScanData = {
 // email — transactional email đã render sẵn (OTP, ...)
 // ---------------------------------------------------------------------------
 
+export type EmailAttachment = {
+  filename: string;
+  /** URL http(s) hoặc đường dẫn file — nodemailer tự tải. Dùng path HOẶC content. */
+  path?: string;
+  /** Nội dung inline, base64. */
+  content?: string;
+  encoding?: "base64";
+  contentType?: string;
+  /** Content-ID để nhúng inline trong HTML: <img src="cid:..."> */
+  cid?: string;
+};
+
 export type EmailJobData = {
   /** Địa chỉ người nhận */
   to: string;
@@ -88,4 +100,6 @@ export type EmailJobData = {
   text: string;
   /** Bản HTML (optional) */
   html?: string;
+  /** File đính kèm (QR vé, ảnh sơ đồ chỗ ngồi, ...) */
+  attachments?: EmailAttachment[];
 };

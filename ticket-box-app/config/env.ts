@@ -51,6 +51,14 @@ export const env = {
     url: process.env["WEB_URL"] ?? "http://localhost:3001",
   },
 
+  // URL public của api-server — dùng để dựng link tuyệt đối trong email
+  // (vd link tải vé khách mời). Production đặt domain thật.
+  api: {
+    publicUrl:
+      process.env["API_PUBLIC_URL"] ??
+      `http://localhost:${process.env["PORT"] ?? "3000"}`,
+  },
+
   // Auth / JWT
   auth: {
     jwtSecret: process.env["JWT_SECRET"] ?? "ticketbox-local-access-secret",
@@ -96,11 +104,25 @@ export const env = {
       process.env["ORDER_HOLD_DURATION_SECONDS"] ?? 900,
     ),
     rateLimitWhitelistEnabled:
-      process.env["ORDER_RATE_LIMIT_WHITELIST_ENABLED"] === "true",
-    rateLimitWhitelist: (process.env["ORDER_RATE_LIMIT_WHITELIST"] ?? "")
+      process.env["RATE_LIMIT_WHITELIST_ENABLED"] === "true",
+    rateLimitWhitelist: (process.env["RATE_LIMIT_WHITELIST"] ?? "")
       .split(",")
       .map((ip) => ip.trim())
       .filter(Boolean),
+    admissionEnabled:
+      process.env["ORDER_ADMISSION_ENABLED"] !== "false",
+    admissionConcurrencyPerConcert: Math.max(
+      1,
+      Number(process.env["ORDER_ADMISSION_CONCURRENCY_PER_CONCERT"] ?? 10),
+    ),
+    admissionLeaseMs: Math.max(
+      1_000,
+      Number(process.env["ORDER_ADMISSION_LEASE_MS"] ?? 60_000),
+    ),
+    admissionRetryAfterSeconds: Math.max(
+      1,
+      Number(process.env["ORDER_ADMISSION_RETRY_AFTER_SECONDS"] ?? 1),
+    ),
   },
 
   // Worker — job dọn dẹp đơn giữ chỗ hết hạn (expire-holds)
@@ -133,6 +155,7 @@ export const env = {
     failureThreshold: Number(process.env["VNPAY_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["VNPAY_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["VNPAY_CB_RESET_TIMEOUT"] ?? 30_000),
+    halfOpenSuccessThreshold: Number(process.env["VNPAY_CB_HALF_OPEN_SUCCESS_THRESHOLD"] ?? 5),
     bulkheadLimit: Number(process.env["VNPAY_BULKHEAD_LIMIT"] ?? 20),
   },
 
@@ -158,6 +181,7 @@ export const env = {
     failureThreshold: Number(process.env["MOMO_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["MOMO_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["MOMO_CB_RESET_TIMEOUT"] ?? 30_000),
+    halfOpenSuccessThreshold: Number(process.env["MOMO_CB_HALF_OPEN_SUCCESS_THRESHOLD"] ?? 5),
     bulkheadLimit: Number(process.env["MOMO_BULKHEAD_LIMIT"] ?? 20),
   },
 

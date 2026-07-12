@@ -71,6 +71,7 @@ export type OrganizerConcert = {
   planned_publish_at?: string;
   cover_image_url?: string;
   seat_map_url?: string;
+  seat_map_image_url?: string;
   venue: Pick<Venue, "id" | "name" | "city">;
   seat_zones: OrganizerSeatZone[];
   ticket_types: Array<{
@@ -144,8 +145,10 @@ export type CreateOrganizerRequestInput = {
   checker_count: number;
   press_kit_url?: string;
   artist_bio_image_url?: string;
-  // Ảnh sơ đồ chỗ ngồi upload lúc nộp hồ sơ; copy sang concert khi admin approve.
+  // File SVG sơ đồ (trang mua vé) upload lúc nộp hồ sơ; copy sang concert khi admin approve.
   seat_map_url?: string;
+  // Ảnh sơ đồ PNG/JPEG (trang thông tin concert).
+  seat_map_image_url?: string;
   ticket_types: OrganizerRequestTicketType[];
 };
 
@@ -161,6 +164,7 @@ export type UpdateOrganizerConcertInput = Partial<{
   planned_publish_at: string;
   cover_image_url: string;
   seat_map_url: string | null;
+  seat_map_image_url: string | null;
   guest_drive_folder_id: string;
 }>;
 
@@ -239,10 +243,19 @@ export async function uploadOrganizerCoverImage(file: File) {
   return response.data;
 }
 
-// Upload ảnh sơ đồ hạng vé (public) → url để lưu vào seat_map_url của concert.
+// Upload ảnh sơ đồ (PNG/JPEG — trang thông tin concert) → url lưu vào seat_map_image_url.
 export async function uploadOrganizerSeatMapImage(file: File) {
   const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
-    "/organizer/uploads/seat-map",
+    "/organizer/uploads/seat-map-image",
+    file,
+  );
+  return response.data;
+}
+
+// Upload file SVG tương tác (trang mua vé) → url lưu vào seat_map_url.
+export async function uploadOrganizerSeatMapSvg(file: File) {
+  const response = await apiUploadFile<ApiResponse<OrganizerCoverUpload>>(
+    "/organizer/uploads/seat-map-svg",
     file,
   );
   return response.data;

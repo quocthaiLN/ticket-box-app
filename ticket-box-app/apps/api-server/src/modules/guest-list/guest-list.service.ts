@@ -9,6 +9,11 @@ export class GuestListService {
     return this.repository.triggerConcertImport(concertId);
   }
 
+  // Vé khách mời (QR mã mời) cho link tải trong email.
+  getInviteTicket(concertId: string, code: string) {
+    return this.repository.findGuestForInviteTicket(concertId, code);
+  }
+
   // Trạng thái 1 job import.
   getImportJob(jobId: string) {
     return this.repository.getImportJob(jobId);

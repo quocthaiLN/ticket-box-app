@@ -59,6 +59,7 @@ type ExpiredHeldOrderRow = {
 type ReleaseOrderRow = {
   orderId: string;
   userId: string;
+  concertId: string;
   orderStatus: string;
   ticketTypeId: string;
   quantity: number;
@@ -108,6 +109,7 @@ export type ReleaseHeldOrderResult = {
   /** Trạng thái kết quả (EXPIRED/CANCELLED) hoặc hiện tại nếu NOT_HELD; "NOT_FOUND" nếu không thấy. */
   status: string;
   userId: string | null;
+  concertId: string | null;
   /** Thời điểm release (cancelledAt/expiredAt); null nếu không release. */
   timestamp: Date | null;
   releasedItems: Array<{ ticketTypeId: string; quantity: number }>;
@@ -124,6 +126,7 @@ export async function releaseHeldOrder(
           SELECT
             o.id AS "orderId",
             o.user_id AS "userId",
+            o.concert_id AS "concertId",
             o.status::text AS "orderStatus",
             oi.ticket_type_id AS "ticketTypeId",
             oi.quantity AS "quantity"
@@ -139,12 +142,13 @@ export async function releaseHeldOrder(
             orderId: input.orderId,
             status: "NOT_FOUND",
             userId: null,
+            concertId: null,
             timestamp: null,
             releasedItems: [],
           };
         }
 
-        const { userId, orderStatus } = rows[0];
+        const { userId, concertId, orderStatus } = rows[0];
 
         // Ownership / policy check nguyên tử (caller quyết định).
         input.authorize?.({
@@ -159,6 +163,7 @@ export async function releaseHeldOrder(
             orderId: input.orderId,
             status: orderStatus,
             userId,
+            concertId,
             timestamp: null,
             releasedItems: [],
           };
@@ -210,6 +215,7 @@ export async function releaseHeldOrder(
           orderId: input.orderId,
           status: newStatus,
           userId,
+          concertId,
           timestamp: now,
           releasedItems,
         };

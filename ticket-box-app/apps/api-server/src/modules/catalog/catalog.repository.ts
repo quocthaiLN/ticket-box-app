@@ -133,6 +133,7 @@ export class CatalogRepository {
     return {
       concert_id: concert.id,
       svg_url: concert.seatMapUrl ?? undefined,
+      fallback_image_url: concert.seatMapImageUrl ?? undefined,
       zones: concert.seatZones.filter(isAudienceZone).map((zone) => ({
         seat_zone_id: zone.id,
         code: zone.code,
@@ -310,6 +311,7 @@ export class CatalogRepository {
     endsAt: Date;
     coverImageUrl?: string;
     seatMapUrl?: string;
+    seatMapImageUrl?: string;
     guestDriveFolderId?: string;
   }): Promise<ConcertDetailDto> {
     const concert = await prisma.concert.create({
@@ -333,6 +335,7 @@ export class CatalogRepository {
       endsAt: Date;
       coverImageUrl: string | null;
       seatMapUrl: string | null;
+      seatMapImageUrl: string | null;
       guestDriveFolderId: string | null;
     }>,
   ): Promise<ConcertDetailDto> {
@@ -652,6 +655,7 @@ function mapConcertDetail(concert: ConcertDetailRecord): ConcertDetailDto {
     status: concert.status,
     cover_image_url: concert.coverImageUrl ?? undefined,
     seat_map_url: concert.seatMapUrl ?? undefined,
+    seat_map_image_url: concert.seatMapImageUrl ?? undefined,
     venue: mapVenue(concert.venue),
   };
 }
@@ -678,6 +682,7 @@ function mapConcertMetadata(
     ticket_types: concert.ticketTypes.map(mapTicketType),
     seat_map: {
       svg_url: concert.seatMapUrl ?? undefined,
+      fallback_image_url: concert.seatMapImageUrl ?? undefined,
     },
     artist_bio: concert.artistBio ?? undefined,
     artist_bio_image_url: concert.artistBioImageUrl ?? undefined,

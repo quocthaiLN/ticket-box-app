@@ -122,7 +122,8 @@ npm run dev:worker
 Payment mocks:
 
 ```powershell
-npm run dev:payment
+npm run dev:payment:momo
+npm run dev:payment:vnpay
 ```
 
 Mobile Checker:
@@ -137,7 +138,8 @@ URL local:
 | --- | --- |
 | API | `http://localhost:3000/v1` |
 | Web | `http://localhost:3001` |
-| Payment mocks | `http://localhost:4100` |
+| MoMo payment mock | `http://localhost:4101` |
+| VNPay payment mock | `http://localhost:4102` |
 
 Smoke test nhanh:
 

@@ -29,5 +29,6 @@ export async function sendEmail(data: EmailJobData): Promise<void> {
     subject: data.subject,
     text: data.text,
     html: data.html,
+    attachments: data.attachments,
   });
 }

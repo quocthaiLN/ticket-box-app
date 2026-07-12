@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isSupabaseStorageConfigured,
+  uploadSeatMapAsset,
+} from "@ticketbox/storage";
 import { ApiError, Errors } from "../../shared/http/problem-details.js";
 import { extractDriveFolderId } from "../../shared/utils/drive.js";
 import { buildConcertSlug } from "../../shared/utils/slug.js";
@@ -64,11 +68,30 @@ export class OrganizerService {
     return this.uploadPublicImage(organizerId, file, input, "covers", "cover");
   }
 
+  // Ảnh sơ đồ chỗ ngồi (PNG/JPEG/WebP) — hiển thị ở trang thông tin concert.
   uploadSeatMapImage(
     organizerId: string,
     file: Buffer,
     input: { contentType?: string; fileName?: string },
   ) {
+    if (isSvgContentType(input.contentType)) {
+      throw Errors.fieldValidationError(
+        "file",
+        "Seat map image must be a raster image (PNG/JPEG/WebP/GIF). Upload SVG via /organizer/uploads/seat-map-svg.",
+      );
+    }
+    return this.uploadPublicImage(organizerId, file, input, "seat-maps", "seat-map");
+  }
+
+  // File SVG tương tác — chỉ hiển thị ở trang mua vé (chọn zone).
+  uploadSeatMapSvg(
+    organizerId: string,
+    file: Buffer,
+    input: { contentType?: string; fileName?: string },
+  ) {
+    if (!isSvgContentType(input.contentType)) {
+      throw Errors.fieldValidationError("file", "Seat map SVG upload requires content-type image/svg+xml.");
+    }
     return this.uploadPublicImage(organizerId, file, input, "seat-maps", "seat-map");
   }
 
@@ -78,7 +101,7 @@ export class OrganizerService {
     input: { contentType?: string; fileName?: string },
     folder: string,
     defaultName: string,
-  ) {
+  ): Promise<{ object_key: string; url_path?: string; url?: string }> {
     if (!organizerId) {
       throw Errors.unauthorized();
     }
@@ -87,12 +110,25 @@ export class OrganizerService {
     if (!extension) {
       throw Errors.fieldValidationError(
         "file",
-        "Only JPEG, PNG, WebP, or GIF images are supported.",
+        "Only JPEG, PNG, WebP, GIF, or SVG images are supported.",
       );
     }
 
     if (!file.length) {
       throw Errors.fieldValidationError("file", "Image file is required.");
+    }
+
+    const safeBaseName = safeFileBaseName(input.fileName ?? defaultName);
+    const fileName = `${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
+
+    // Có Supabase → upload cloud (URL bền vững, sống qua redeploy); thiếu env → local (dev).
+    if (isSupabaseStorageConfigured()) {
+      const uploaded = await uploadSeatMapAsset(
+        `${folder}/${organizerId}/${fileName}`,
+        file,
+        input.contentType ?? "application/octet-stream",
+      );
+      return { object_key: uploaded.object_key, url: uploaded.url };
     }
 
     const uploadDir = path.resolve(
@@ -101,8 +137,7 @@ export class OrganizerService {
     );
     await mkdir(uploadDir, { recursive: true });
 
-    const safeBaseName = safeFileBaseName(input.fileName ?? defaultName);
-    const objectKey = `uploads/${folder}/${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
+    const objectKey = `uploads/${folder}/${fileName}`;
     await writeFile(path.resolve(uploadDir, path.basename(objectKey)), file);
 
     return {
@@ -364,8 +399,13 @@ function extensionForImageType(contentType?: string) {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/gif": ".gif",
+    "image/svg+xml": ".svg",
   };
   return normalized ? extensions[normalized] : undefined;
+}
+
+function isSvgContentType(contentType?: string) {
+  return contentType?.split(";")[0]?.trim().toLowerCase() === "image/svg+xml";
 }
 
 function safeFileBaseName(fileName: string) {

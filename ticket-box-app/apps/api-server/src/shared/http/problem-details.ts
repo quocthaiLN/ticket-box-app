@@ -9,7 +9,10 @@ export type ProblemDetails = {
 };
 
 export class ApiError extends Error {
-  constructor(public problem: Omit<ProblemDetails, "request_id">) {
+  constructor(
+    public problem: Omit<ProblemDetails, "request_id">,
+    public headers: Record<string, string> = {},
+  ) {
     super(problem.detail);
   }
 }
@@ -181,6 +184,15 @@ export const Errors = {
       code: "IDEMPOTENCY_IN_PROGRESS",
       detail:
         "A request with the same Idempotency-Key is currently being processed.",
+    }),
+
+  idempotencyKeyReused: () =>
+    new ApiError({
+      title: "Idempotency-Key already used",
+      status: 409,
+      code: "IDEMPOTENCY_KEY_REUSED",
+      detail:
+        "This Idempotency-Key was already used for a different endpoint or request payload.",
     }),
 
   missingIdempotencyKey: () =>

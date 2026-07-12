@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" width="100%" height="100%" style="background:#07140f;font-family:Arial,sans-serif">
+  <defs><style>.z{stroke:#fff;stroke-opacity:.75;stroke-width:2}.t{fill:#fff;font-weight:700;text-anchor:middle}.s{fill:#bbf7d0;text-anchor:middle}</style></defs>
+  <text x="450" y="42" class="t" font-size="26">CHI DEP DAP GIO RE SONG - SEAT MAP</text>
+  <path d="M250 80h400l-45 76H295z" fill="#0f766e" class="z"/>
+  <text x="450" y="128" fill="#ecfeff" font-size="24" font-weight="900" text-anchor="middle">STAGE</text>
+  <g id="zone-queen"><rect x="330" y="185" width="240" height="85" rx="10" fill="#047857" class="z"/><text x="450" y="236" class="t" font-size="20">QUEEN</text></g>
+  <g id="zone-vip"><rect x="160" y="305" width="220" height="110" rx="10" fill="#059669" class="z"/><text x="270" y="370" class="t" font-size="20">VIP</text></g>
+  <g id="zone-fanzone"><rect x="520" y="305" width="220" height="110" rx="10" fill="#0d9488" class="z"/><text x="630" y="370" class="t" font-size="20">FANZONE</text></g>
+  <g id="zone-cat1"><rect x="110" y="455" width="205" height="105" rx="10" fill="#65a30d" class="z"/><text x="213" y="515" class="t" font-size="20">CAT 1</text></g>
+  <g id="zone-cat2"><rect x="347" y="455" width="205" height="105" rx="10" fill="#84cc16" class="z"/><text x="450" y="515" class="t" font-size="20">CAT 2</text></g>
+  <g id="zone-ga"><rect x="585" y="455" width="205" height="105" rx="10" fill="#22c55e" class="z"/><text x="688" y="515" class="t" font-size="20">GA</text></g>
+  <text x="450" y="625" class="s" font-size="16">Green wave demo layout for Chi Dep concert</text>
+</svg>

@@ -84,21 +84,62 @@ Blueprint documents live at the repository root in `blueprint/`, including syste
 - Node.js 22+ recommended
 - npm 10+
 - Docker Desktop for local Postgres/Redis
-- A `.env` file in `ticket-box-app/`
+- The extracted source folder `ticket-box-app/` from `ticket-box-app.zip`
+- A `.env` file copied from `.env.example` inside the extracted source folder
+
+## Run From Submitted ZIP
+
+1. Download `ticket-box-app.zip` from the prepared Google Drive `src/` folder.
+2. Extract `ticket-box-app.zip`.
+3. Open a terminal in the extracted folder named `ticket-box-app`.
+4. Confirm you are in the correct folder:
+
+```bash
+ls
+```
+
+The correct folder contains `package.json`, `docker-compose.yml`, `apps/`, and `packages/`.
+
+On Windows PowerShell, if you extracted the zip to `Downloads`:
+
+```powershell
+cd $HOME\Downloads\ticket-box-app
+dir
+```
+
+If there is another nested folder, keep going until `package.json` is visible:
+
+```powershell
+cd ticket-box-app
+dir
+```
 
 ## Environment
 
-Create `ticket-box-app/.env` with values for local development. Do not commit production secrets.
+Create `.env` from the committed example inside the extracted source folder and adjust values only when your local ports or providers differ. Do not commit production secrets.
 
-Minimum local variables:
+From the extracted source folder:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Minimum local variables already included in `.env.example`:
 
 ```env
 DATABASE_URL=postgresql://ticketbox:ticketbox@localhost:5433/ticketbox?schema=public
-UPSTASH_REDIS_URL=redis://localhost:6379
-JWT_SECRET=replace-me
-JWT_REFRESH_SECRET=replace-me
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=ticketbox-local-access-secret
+JWT_REFRESH_SECRET=ticketbox-local-refresh-secret
 WEB_URL=http://localhost:3001
-API_URL=http://localhost:3000
+API_PUBLIC_URL=http://localhost:3000
+VITE_API_BASE_URL=http://localhost:3000/v1
 
 VNPAY_RETURN_URL=http://localhost:3000/v1/payment/return
 MOMO_REDIRECT_URL=http://localhost:3000/v1/payment/return/momo
@@ -108,12 +149,13 @@ Additional variables are needed for payment provider mocks, email, AI provider a
 
 ## Local Setup
 
-From the repository root:
+From the extracted source folder, install dependencies:
 
 ```bash
-cd ticket-box-app
 npm install
 ```
+
+If PowerShell blocks `npm` because `npm.ps1` is disabled, use `npm.cmd install` instead.
 
 Start local infrastructure:
 
@@ -126,8 +168,26 @@ Prepare the database:
 ```bash
 npm run db:generate
 npm run db:migrate
-npm run db:seed
+npm run db:seed:demo
 ```
+
+`npm run db:seed` is also available and points to the same clean demo profile. The demo seed creates the standardized dataset for grading:
+
+- 9 main demo users with shared password `Password@123`.
+- Organizer `yeah1@gmail.com` owns `Anh Trai Vượt Ngàn Chông Gai` and `Chị Đẹp Đạp Gió Rẽ Sóng`.
+- Organizer `DatVietVAC@gmail.com` owns `Anh Trai Say Hi` and `Em Xinh Say Hi`.
+- 10 concerts total: 9 published and 1 draft.
+- The 4 main concerts above have cover images, seat maps, ticket types/zones, and sold quantity over 70%.
+- Load-test users are not included in the default demo seed.
+
+For an existing local database with old seed data, reset local data first only when you do not need to keep it:
+
+```bash
+npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
+npm run db:seed:demo
+```
+
+Use `npm run db:seed:loadtest` only when you intentionally need extra users for load testing.
 
 Run the main services:
 
@@ -135,7 +195,8 @@ Run the main services:
 npm run dev:api
 npm run dev:web
 npm run dev:worker
-npm run dev:payment
+npm run dev:payment:momo
+npm run dev:payment:vnpay
 ```
 
 Run the mobile checker app:
@@ -150,9 +211,18 @@ Default local URLs:
 | --- | --- |
 | API | `http://localhost:3000/v1` |
 | Web | `http://localhost:3001` |
-| Payment mocks | `http://localhost:4100` |
+| MoMo payment mock | `http://localhost:4101` |
+| VNPay payment mock | `http://localhost:4102` |
 | Postgres | `localhost:5433` |
 | Redis | `localhost:6379` |
+
+Quick smoke checks:
+
+```text
+http://localhost:3000/v1/health
+http://localhost:3000/v1/concerts
+http://localhost:3001
+```
 
 ## Build
 

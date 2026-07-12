@@ -58,7 +58,10 @@ export type ConcertDetail = ConcertSummary & {
   artist_bio?: string;
   artist_bio_image_url?: string;
   artists?: ConcertArtist[];
+  // SVG tương tác — chỉ dùng ở trang mua vé.
   seat_map_url?: string;
+  // Ảnh PNG/JPEG — trang thông tin concert.
+  seat_map_image_url?: string;
   venue: Venue;
 };
 
@@ -308,7 +311,14 @@ async function apiRequest<TData>(
 
   if (!response.ok) {
     const { message, code } = await parseErrorResponse(response);
-    throw new ApiClientError(message, code, response.status);
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfter = retryAfterHeader === null ? undefined : Number(retryAfterHeader);
+    throw new ApiClientError(
+      message,
+      code,
+      response.status,
+      Number.isFinite(retryAfter) ? retryAfter : undefined,
+    );
   }
 
   if (response.status === 204) {
@@ -350,6 +360,7 @@ export class ApiClientError extends Error {
     message: string,
     public code?: string,
     public status?: number,
+    public retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiClientError";

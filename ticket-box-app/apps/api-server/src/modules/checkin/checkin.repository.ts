@@ -89,7 +89,7 @@ export class CheckinRepository {
     try {
       const ticket = await checkInTicketAtGate({
         concertId: input.concert_id,
-        deviceId: input.device_id,
+        deviceId: device.id,
         gateId: input.gate_id,
         qrTokenHash: qr.tokenHash,
         staffId: this.resolveStaffId(input, device),
@@ -590,7 +590,38 @@ export class CheckinRepository {
 
   // Chuẩn hoá nhiều dạng QR input thành token hash/payload/signature dùng chung.
   private resolveQrInput(input: CheckinScanRequest): QrInput {
-    const payload = normalizePayload(input.qr_payload);
+    let payload = normalizePayload(input.qr_payload);
+    if (!payload && typeof input.qr_token === "string") {
+      payload = normalizePayload(input.qr_token);
+    }
+
+    const signature =
+      input.qr_signature ??
+      asString(payload?.qr_signature) ??
+      asString(payload?.qrSignature);
+
+    if (payload && signature) {
+      if (!verifyQrSignature(payload, signature)) {
+        const tokenHash =
+          input.qr_payload_hash ??
+          input.qr_token ??
+          input.ticket_code;
+        return {
+          tokenHash,
+          payload,
+          signature,
+          invalidReason: "QR_SIGNATURE_INVALID",
+        };
+      } else {
+        const tokenHash = asString(payload.qr_token) ?? asString(payload.qrToken);
+        return {
+          tokenHash,
+          payload,
+          signature,
+        };
+      }
+    }
+
     const rawPayloadToken =
       typeof input.qr_payload === "string" && !payload
         ? input.qr_payload.trim()
@@ -599,22 +630,7 @@ export class CheckinRepository {
       input.qr_payload_hash ??
       input.qr_token ??
       input.ticket_code ??
-      rawPayloadToken ??
-      asString(payload?.qr_token) ??
-      asString(payload?.qrToken);
-    const signature =
-      input.qr_signature ??
-      asString(payload?.qr_signature) ??
-      asString(payload?.qrSignature);
-
-    if (payload && signature && !verifyQrSignature(payload, signature)) {
-      return {
-        tokenHash,
-        payload,
-        signature,
-        invalidReason: "QR_SIGNATURE_INVALID",
-      };
-    }
+      rawPayloadToken;
 
     return { tokenHash, payload, signature };
   }
@@ -625,9 +641,10 @@ export class CheckinRepository {
     concertId: string,
     gateId: string,
   ): Promise<DeviceContext> {
+    const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     const device = await prisma.checkinDevice.findFirst({
       where: {
-        id: deviceId,
+        ...(isUuid(deviceId) ? { id: deviceId } : { deviceCode: deviceId }),
         concertId,
         gateId,
         status: DeviceStatus.ACTIVE,
@@ -669,7 +686,7 @@ export class CheckinRepository {
       data: {
         concertId: args.input.concert_id,
         gateId: args.input.gate_id,
-        deviceId: args.input.device_id,
+        deviceId: args.device.id,
         staffId: this.resolveStaffId(args.input, args.device),
         scanTokenHash: args.scanTokenHash,
         result: args.result,

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 850" width="100%" height="100%" style="background-color: #090a0f; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  
+  <!-- ĐỊNH NGHĨA HIỆU ỨNG ÁNH SÁNG & GRADIENT BÍ ẨN -->
+  <defs>
+    <!-- Hiệu ứng đèn Neon mờ ảo cho sân khấu Secret Show -->
+    <filter id="secret-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <!-- Gradient Sân khấu phối màu Hoàng hôn huyền bí -->
+    <linearGradient id="stage-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+
+    <!-- Gradients mờ cho 2 phân khu đặc biệt -->
+    <linearGradient id="vip-secret-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.04" />
+    </linearGradient>
+    
+    <linearGradient id="ga-secret-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.02" />
+    </linearGradient>
+  </defs>
+
+  <!-- TIÊU ĐỀ ĐÊM DIỄN BÍ MẬT -->
+  <text x="400" y="45" text-anchor="middle" fill="#ffffff" font-size="24" font-weight="bold" letter-spacing="4">THE SECRET CONCERT</text>
+  <text x="400" y="72" text-anchor="middle" fill="#475569" font-size="12" font-weight="700" letter-spacing="2">EXCLUSIVE SEATING PLAN</text>
+
+  <!-- ================= STAGE (SÂN KHẤU MỞ RỘNG) ================= -->
+  <g transform="translate(0, 120)">
+    <!-- Hào quang ma mị phía sau sân khấu -->
+    <ellipse cx="400" cy="35" rx="180" ry="15" fill="#a855f7" opacity="0.35" filter="url(#secret-glow)" />
+    
+    <!-- Thiết kế Sân khấu bo cong nhẹ thời thượng -->
+    <path d="M 230,45 Q 400,75 570,45 L 530,0 L 270,0 Z" fill="url(#stage-grad)" />
+    <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="900" letter-spacing="6">SECRET STAGE</text>
+  </g>
+
+  <!-- ================= PHÂN CHIA PHÂN KHU ĐÊM NHẠC ================= -->
+
+  <!-- 1. VIP SECRET CIRCLE (120 Vé - Vòng tròn đặc quyền ôm sát lấy trung tâm sân khấu) -->
+  <g id="zone-vip-secret">
+    <!-- Hình vòng cung vát góc ôm trực diện tâm diễn -->
+    <path d="M 260,185 Q 400,225 540,185 L 575,310 Q 400,360 225,310 Z" fill="url(#vip-secret-grad)" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 3"/>
+    
+    <!-- Tên và thông số khu vực -->
+    <text x="400" y="250" text-anchor="middle" fill="#f59e0b" font-size="20" font-weight="bold" letter-spacing="1">VIP SECRET CIRCLE</text>
+    <text x="400" y="280" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="600">120 Vé • Khu vực riêng với tầm nhìn gần sân khấu nhất</text>
+  </g>
+
+  <!-- 2. GENERAL ADMISSION - GA (1.200 Vé đứng - Phân khu lòng sàn cuồng nhiệt bao quát) -->
+  <g id="zone-ga-secret">
+    <!-- Khối sàn đứng rộng lớn phía sau -->
+    <path d="M 195,335 Q 400,385 605,335 L 670,700 Q 400,760 130,700 Z" fill="url(#ga-secret-grad)" stroke="#a855f7" stroke-width="2"/>
+    
+    <!-- Tên và thông số khu vực -->
+    <text x="400" y="505" text-anchor="middle" fill="#a855f7" font-size="24" font-weight="800" letter-spacing="2">GENERAL ADMISSION</text>
+    <text x="400" y="540" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="bold">1,200 Vé đứng cho đêm diễn bí mật</text>
+  </g>
+
+  <!-- ================= BẢNG CHÚ THÍCH MINIMALIST (LEGEND) ================= -->
+  <g transform="translate(150, 750)">
+    <!-- Khung nền tối giản hòa quyện background -->
+    <rect x="0" y="0" width="500" height="60" rx="12" fill="#11131c" stroke="#1e2230" stroke-width="1.5"/>
+    
+    <!-- Legend: VIP Secret Circle -->
+    <g transform="translate(40, 0)">
+      <circle cx="15" cy="30" r="7" fill="#f59e0b" />
+      <text x="30" y="35" fill="#ffffff" font-size="13" font-weight="bold">VIP Secret Circle</text>
+      <text x="155" y="35" fill="#64748b" font-size="13">(120 vé)</text>
+    </g>
+
+    <!-- Legend: General Admission -->
+    <g transform="translate(290, 0)">
+      <circle cx="15" cy="30" r="7" fill="#a855f7" />
+      <text x="30" y="35" fill="#ffffff" font-size="13" font-weight="bold">GA (Standing)</text>
+      <text x="135" y="35" fill="#64748b" font-size="13">(1,200 vé)</text>
+    </g>
+  </g>
+
+</svg>

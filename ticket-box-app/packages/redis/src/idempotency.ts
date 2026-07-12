@@ -10,15 +10,27 @@
  * Sprint 3: middleware idempotency dùng helpers này cho POST /orders và payment webhook.
  */
 
+import { randomUUID } from "node:crypto";
 import { getRedisClient } from "./client.js";
 
 const IDEMPOTENCY_TTL_SECONDS = 86_400; // 24 giờ
 const KEY_PREFIX = "idempotency:";
+const CLAIM_KEY_PREFIX = "idempotency:claim:";
+
+const RELEASE_CLAIM_SCRIPT = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`;
 
 export type IdempotencyRecord = {
   status: number;
   body: unknown;
   created_at: string;
+  // Optional để các record đã ghi trước khi triển khai fingerprint vẫn đọc được
+  // cho đến khi TTL 24 giờ của chúng hết hạn.
+  fingerprint?: string;
 };
 
 /**
@@ -60,6 +72,53 @@ export async function setIdempotencyResponse(
     );
   } catch (err) {
     console.error(`[idempotency] SET error for key "${key}":`, err);
+  }
+}
+
+/**
+ * Claim an idempotency key before running its handler. `null` means another
+ * request owns the claim; `undefined` means Redis is unavailable and callers
+ * should rely on the database uniqueness fallback.
+ */
+export async function acquireIdempotencyClaim(
+  key: string,
+  ttlSeconds = 60,
+): Promise<string | null | undefined> {
+  const client = getRedisClient();
+  if (!client) return undefined;
+
+  const token = randomUUID();
+  try {
+    const result = await client.set(
+      `${CLAIM_KEY_PREFIX}${key}`,
+      token,
+      "EX",
+      ttlSeconds,
+      "NX",
+    );
+    return result === "OK" ? token : null;
+  } catch (err) {
+    console.error(`[idempotency] claim error for key "${key}":`, err);
+    return undefined;
+  }
+}
+
+export async function releaseIdempotencyClaim(
+  key: string,
+  token: string,
+): Promise<void> {
+  const client = getRedisClient();
+  if (!client) return;
+
+  try {
+    await client.eval(
+      RELEASE_CLAIM_SCRIPT,
+      1,
+      `${CLAIM_KEY_PREFIX}${key}`,
+      token,
+    );
+  } catch (err) {
+    console.error(`[idempotency] release claim error for key "${key}":`, err);
   }
 }
 

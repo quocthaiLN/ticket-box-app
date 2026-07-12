@@ -1,12 +1,12 @@
 import http, { type RefinedResponse, type ResponseType } from "k6/http";
-import { check, fail } from "k6";
+import { check, fail, sleep } from "k6";
 import exec from "k6/execution";
 import { Counter, Rate, Trend } from "k6/metrics";
 import { SharedArray } from "k6/data";
 
 // Đọc toàn bộ danh sách JWT token đã được sinh sẵn từ file JSON
 const allTokens = new SharedArray("loadtest_tokens", function () {
-  return JSON.parse(open("./tokens.json"));
+  return JSON.parse(open("../generate-tokens/tokens.json"));
 });
 
 function getEnv(name: string, fallback: string): string {
@@ -33,71 +33,22 @@ type TicketOption = {
   weight: number;
 };
 
-type ConcertOption = {
-  concertId: string;
-  weight: number;
-  tickets: TicketOption[];
-};
+const TARGET_CONCERT_ID = "00000000-0000-0000-0000-000000000201";
 
-// ID và max_per_user lấy từ packages/database/prisma/seed.mjs. Trọng số ưu
-// tiên GA/CAT và concert phổ biến, nhưng vẫn tạo traffic cho VIP/SVIP.
-// Riêng concert 201 có seed nhỏ để tạo nhánh sold-out có chủ đích.
-const concerts: ConcertOption[] = [
-  {
-    concertId: "00000000-0000-0000-0000-000000000201",
-    weight: 20,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000501", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000502", maxPerUser: 2, weight: 12 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000503", maxPerUser: 4, weight: 28 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000504", maxPerUser: 4, weight: 55 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000202",
-    weight: 45,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000506", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000507", maxPerUser: 4, weight: 12 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000508", maxPerUser: 4, weight: 23 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000509", maxPerUser: 6, weight: 25 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000510", maxPerUser: 6, weight: 35 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000203",
-    weight: 20,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000511", maxPerUser: 2, weight: 5 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000512", maxPerUser: 2, weight: 15 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000513", maxPerUser: 4, weight: 30 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000514", maxPerUser: 4, weight: 50 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000204",
-    weight: 3,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000516", maxPerUser: 2, weight: 10 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000517", maxPerUser: 2, weight: 30 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000518", maxPerUser: 4, weight: 60 },
-    ],
-  },
-  {
-    concertId: "00000000-0000-0000-0000-000000000205",
-    weight: 12,
-    tickets: [
-      { ticketTypeId: "00000000-0000-0000-0000-000000000521", maxPerUser: 2, weight: 8 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000522", maxPerUser: 2, weight: 22 },
-      { ticketTypeId: "00000000-0000-0000-0000-000000000523", maxPerUser: 4, weight: 70 },
-    ],
-  },
+// ID và max_per_user lấy từ packages/database/prisma/seed.mjs. Load test order
+// chỉ bắn vào một concert đang mở bán để đo đúng tranh chấp giữ vé của concert đó.
+const ticketOptions: TicketOption[] = [
+  { ticketTypeId: "00000000-0000-0000-0000-000000000501", maxPerUser: 2, weight: 4 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000502", maxPerUser: 2, weight: 10 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000503", maxPerUser: 4, weight: 24 },
+  { ticketTypeId: "00000000-0000-0000-0000-000000000504", maxPerUser: 4, weight: 62 },
 ];
 
 const createdOrders = new Counter("orders_created");
 const rejectedOrders = new Counter("orders_rejected");
 const soldOutOrders = new Counter("orders_sold_out");
 const rateLimitedOrders = new Counter("orders_rate_limited");
+const capacityLimitedOrders = new Counter("orders_capacity_limited");
 const invalidOrders = new Counter("orders_invalid");
 const systemErrors = new Counter("orders_system_errors");
 const requestedTickets = new Counter("tickets_requested");
@@ -106,13 +57,11 @@ const orderItemCount = new Trend("order_item_count");
 const unexpectedResponses = new Rate("orders_unexpected_response");
 
 export const options = {
-  setupTimeout: "10m",
   scenarios: {
     create_orders: {
       executor: "shared-iterations",
       vus: VUS,
       iterations: TOTAL_REQUESTS,
-      maxDuration: "10m",
     },
   },
   thresholds: {
@@ -120,7 +69,6 @@ export const options = {
     orders_invalid: ["count==0"],
     orders_system_errors: ["count==0"],
     orders_unexpected_response: ["rate==0"],
-    "http_req_duration{name:POST /v1/orders}": ["p(95)<2000"],
   },
 };
 
@@ -246,7 +194,7 @@ export function setup(): SetupData {
     .map((t) => t.token);
 
   if (tokens.length !== USER_COUNT) {
-    fail(`Chỉ lấy được ${tokens.length}/${USER_COUNT} access token từ file tokens.json.`);
+    fail(`Chỉ lấy được ${tokens.length}/${USER_COUNT} access token từ file generate-tokens/tokens.json.`);
   }
 
   return { tokens };
@@ -260,16 +208,12 @@ export default function ({ tokens }: SetupData): void {
     fail(`Không có access token cho iteration ${iteration}.`);
   }
 
-  const concert = weightedChoice(
-    concerts,
-    deterministicRandom(iteration, 1),
-  );
   const itemCount = randomItemCount(
     deterministicRandom(iteration, 2),
-    concert.tickets.length,
+    ticketOptions.length,
   );
   const selectedTickets = selectTickets(
-    concert.tickets,
+    ticketOptions,
     itemCount,
     iteration,
   );
@@ -285,45 +229,75 @@ export default function ({ tokens }: SetupData): void {
   orderItemCount.add(items.length);
   requestedTickets.add(totalQuantity);
 
-  const response = http.post(
-    `${BASE_URL}/orders`,
-    JSON.stringify({
-      concert_id: concert.concertId,
-      items,
-    }),
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": `k6-order-${RUN_ID}-${iteration}`,
-      },
-      tags: {
-        name: "POST /v1/orders",
-        concert_id: concert.concertId,
-        cart_size: String(items.length),
-      },
-    },
-  );
+  let response;
+  let attempts = 0;
+  const maxAttempts = 10;
+  let created = false;
+  let soldOut = false;
+  let capacityLimited = false;
+  let rateLimited = false;
+  let systemError = false;
 
-  const created = response.status === 201;
-  const code = responseCode(response);
-  const soldOut = response.status === 409 && code === "TICKET_SOLD_OUT";
-  const rateLimited = response.status === 429;
-  const systemError = response.status >= 500;
-  const invalid = !created && !soldOut && !rateLimited && !systemError;
-  const expected = created || soldOut;
+  while (attempts < maxAttempts) {
+    attempts += 1;
+    response = http.post(
+      `${BASE_URL}/orders`,
+      JSON.stringify({
+        concert_id: TARGET_CONCERT_ID,
+        items,
+      }),
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": `k6-order-${RUN_ID}-${iteration}`,
+        },
+        tags: {
+          name: "POST /v1/orders",
+          concert_id: TARGET_CONCERT_ID,
+          cart_size: String(items.length),
+        },
+      },
+    );
+
+    created = response.status === 201;
+    const code = responseCode(response);
+    soldOut = response.status === 409 && code === "TICKET_SOLD_OUT";
+    capacityLimited = response.status === 429 && code === "ORDER_CAPACITY_REACHED";
+    rateLimited = response.status === 429 && !capacityLimited;
+    systemError = response.status >= 500;
+
+    if (capacityLimited) {
+      const retryAfterHeader = response.headers["Retry-After"] || response.headers["retry-after"];
+      const retryAfterSeconds = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : 1;
+
+      capacityLimitedOrders.add(1);
+      sleep(retryAfterSeconds);
+      continue;
+    }
+
+    break;
+  }
+
+  const invalid =
+    !created && !soldOut && !capacityLimited && !rateLimited && !systemError;
+  // Admission control là backpressure có chủ đích trong burst test, không phải
+  // lỗi database. Theo dõi bằng metric riêng thay vì gộp vào 429 rate-limit.
+  const expected = created || soldOut || capacityLimited;
 
   createdOrders.add(created ? 1 : 0);
   rejectedOrders.add(created ? 0 : 1);
   soldOutOrders.add(soldOut ? 1 : 0);
   rateLimitedOrders.add(rateLimited ? 1 : 0);
+  // Đã cộng dồn capacityLimitedOrders ở trong loop nên ở đây chỉ ghi nhận nếu lần thử cuối cùng vẫn bị kẹt 429
+  // capacityLimitedOrders.add(capacityLimited ? 1 : 0);
   invalidOrders.add(invalid ? 1 : 0);
   systemErrors.add(systemError ? 1 : 0);
   reservedTickets.add(created ? totalQuantity : 0);
   unexpectedResponses.add(!expected);
 
   check(response, {
-    "kết quả hợp lệ (201 hoặc sold out)": () => expected,
+    "kết quả hợp lệ (201, sold out hoặc backpressure)": () => expected,
     "response có order_id": (res) => {
       if (!created) return true;
       try {

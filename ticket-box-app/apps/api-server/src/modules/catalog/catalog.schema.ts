@@ -41,6 +41,7 @@ export type CreateConcertInput = {
   cover_image_object_key?: string;
   seat_map_url?: string;
   seat_map_object_key?: string;
+  seat_map_image_url?: string;
   guest_drive_folder_id?: string;
 };
 
@@ -150,6 +151,7 @@ export function parseCreateConcertBody(body: unknown): CreateConcertInput {
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
     seat_map_object_key: asOptionalString(value.seat_map_object_key),
+    seat_map_image_url: asOptionalString(value.seat_map_image_url),
     guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   };
 }
@@ -169,6 +171,7 @@ export function parseUpdateConcertBody(body: unknown): UpdateConcertInput {
     cover_image_object_key: asOptionalString(value.cover_image_object_key),
     seat_map_url: asOptionalString(value.seat_map_url),
     seat_map_object_key: asOptionalString(value.seat_map_object_key),
+    seat_map_image_url: asOptionalString(value.seat_map_image_url),
     guest_drive_folder_id: parseGuestDriveFolderId(value.guest_drive_folder_id),
   });
 }

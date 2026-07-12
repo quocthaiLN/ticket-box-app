@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1100" width="100%" height="100%" style="background-color: #0b0f19; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  
+  <!-- ĐỊNH NGHĨA HIỆU ỨNG & MÀU SẮC GRADIET -->
+  <defs>
+    <!-- Hiệu ứng hào quang cho Sân khấu chính -->
+    <filter id="stage-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <!-- Gradient chuyển màu cho Sân khấu sống động -->
+    <linearGradient id="stage-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="50%" stop-color="#4facfe" />
+      <stop offset="100%" stop-color="#00f2fe" />
+    </linearGradient>
+
+    <!-- Gradients phủ màu mờ cho nền của từng Khu Vực Vé -->
+    <linearGradient id="svip-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff007f" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ff007f" stop-opacity="0.03" />
+    </linearGradient>
+    
+    <linearGradient id="vip-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffb300" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ffb300" stop-opacity="0.03" />
+    </linearGradient>
+
+    <linearGradient id="cat1-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00e676" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#00e676" stop-opacity="0.03" />
+    </linearGradient>
+
+    <linearGradient id="cat2-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00b0ff" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#00b0ff" stop-opacity="0.03" />
+    </linearGradient>
+
+    <linearGradient id="ga-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e0e0e0" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#e0e0e0" stop-opacity="0.02" />
+    </linearGradient>
+  </defs>
+
+  <!-- TIÊU ĐỀ SƠ ĐỒ CHÍNH -->
+  <text x="500" y="45" text-anchor="middle" fill="#ffffff" font-size="28" font-weight="800" letter-spacing="3">SƠ ĐỒ TỔNG THỂ KHU VỰC VÉ</text>
+  <text x="500" y="75" text-anchor="middle" fill="#64748b" font-size="15" font-weight="500" letter-spacing="1">STADIUM MEGA CONCERT MAP</text>
+
+  <!-- ================= STAGE (SÂN KHẤU CHÍNH & ĐƯỜNG RUNWAY) ================= -->
+  <g transform="translate(0, 120)">
+    <!-- Ánh sáng Neon phía sau sân khấu -->
+    <ellipse cx="500" cy="35" rx="280" ry="25" fill="#00f2fe" opacity="0.25" filter="url(#stage-glow)" />
+    <!-- Catwalk / Runway mở rộng đâm vào khu khán giả -->
+    <path d="M 460,50 L 540,50 L 520,110 L 480,110 Z" fill="url(#stage-grad)" opacity="0.8"/>
+    <circle cx="500" cy="110" r="25" fill="url(#stage-grad)" />
+    <!-- Khối sân khấu chính hình thang -->
+    <path d="M 220,50 L 780,50 L 730,0 L 270,0 Z" fill="url(#stage-grad)" />
+    <!-- Tên Sân Khấu -->
+    <text x="500" y="32" text-anchor="middle" fill="#0b0f19" font-size="22" font-weight="900" letter-spacing="5">MAIN STAGE</text>
+  </g>
+
+  <!-- ================= CÁC PHÂN KHU VÉ ĐỒNG BỘ CẤP BẬC ================= -->
+
+  <!-- 1. SVIP DIAMOND (Khu VIP nhất, bao quanh trọn vẹn đường Catwalk) -->
+  <g id="zone-svip">
+    <path d="M 280,185 L 720,185 L 670,320 L 550,320 L 540,260 L 460,260 L 450,320 L 330,320 Z" fill="url(#svip-grad)" stroke="#ff007f" stroke-width="2.5" stroke-dasharray="6 3"/>
+    <text x="500" y="220" text-anchor="middle" fill="#ff007f" font-size="20" font-weight="bold" letter-spacing="1">SVIP DIAMOND</text>
+    <text x="500" y="245" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">500 Ghế đặc biệt (Gần sân khấu nhất)</text>
+  </g>
+
+  <!-- 2. VIP GOLD (Gồm 2 cánh Trái/Phải và 1 khu Trung Tâm ngay sau SVIP - Tổng 2000 Ghế có mái che) -->
+  <g id="zone-vip-gold">
+    <!-- Cánh Trái VIP -->
+    <path d="M 120,185 L 260,185 L 310,320 L 120,320 Z" fill="url(#vip-grad)" stroke="#ffb300" stroke-width="2.5"/>
+    <text x="195" y="250" text-anchor="middle" fill="#ffb300" font-size="15" font-weight="bold">VIP GOLD (L)</text>
+    
+    <!-- Cánh Phải VIP -->
+    <path d="M 740,185 L 880,185 L 880,320 L 690,320 Z" fill="url(#vip-grad)" stroke="#ffb300" stroke-width="2.5"/>
+    <text x="785" y="250" text-anchor="middle" fill="#ffb300" font-size="15" font-weight="bold">VIP GOLD (R)</text>
+
+    <!-- Khu VIP Giữa -->
+    <path d="M 315,335 L 685,335 L 650,440 L 350,440 Z" fill="url(#vip-grad)" stroke="#ffb300" stroke-width="2.5"/>
+    <text x="500" y="380" text-anchor="middle" fill="#ffb300" font-size="18" font-weight="bold">VIP GOLD (CENTER)</text>
+    <text x="500" y="405" text-anchor="middle" fill="#ffffff" font-size="13">2,000 Ghế • Có mái che • Tầm nhìn đẹp</text>
+  </g>
+
+  <!-- 3. CAT 1 (Khán đài tầng thấp phía trước - 3 Khối cánh cung bao quanh) -->
+  <g id="zone-cat1">
+    <!-- Khán đài cánh trái -->
+    <path d="M 100,340 L 290,340 L 250,580 L 70,580 Z" fill="url(#cat1-grad)" stroke="#00e676" stroke-width="2.5"/>
+    <text x="170" y="450" text-anchor="middle" fill="#00e676" font-size="20" font-weight="bold" transform="rotate(-15, 170, 450)">CAT 1 (L)</text>
+
+    <!-- Khán đài cánh phải -->
+    <path d="M 710,340 L 900,340 L 930,580 L 750,580 Z" fill="url(#cat1-grad)" stroke="#00e676" stroke-width="2.5"/>
+    <text x="830" y="450" text-anchor="middle" fill="#00e676" font-size="20" font-weight="bold" transform="rotate(15, 830, 450)">CAT 1 (R)</text>
+
+    <!-- Khán đài chính diện trước -->
+    <path d="M 310,485 L 690,485 L 660,600 L 340,600 Z" fill="url(#cat1-grad)" stroke="#00e676" stroke-width="2.5"/>
+    <text x="500" y="535" text-anchor="middle" fill="#00e676" font-size="20" font-weight="bold">CAT 1 (Khán Đài Trước)</text>
+    <text x="500" y="560" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">Tổng: 5,000 Vé ngồi</text>
+  </g>
+
+  <!-- 4. GENERAL ADMISSION - GA (Khu vực đứng tự do ngoài trời vô cùng rộng lớn tại lòng sân vận động) -->
+  <g id="zone-ga">
+    <path d="M 320,615 L 680,615 L 720,850 L 280,850 Z" fill="url(#ga-grad)" stroke="#ffffff" stroke-width="2" stroke-opacity="0.6"/>
+    <text x="500" y="715" text-anchor="middle" fill="#ffffff" font-size="25" font-weight="800" letter-spacing="1">GENERAL ADMISSION (GA)</text>
+    <text x="500" y="750" text-anchor="middle" fill="#cbd5e1" font-size="16" font-weight="bold">20,000 Vé đứng tự do ngoài trời</text>
+    <text x="500" y="775" text-anchor="middle" fill="#94a3b8" font-size="13" font-style="italic">(Khu vực cuồng nhiệt nhất)</text>
+  </g>
+
+  <!-- 5. CAT 2 (Khán đài tầng cao phía sau cùng, chạy hình chữ U ôm trọn sân vận động) -->
+  <g id="zone-cat2">
+    <path d="M 50,600 L 230,600 L 260,870 L 740,870 L 770,600 L 950,600 L 910,930 L 90,930 Z" fill="url(#cat2-grad)" stroke="#00b0ff" stroke-width="2.5"/>
+    <text x="500" y="895" text-anchor="middle" fill="#00b0ff" font-size="22" font-weight="bold">CAT 2 (Khán Đài Phía Sau)</text>
+    <text x="500" y="918" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">8,000 Vé ghế ngồi khán đài xa</text>
+  </g>
+
+  <!-- ================= BẢNG GIẢI THÍCH CHI TIẾT (LEGEND PANEL) ================= -->
+  <g transform="translate(50, 970)">
+    <!-- Viền khung thông tin tổng hợp -->
+    <rect x="0" y="0" width="900" height="90" rx="12" fill="#111827" stroke="#1f2937" stroke-width="1.5"/>
+    
+    <!-- Legend: SVIP -->
+    <g transform="translate(25, 0)">
+      <rect x="0" y="25" width="22" height="22" rx="6" fill="#ff007f" />
+      <text x="32" y="39" fill="#ffffff" font-size="13" font-weight="bold">SVIP Diamond</text>
+      <text x="32" y="58" fill="#94a3b8" font-size="11">500 vé (Sát sân khấu)</text>
+    </g>
+
+    <!-- Legend: VIP -->
+    <g transform="translate(210, 0)">
+      <rect x="0" y="25" width="22" height="22" rx="6" fill="#ffb300" />
+      <text x="32" y="39" fill="#ffffff" font-size="13" font-weight="bold">VIP Gold</text>
+      <text x="32" y="58" fill="#94a3b8" font-size="11">2,000 vé (Mái che, view đẹp)</text>
+    </g>
+
+    <!-- Legend: CAT 1 -->
+    <g transform="translate(390, 0)">
+      <rect x="0" y="25" width="22" height="22" rx="6" fill="#00e676" />
+      <text x="32" y="39" fill="#ffffff" font-size="13" font-weight="bold">CAT 1</text>
+      <text x="32" y="58" fill="#94a3b8" font-size="11">5,000 vé (Khán đài trước)</text>
+    </g>
+
+    <!-- Legend: CAT 2 -->
+    <g transform="translate(565, 0)">
+      <rect x="0" y="25" width="22" height="22" rx="6" fill="#00b0ff" />
+      <text x="32" y="39" fill="#ffffff" font-size="13" font-weight="bold">CAT 2</text>
+      <text x="32" y="58" fill="#94a3b8" font-size="11">8,000 vé (Khán đài sau)</text>
+    </g>
+
+    <!-- Legend: GA -->
+    <g transform="translate(740, 0)">
+      <rect x="0" y="25" width="22" height="22" rx="6" fill="#ffffff" fill-opacity="0.8" stroke="#ffffff" />
+      <text x="32" y="39" fill="#ffffff" font-size="13" font-weight="bold">GA (General Admission)</text>
+      <text x="32" y="58" fill="#94a3b8" font-size="11">20,000 vé (Đứng tự do)</text>
+    </g>
+  </g>
+
+</svg>

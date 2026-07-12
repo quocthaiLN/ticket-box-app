@@ -169,11 +169,13 @@ export class PaymentCircuitBreaker {
 export const vnpayCircuitBreaker = new PaymentCircuitBreaker('VNPAY', {
   failureThreshold: env.vnpay.failureThreshold,
   resetTimeout: env.vnpay.resetTimeout,
+  halfOpenSuccessThreshold: env.vnpay.halfOpenSuccessThreshold,
 });
 
 export const momoCircuitBreaker = new PaymentCircuitBreaker('MOMO', {
   failureThreshold: env.momo.failureThreshold,
   resetTimeout: env.momo.resetTimeout,
+  halfOpenSuccessThreshold: env.momo.halfOpenSuccessThreshold,
 });
 
 // Trả về circuit breaker tương ứng với provider đang được gọi.

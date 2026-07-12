@@ -14,7 +14,13 @@ const userIds = {
   checkerSecretOne: "00000000-0000-0000-0000-000000000005",
   checkerSecretTwo: "00000000-0000-0000-0000-000000000006",
   organizerTwo: "00000000-0000-0000-0000-000000000007",
+  yeah1Organizer: "00000000-0000-0000-0000-000000000008",
+  datVietVacOrganizer: "00000000-0000-0000-0000-000000000009",
 };
+
+const SEED_PROFILE = process.env.SEED_PROFILE ?? process.argv[2] ?? "demo";
+const LOAD_TEST_USER_COUNT = Number(process.env.LOAD_TEST_USER_COUNT ?? 1000);
+const FIXED_CHECKED_IN_AT = new Date("2026-06-08T11:15:00+07:00");
 
 const venues = [
   {
@@ -49,6 +55,38 @@ const venues = [
     capacity: 598,
     mapUrl: "https://maps.example.com/opera-house",
   },
+  {
+    id: "00000000-0000-0000-0000-000000000105",
+    name: "Cong vien bo song Sai Gon",
+    address: "Thu Thiem, TP. Thu Duc",
+    city: "Ho Chi Minh",
+    capacity: 30000,
+    mapUrl: "https://maps.example.com/saigon-riverside-park",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000106",
+    name: "Ravopark - The Metropole Thu Thiem",
+    address: "Khu do thi Thu Thiem, TP. Thu Duc",
+    city: "Ho Chi Minh",
+    capacity: 22000,
+    mapUrl: "https://maps.example.com/ravopark",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000107",
+    name: "The Global City",
+    address: "Do Xuan Hop, An Phu, TP. Thu Duc",
+    city: "Ho Chi Minh",
+    capacity: 35000,
+    mapUrl: "https://maps.example.com/the-global-city",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000108",
+    name: "Vinhomes Ocean Park 3",
+    address: "Van Giang, Hung Yen",
+    city: "Hung Yen",
+    capacity: 30000,
+    mapUrl: "https://maps.example.com/ocean-park-3",
+  },
 ];
 
 const concerts = [
@@ -68,16 +106,16 @@ const concerts = [
     status: "PUBLISHED",
     coverImageUrl: "/src/img/anh-sang-man-dem.jpg",
     zones: [
-      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 10),
-      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 30),
-      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 80),
-      zone("GA", "General Admission", "Khu đứng tự do.", 200),
+      zone("SVIP", "SVIP", "Hàng đầu, tầm nhìn sân khấu đẹp nhất.", 500),
+      zone("VIP", "VIP", "Khu ghế ngồi thoải mái, gần sân khấu.", 1000),
+      zone("CAT1", "CAT 1", "Khu đứng phía trước.", 1500),
+      zone("GA", "General Admission", "Khu đứng tự do.", 2000),
     ],
     tickets: [
-      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 10, 1, 3, 2),
-      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 30, 2, 8, 2),
-      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 80, 3, 17, 4),
-      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 200, 5, 45, 4),
+      ticket("SVIP", "SVIP", "Vào cổng ưu tiên và poster độc quyền.", 2950000, 500, 0, 0, 2),
+      ticket("VIP", "VIP", "Ghế ngồi cao cấp và túi quà lưu niệm.", 1950000, 1000, 0, 0, 2),
+      ticket("CAT1", "CAT 1", "Quyền vào khu đứng phía trước.", 1250000, 1500, 0, 0, 4),
+      ticket("GA", "GA", "Vé đứng tiêu chuẩn.", 750000, 2000, 0, 0, 4),
     ],
   },
   {
@@ -212,6 +250,130 @@ const concerts = [
       ticket("GA", "GA", "Vé phổ thông nháp được tạo từ hồ sơ đã duyệt.", 700000, 1200, 0, 0, 4, "DRAFT"),
     ],
   },
+  {
+    id: "00000000-0000-0000-0000-000000000207",
+    venueId: "00000000-0000-0000-0000-000000000105",
+    organizerId: userIds.datVietVacOrganizer,
+    title: "Anh Trai Say Hi",
+    slug: "anh-trai-say-hi",
+    description:
+      "Concert Anh Trai Say Hi quy tu 30 nghe si tre voi san khau pop, rap, dance va nhung tiet muc viral tu chuong trinh. Dem dien duoc thiet ke nhu mot le hoi am nhac ngoai troi danh cho cong dong fan Say Hi.",
+    artistName: "Anh Trai Say Hi",
+    artistBio:
+      "Anh Trai Say Hi la chuong trinh am nhac thuc te cua Vie Channel, VieON va DatVietVAC, noi cac nghe si nam tre ket hop, sang tac va trinh dien tren nhieu live stage.",
+    startsAt: "2026-09-19T19:00:00+07:00",
+    endsAt: "2026-09-19T22:30:00+07:00",
+    plannedPublishAt: "2026-07-20T10:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/anh-trai-say-hi.jpg",
+    zones: [
+      zone("SKY", "Sky Lounge", "Khu lounge cao cap, tam nhin rong va F&B rieng.", 800),
+      zone("VIP1", "VIP 1", "Khu ngoi gan san khau voi bo qua doc quyen.", 2500),
+      zone("VIP2", "VIP 2", "Khu ngoi trung tam, am thanh va anh sang can bang.", 4000),
+      zone("FANZONE", "Fanzone", "Khu dung gan san khau danh cho fan co vu.", 6000),
+      zone("GA1", "GA 1", "Khu dung trung tam.", 5000),
+    ],
+    tickets: [
+      ticket("SKY", "Sky Lounge", "Lounge rieng, F&B cao cap va qua luu niem.", 10000000, 800, 12, 720, 2),
+      ticket("VIP1", "VIP 1", "Ghe ngoi dep, lightstick va bo qua Say Hi.", 3500000, 2500, 40, 2050, 4),
+      ticket("VIP2", "VIP 2", "Ghe ngoi trung tam, vong tay check-in.", 2000000, 4000, 70, 3100, 4),
+      ticket("FANZONE", "Fanzone", "Khu dung gan san khau, photocard random.", 2200000, 6000, 130, 5200, 4),
+      ticket("GA1", "GA 1", "Khu dung nang luong cao.", 1500000, 5000, 100, 3900, 4),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000208",
+    venueId: "00000000-0000-0000-0000-000000000107",
+    organizerId: userIds.datVietVacOrganizer,
+    title: "Em Xinh Say Hi",
+    slug: "em-xinh-say-hi",
+    description:
+      "Em Xinh Say Hi Concert la bua tiec am nhac va thoi trang cua 30 nu nghe si, voi san khau hong tim ruc ro, vu dao dong doi va nhung man ket hop dac biet tu chuong trinh.",
+    artistName: "Em Xinh Say Hi",
+    artistBio:
+      "Em Xinh Say Hi la phien ban nu cua vu tru Say Hi, do Vie Channel, VieON va DatVietVAC san xuat, tap trung vao ca tinh am nhac va nang luong trinh dien cua cac nghe si nu.",
+    startsAt: "2026-10-10T19:00:00+07:00",
+    endsAt: "2026-10-10T22:30:00+07:00",
+    plannedPublishAt: "2026-08-01T10:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/em-xinh-say-hi.jpg",
+    zones: [
+      zone("DIAMOND", "Diamond", "Khu gan san khau nhat voi quyen loi premium.", 1000),
+      zone("VIP", "VIP", "Khu ngoi trung tam voi tam nhin ro.", 2500),
+      zone("FANZONE", "Fanzone", "Khu dung gan runway danh cho fan.", 5000),
+      zone("CAT1", "CAT 1", "Khu ngoi/tua dung tam nhin tot.", 5000),
+      zone("GA", "GA", "Khu pho thong mo rong.", 7000),
+    ],
+    tickets: [
+      ticket("DIAMOND", "Diamond", "Gift set, lane rieng va co hoi check-in photobooth.", 5500000, 1000, 20, 860, 2),
+      ticket("VIP", "VIP", "Ghe dep va goi qua Em Xinh.", 3200000, 2500, 45, 1900, 4),
+      ticket("FANZONE", "Fanzone", "Khu dung gan runway, lightstick.", 2400000, 5000, 110, 3900, 4),
+      ticket("CAT1", "CAT 1", "Tam nhin tot va vong tay check-in.", 1600000, 5000, 90, 3800, 4),
+      ticket("GA", "GA", "Khu pho thong gia tot.", 800000, 7000, 150, 5200, 6),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000209",
+    venueId: "00000000-0000-0000-0000-000000000106",
+    organizerId: userIds.yeah1Organizer,
+    title: "Anh Trai Vượt Ngàn Chông Gai",
+    slug: "anh-trai-vuot-ngan-chong-gai",
+    description:
+      "Concert Anh Trai Vượt Ngàn Chông Gai mang tinh thần hỏa ca lên sân khấu lớn, quy tụ các Anh Tài với ban nhạc live, vũ đạo và những tiết mục được khán giả yêu thích.",
+    artistName: "Anh Tài Vượt Ngàn Chông Gai",
+    artistBio:
+      "Anh Trai Vượt Ngàn Chông Gai là chương trình âm nhạc thực tế do VTV và 1Production, công ty thuộc Yeah1, phối hợp sản xuất, quy tụ nhiều nghệ sĩ nam đã có dấu ấn trong showbiz Việt.",
+    startsAt: "2026-11-07T19:00:00+07:00",
+    endsAt: "2026-11-07T22:30:00+07:00",
+    plannedPublishAt: "2026-08-15T10:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/anh-trai-vuot-ngan-chong-gai.jpg",
+    zones: [
+      zone("XVIP", "X-VIP", "Khu lounge cao cap nhat.", 900),
+      zone("DINH_NOC", "Dinh Noc", "Khu ghe premium trung tam.", 2500),
+      zone("KICH_TRAN", "Kich Tran", "Khu ghe premium can san khau.", 2500),
+      zone("HOA_LUC", "Hoa Luc", "Khu standing gan san khau.", 4500),
+      zone("TAM_KHIEN", "Tam Khien", "Khu ngoi gia tot.", 3000),
+    ],
+    tickets: [
+      ticket("XVIP", "X-VIP", "Lounge, F&B, merchandise va lane rieng.", 8000000, 900, 12, 790, 2),
+      ticket("DINH_NOC", "Dinh Noc", "Ghe premium, ao va non concert.", 3500000, 2500, 45, 1950, 4),
+      ticket("KICH_TRAN", "Kich Tran", "Ghe premium can san khau.", 3500000, 2500, 50, 1950, 4),
+      ticket("HOA_LUC", "Hoa Luc", "Standing khu lua gan san khau.", 1800000, 4500, 110, 3600, 4),
+      ticket("TAM_KHIEN", "Tam Khien", "Khu ngoi gia tot.", 800000, 3000, 60, 2200, 6),
+    ],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000210",
+    venueId: "00000000-0000-0000-0000-000000000107",
+    organizerId: userIds.yeah1Organizer,
+    title: "Chị Đẹp Đạp Gió Rẽ Sóng",
+    slug: "chi-dep-dap-gio-re-song",
+    description:
+      "Chị Đẹp Đạp Gió Rẽ Sóng Concert tôn vinh năng lượng của các nghệ sĩ nữ qua những tiết mục live band, dance performance và những sân khấu kết hợp giữa hai mùa chương trình.",
+    artistName: "Chị Đẹp Đạp Gió Rẽ Sóng",
+    artistBio:
+      "Chị Đẹp Đạp Gió Rẽ Sóng là series âm nhạc thực tế của Yeah1/1Production, nơi các nghệ sĩ nữ tài năng cùng tập luyện, tạo nhóm và mang đến những tiết mục truyền cảm hứng.",
+    startsAt: "2026-12-12T19:00:00+07:00",
+    endsAt: "2026-12-12T22:30:00+07:00",
+    plannedPublishAt: "2026-09-01T10:00:00+07:00",
+    status: "PUBLISHED",
+    coverImageUrl: "/src/img/chi-dep-dap-gio-re-song.jpg",
+    zones: [
+      zone("QUEEN", "Queen", "Khu premium gan san khau.", 1000),
+      zone("VIP", "VIP", "Khu ngoi tam nhin dep.", 3000),
+      zone("FANZONE", "Fanzone", "Khu dung gan runway.", 5000),
+      zone("CAT1", "CAT 1", "Khu ngoi trung tam.", 6000),
+      zone("GA", "GA", "Khu pho thong mo rong.", 8000),
+    ],
+    tickets: [
+      ticket("QUEEN", "Queen", "Gift set, lane rieng va ghe premium.", 6000000, 1000, 20, 790, 2),
+      ticket("VIP", "VIP", "Khu ngoi dep va lightstick.", 3500000, 3000, 60, 2250, 4),
+      ticket("FANZONE", "Fanzone", "Khu dung gan runway.", 2500000, 5000, 110, 3850, 4),
+      ticket("CAT1", "CAT 1", "Khu ngoi trung tam.", 1800000, 6000, 140, 4500, 4),
+      ticket("GA", "GA", "Khu pho thong gia tot.", 800000, 8000, 180, 6100, 6),
+    ],
+  },
 ];
 
 const fixedId = (number) =>
@@ -228,6 +390,7 @@ const ticketTypeId = (concertIndex, ticketIndex) => fixedId(501 + concertIndex *
 const organizerRequestId = (index) => fixedId(701 + index);
 const deletionRequestId = (index) => fixedId(721 + index);
 const checkerAccountId = (index) => fixedId(741 + index);
+const LOAD_TEST_CONCERT_ID = "00000000-0000-0000-0000-000000000201";
 
 function zone(code, name, description, capacity) {
   return { code, name, description, capacity };
@@ -262,9 +425,10 @@ async function seedUsers() {
     ["organizerTwo", "organizer2@gmail.com", "BTC 2", "+84900000007", "ORGANIZER"],
     ["checker", "checker@gmail.com", "Nhân viên soát vé Demo", "+84900000003", "CHECKER"],
     ["admin", "admin@gmail.com", "Quản trị viên Demo", "+84900000004", "ADMIN"],
-    ["checker", "checker@ticketbox.test", "Checker Soát Vé Demo", "+84900000003", "CHECKER"],
     ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
+    ["yeah1Organizer", "yeah1@gmail.com", "Yeah1 / 1Production", "+84900000008", "ORGANIZER"],
+    ["datVietVacOrganizer", "DatVietVAC@gmail.com", "DatVietVAC / Vie Channel", "+84900000009", "ORGANIZER"],
   ];
 
   // Bcrypt hash thật (12 rounds, khớp hashPassword của api-server) để demo login được.
@@ -287,6 +451,16 @@ async function seedUsers() {
   }
 }
 
+async function cleanupDemoOnlyNoise() {
+  await prisma.user.deleteMany({
+    where: { email: { startsWith: "loadtest", endsWith: "@ticketbox.test" } },
+  });
+
+  await prisma.user.deleteMany({
+    where: { email: "checker@ticketbox.test" },
+  });
+}
+
 async function seedCatalog() {
   for (const venue of venues) {
     await prisma.venue.upsert({
@@ -297,12 +471,14 @@ async function seedCatalog() {
   }
 
   for (const [concertIndex, concert] of concerts.entries()) {
+    const organizerId = concert.organizerId ?? userIds.organizer;
+
     await prisma.concert.upsert({
       where: { id: concert.id },
       create: {
         id: concert.id,
         venueId: concert.venueId,
-        organizerId: userIds.organizer,
+        organizerId,
         title: concert.title,
         slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
@@ -313,11 +489,11 @@ async function seedCatalog() {
         plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
-        seatMapUrl: null,
+        seatMapUrl: `/uploads/seat-maps/${concertIndex + 1}.svg`,
       },
       update: {
         venueId: concert.venueId,
-        organizerId: userIds.organizer,
+        organizerId,
         title: concert.title,
         slug: slugWithIdSuffix(concert.slug, concert.id),
         description: concert.description,
@@ -328,7 +504,7 @@ async function seedCatalog() {
         plannedPublishAt: concert.plannedPublishAt ? new Date(concert.plannedPublishAt) : null,
         status: concert.status,
         coverImageUrl: concert.coverImageUrl,
-        seatMapUrl: null,
+        seatMapUrl: `/uploads/seat-maps/${concertIndex + 1}.svg`,
       },
     });
 
@@ -569,11 +745,16 @@ async function seedOrganizerWorkflow() {
   ];
 
   for (const account of checkerAccounts) {
-    await prisma.concertCheckerAccount.upsert({
-      where: { id: account.id },
-      create: account,
-      update: account,
+    await prisma.concertCheckerAccount.deleteMany({
+      where: {
+        OR: [
+          { id: account.id },
+          { concertId: account.concertId, userId: account.userId },
+        ],
+      },
     });
+
+    await prisma.concertCheckerAccount.create({ data: account });
   }
 
   const deletionRequests = [
@@ -609,7 +790,20 @@ async function seedOrganizerWorkflow() {
 }
 
 async function seedDemoTickets() {
-  const publishedConcerts = concerts.filter((concert) => concert.status === "PUBLISHED" && concert.tickets.length > 0);
+  await prisma.ticket.deleteMany({ where: { concertId: LOAD_TEST_CONCERT_ID } });
+  await prisma.payment.deleteMany({ where: { order: { concertId: LOAD_TEST_CONCERT_ID } } });
+  await prisma.orderItem.deleteMany({ where: { order: { concertId: LOAD_TEST_CONCERT_ID } } });
+  await prisma.order.deleteMany({ where: { concertId: LOAD_TEST_CONCERT_ID } });
+  await prisma.userTicketTypeCounter.deleteMany({
+    where: { ticketType: { concertId: LOAD_TEST_CONCERT_ID } },
+  });
+
+  const publishedConcerts = concerts.filter(
+    (concert) =>
+      concert.status === "PUBLISHED" &&
+      concert.tickets.length > 0 &&
+      concert.id !== LOAD_TEST_CONCERT_ID,
+  );
 
   for (const [index, concert] of publishedConcerts.slice(0, 3).entries()) {
     const sourceConcertIndex = concerts.findIndex((item) => item.id === concert.id);
@@ -732,76 +926,6 @@ async function seedDemoTickets() {
     });
   }
 
-  // Bổ sung các ticket phụ cho concert 1 (anh-sang-man-dem) phục vụ demo
-  const asmConcert = publishedConcerts[0];
-  if (asmConcert) {
-    const sourceConcertIndex = concerts.findIndex((item) => item.id === asmConcert.id);
-    const ticketIndex = Math.min(1, asmConcert.tickets.length - 1);
-    const ticketSeed = asmConcert.tickets[ticketIndex];
-    const ticketType = ticketTypeId(sourceConcertIndex, ticketIndex);
-    const sourceZoneIndex = asmConcert.zones.findIndex((item) => item.code === ticketSeed.zoneCode);
-    const amount = ticketSeed.price;
-
-    const extraTickets = [
-      { id: fixedId(801), orderId: fixedId(811), orderItemId: fixedId(821), qrTokenHash: `qr-seed-${asmConcert.slug}-002`, status: "ISSUED" },
-      { id: fixedId(802), orderId: fixedId(812), orderItemId: fixedId(822), qrTokenHash: `qr-seed-${asmConcert.slug}-cancelled`, status: "CANCELLED" },
-      { id: fixedId(803), orderId: fixedId(813), orderItemId: fixedId(823), qrTokenHash: `qr-seed-${asmConcert.slug}-refunded`, status: "REFUNDED" },
-    ];
-
-    for (const ext of extraTickets) {
-      await prisma.order.upsert({
-        where: { id: ext.orderId },
-        create: {
-          id: ext.orderId,
-          userId: userIds.audience,
-          concertId: asmConcert.id,
-          idempotencyKey: `seed-order-${ext.id}`,
-          status: "CONFIRMED",
-          totalAmount: amount,
-          currency: "VND",
-          confirmedAt: new Date("2026-06-08T10:00:00+07:00"),
-        },
-        update: {
-          status: "CONFIRMED",
-        },
-      });
-
-      await prisma.orderItem.upsert({
-        where: { id: ext.orderItemId },
-        create: {
-          id: ext.orderItemId,
-          orderId: ext.orderId,
-          ticketTypeId: ticketType,
-          quantity: 1,
-          unitPrice: amount,
-          lineTotal: amount,
-        },
-        update: {},
-      });
-
-      await prisma.ticket.upsert({
-        where: { id: ext.id },
-        create: {
-          id: ext.id,
-          orderId: ext.orderId,
-          orderItemId: ext.orderItemId,
-          userId: userIds.audience,
-          concertId: asmConcert.id,
-          ticketTypeId: ticketType,
-          seatZoneId: zoneId(sourceConcertIndex, sourceZoneIndex),
-          gateId: gateId(sourceConcertIndex, sourceZoneIndex),
-          qrTokenHash: ext.qrTokenHash,
-          qrPayload: null,
-          qrSignature: null,
-          status: ext.status,
-          issuedAt: new Date("2026-06-08T10:05:00+07:00"),
-        },
-        update: {
-          status: ext.status,
-        },
-      });
-    }
-  }
 }
 
 async function seedOperations() {
@@ -919,7 +1043,7 @@ async function seedOperations() {
       create: {
         id: fixedId(681 + concertIndex),
         concertId: concert.id,
-        requestedById: userIds.organizer,
+        requestedById: concert.organizerId ?? userIds.organizer,
         status: concertIndex < 2 ? "DONE" : "PENDING",
         sourceFileUrl: `/press-kit/${concert.slug}.pdf`,
         extractedText: concert.description,
@@ -941,7 +1065,7 @@ async function seedOperations() {
     const guestListSeed = [
       { id: fixedId(901), fullName: "Khách VIP 1", email: "guest1@ticketbox.test", phone: "+84911111111", status: "INVITED" },
       { id: fixedId(902), fullName: "Khách VIP 2", email: "guest2@ticketbox.test", phone: "+84922222222", status: "INVITED" },
-      { id: fixedId(903), fullName: "Khách VIP Đã Soát", email: "guest3@ticketbox.test", phone: "+84933333333", status: "CHECKED_IN", checkedInAt: new Date(), checkedInById: userIds.checker },
+      { id: fixedId(903), fullName: "Khách VIP Đã Soát", email: "guest3@ticketbox.test", phone: "+84933333333", status: "CHECKED_IN", checkedInAt: FIXED_CHECKED_IN_AT, checkedInById: userIds.checker },
     ];
 
     for (const guest of guestListSeed) {
@@ -969,13 +1093,13 @@ async function seedOperations() {
 }
 
 async function seedLoadTestUsers() {
-  // 1.000 user AUDIENCE cho k6 load test.
-  // Email: loadtest0001@ticketbox.test … loadtest1000@ticketbox.test
+  // User AUDIENCE cho k6 load test.
+  // Email: loadtest0001@ticketbox.test ... loadtestNNNN@ticketbox.test
   // Mật khẩu chung: Password@123 (10 rounds để seed nhanh hơn).
   const passwordHash = bcrypt.hashSync(DEMO_PASSWORD, 10);
 
   const data = [];
-  for (let i = 1; i <= 100000; i++) {
+  for (let i = 1; i <= LOAD_TEST_USER_COUNT; i++) {
     const index = String(i).padStart(4, "0");
     data.push({
       email: `loadtest${index}@ticketbox.test`,
@@ -989,7 +1113,7 @@ async function seedLoadTestUsers() {
 
   // createMany với skipDuplicates idempotent — chạy lại không sinh lỗi.
   const result = await prisma.user.createMany({ data, skipDuplicates: true });
-  console.log(`seedLoadTestUsers: ${result.count} user mới được tạo (${1000 - result.count} đã tồn tại).`);
+  console.log(`seedLoadTestUsers: ${result.count} user mới được tạo (${LOAD_TEST_USER_COUNT - result.count} đã tồn tại).`);
 
   // Đảm bảo mật khẩu luôn đúng cho những user đã có (phòng trường hợp hash cũ).
   await prisma.user.updateMany({
@@ -999,12 +1123,26 @@ async function seedLoadTestUsers() {
 }
 
 async function main() {
+  if (!["demo", "dev", "loadtest"].includes(SEED_PROFILE)) {
+    throw new Error(`Unknown SEED_PROFILE "${SEED_PROFILE}". Use demo, dev, or loadtest.`);
+  }
+
+  console.log(`Seeding TicketBox profile: ${SEED_PROFILE}`);
+
   await seedUsers();
-  await seedLoadTestUsers();
   await seedCatalog();
   await seedOrganizerWorkflow();
   await seedDemoTickets();
   await seedOperations();
+
+  if (SEED_PROFILE === "demo") {
+    await cleanupDemoOnlyNoise();
+    return;
+  }
+
+  if (SEED_PROFILE === "loadtest") {
+    await seedLoadTestUsers();
+  }
 }
 
 main()

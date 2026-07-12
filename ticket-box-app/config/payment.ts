@@ -15,6 +15,8 @@ export const paymentConfig = {
     errorThreshold: Number(process.env['VNPAY_CB_ERROR_THRESHOLD'] ?? 50),
     // Circuit breaker: ms to wait in OPEN state before probing (HALF_OPEN)
     resetTimeout: Number(process.env['VNPAY_CB_RESET_TIMEOUT'] ?? 30000),
+    // Circuit breaker: successful HALF_OPEN probes required before closing
+    halfOpenSuccessThreshold: Number(process.env['VNPAY_CB_HALF_OPEN_SUCCESS_THRESHOLD'] ?? 5),
     // Bulkhead: max concurrent calls to this provider
     bulkheadLimit: Number(process.env['VNPAY_BULKHEAD_LIMIT'] ?? 20),
   },
@@ -32,6 +34,7 @@ export const paymentConfig = {
     failureThreshold: Number(process.env['MOMO_CB_FAILURE_THRESHOLD'] ?? 5),
     errorThreshold: Number(process.env['MOMO_CB_ERROR_THRESHOLD'] ?? 50),
     resetTimeout: Number(process.env['MOMO_CB_RESET_TIMEOUT'] ?? 30000),
+    halfOpenSuccessThreshold: Number(process.env['MOMO_CB_HALF_OPEN_SUCCESS_THRESHOLD'] ?? 5),
     bulkheadLimit: Number(process.env['MOMO_BULKHEAD_LIMIT'] ?? 20),
   },
 };

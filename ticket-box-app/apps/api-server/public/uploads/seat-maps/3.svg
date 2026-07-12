@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 950" width="100%" height="100%" style="background-color: #0d0e12; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  
+  <!-- ĐỊNH NGHĨA GRADIENTS & GLOWS (HIỆU ỨNG TÂN TIẾN) -->
+  <defs>
+    <!-- Sân khấu phát sáng -->
+    <filter id="stage-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <!-- Gradient cho Sân khấu Arena -->
+    <linearGradient id="stage-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a855f7" />
+      <stop offset="50%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+
+    <!-- Gradients phủ màu cho từng Zone -->
+    <linearGradient id="svip-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fb7185" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0.05" />
+    </linearGradient>
+    
+    <linearGradient id="vip-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.05" />
+    </linearGradient>
+
+    <linearGradient id="cat1-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0.05" />
+    </linearGradient>
+
+    <linearGradient id="ga-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#64748b" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#64748b" stop-opacity="0.02" />
+    </linearGradient>
+  </defs>
+
+  <!-- TIÊU ĐỀ SƠ ĐỒ CHÍNH -->
+  <text x="400" y="45" text-anchor="middle" fill="#ffffff" font-size="24" font-weight="bold" letter-spacing="2">SƠ ĐỒ KHU VỰC VÉ CHƯƠNG TRÌNH</text>
+  <text x="400" y="70" text-anchor="middle" fill="#4b5563" font-size="13" font-weight="600" letter-spacing="1">ARENA SEATING PLAN</text>
+
+  <!-- ================= MAIN STAGE (SÂN KHẤU CHÍNH) ================= -->
+  <g transform="translate(0, 110)">
+    <!-- Hào quang ánh đèn sân khấu -->
+    <ellipse cx="400" cy="35" rx="200" ry="15" fill="#ec4899" opacity="0.3" filter="url(#stage-glow)" />
+    <!-- Khối thiết kế sân khấu -->
+    <path d="M 200,45 L 600,45 L 560,0 L 240,0 Z" fill="url(#stage-grad)" />
+    <text x="400" y="28" text-anchor="middle" fill="#ffffff" font-size="18" font-weight="900" letter-spacing="4">STAGE / SÂN KHẤU</text>
+  </g>
+
+  <!-- ================= PHÂN CHIA CÁC KHU VỰC VÉ ================= -->
+
+  <!-- 1. SVIP (Chỉ 200 vé - Hàng đầu đặc quyền cao cấp nhất) -->
+  <g id="zone-svip">
+    <path d="M 280,180 L 520,180 L 540,260 L 260,260 Z" fill="url(#svip-grad)" stroke="#fb7185" stroke-width="2.5" stroke-dasharray="5 3"/>
+    <text x="400" y="215" text-anchor="middle" fill="#fb7185" font-size="18" font-weight="bold" letter-spacing="1">SVIP</text>
+    <text x="400" y="240" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="600">200 Ghế (Hàng đầu + Cocktail Party)</text>
+  </g>
+
+  <!-- 2. VIP (800 Ghế cao cấp - Bao quanh khu SVIP tạo góc nhìn trực diện siêu đẹp) -->
+  <g id="zone-vip">
+    <path d="M 210,180 L 265,180 L 245,265 L 555,265 L 535,180 L 590,180 L 625,380 L 175,380 Z" fill="url(#vip-grad)" stroke="#fbbf24" stroke-width="2.5"/>
+    <text x="400" y="315" text-anchor="middle" fill="#fbbf24" font-size="20" font-weight="bold" letter-spacing="1">VIP</text>
+    <text x="400" y="345" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">800 Ghế ngồi cao cấp</text>
+  </g>
+
+  <!-- 3. CAT 1 (2.500 Ghế tiêu chuẩn B - Khu vực khán đài chính tầng giữa) -->
+  <g id="zone-cat1">
+    <path d="M 160,395 L 640,395 L 685,580 L 115,580 Z" fill="url(#cat1-grad)" stroke="#2dd4bf" stroke-width="2.5"/>
+    <text x="400" y="475" text-anchor="middle" fill="#2dd4bf" font-size="22" font-weight="bold" letter-spacing="1">CAT 1</text>
+    <text x="400" y="505" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="600">2,500 Ghế ngồi tiêu chuẩn B</text>
+  </g>
+
+  <!-- 4. STANDING / GA (5.000 Vé đứng tự do - Khu vực lòng sân rộng lớn phía sau sôi động) -->
+  <g id="zone-ga">
+    <path d="M 100,595 L 700,595 L 745,800 L 55,800 Z" fill="url(#ga-grad)" stroke="#94a3b8" stroke-width="2"/>
+    <text x="400" y="685" text-anchor="middle" fill="#ffffff" font-size="24" font-weight="800" letter-spacing="2">STANDING (GA)</text>
+    <text x="400" y="720" text-anchor="middle" fill="#94a3b8" font-size="16" font-weight="bold">5,000 Vé đứng phía sau</text>
+  </g>
+
+  <!-- ================= BẢNG HƯỚNG DẪN CHÚ THÍCH (LEGEND) ================= -->
+  <g transform="translate(50, 840)">
+    <!-- Khung nền Legend -->
+    <rect x="0" y="0" width="700" height="70" rx="10" fill="#16171d" stroke="#22242f" stroke-width="1.5"/>
+    
+    <!-- Item: SVIP -->
+    <g transform="translate(20, 0)">
+      <rect x="0" y="24" width="20" height="20" rx="5" fill="#fb7185" />
+      <text x="28" y="38" fill="#ffffff" font-size="13" font-weight="bold">SVIP</text>
+      <text x="28" y="54" fill="#6b7280" font-size="11">200 vé</text>
+    </g>
+
+    <!-- Item: VIP -->
+    <g transform="translate(195, 0)">
+      <rect x="0" y="24" width="20" height="20" rx="5" fill="#fbbf24" />
+      <text x="28" y="38" fill="#ffffff" font-size="13" font-weight="bold">VIP</text>
+      <text x="28" y="54" fill="#6b7280" font-size="11">800 vé</text>
+    </g>
+
+    <!-- Item: CAT 1 -->
+    <g transform="translate(370, 0)">
+      <rect x="0" y="24" width="20" height="20" rx="5" fill="#2dd4bf" />
+      <text x="28" y="38" fill="#ffffff" font-size="13" font-weight="bold">CAT 1</text>
+      <text x="28" y="54" fill="#6b7280" font-size="11">2,500 vé</text>
+    </g>
+
+    <!-- Item: GA -->
+    <g transform="translate(545, 0)">
+      <rect x="0" y="24" width="20" height="20" rx="5" fill="#94a3b8" />
+      <text x="28" y="38" fill="#ffffff" font-size="13" font-weight="bold">Standing (GA)</text>
+      <text x="28" y="54" fill="#6b7280" font-size="11">5,000 vé</text>
+    </g>
+  </g>
+
+</svg>

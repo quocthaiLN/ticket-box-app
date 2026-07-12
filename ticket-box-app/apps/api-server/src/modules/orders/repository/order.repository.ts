@@ -3,7 +3,7 @@
   Prisma,
   releaseHeldOrder,
 } from "@ticketbox/database";
-import { cacheDelete } from "@ticketbox/redis";
+import { cacheDelete, catalogCacheKeys } from "@ticketbox/redis";
 import { env } from "@ticketbox/config";
 import { ApiError } from "../../../shared/http/problem-details.js";
 import type {
@@ -12,8 +12,6 @@ import type {
   AdminOrdersQuery,
 } from "../order.type.js";
 import { createHeldOrder, InventoryReservationError } from "./hold.js";
-
-const inventoryCacheKey = (ticketTypeId: string) => `inventory:${ticketTypeId}`;
 
 type OrderItemRow = {
   id: string;
@@ -210,9 +208,7 @@ export async function createOrderHeld(
     throw mapReservationErrorToApi(err);
   }
 
-  await Promise.allSettled(
-    result.items.map((i) => cacheDelete(inventoryCacheKey(i.ticketTypeId))),
-  );
+  await cacheDelete(catalogCacheKeys.inventory(result.concertId));
 
   return {
     order: {
@@ -321,6 +317,7 @@ export async function getOrderWithDetails(
 }
 
 export async function getOrderByIdempotencyKey(
+  userId: string,
   idempotencyKey: string,
 ): Promise<{ id: string; status: string } | null> {
   const [row] = await prisma.$queryRaw<
@@ -328,7 +325,8 @@ export async function getOrderByIdempotencyKey(
   >(Prisma.sql`
     SELECT id, status::text AS "status"
     FROM orders
-    WHERE idempotency_key = ${idempotencyKey}
+    WHERE user_id = ${userId}::uuid
+      AND idempotency_key = ${idempotencyKey}
   `);
 
   return row ?? null;
@@ -382,9 +380,9 @@ export async function cancelOrderById(
     quantity: i.quantity,
   }));
 
-  await Promise.allSettled(
-    releasedItems.map((i) => cacheDelete(inventoryCacheKey(i.ticket_type_id))),
-  );
+  if (result.concertId) {
+    await cacheDelete(catalogCacheKeys.inventory(result.concertId));
+  }
 
   return {
     orderId: result.orderId,
@@ -417,9 +415,9 @@ export async function expireOrderById(orderId: string): Promise<{
     quantity: i.quantity,
   }));
 
-  await Promise.allSettled(
-    releasedItems.map((i) => cacheDelete(inventoryCacheKey(i.ticket_type_id))),
-  );
+  if (result.concertId) {
+    await cacheDelete(catalogCacheKeys.inventory(result.concertId));
+  }
 
   return {
     orderId: result.orderId,

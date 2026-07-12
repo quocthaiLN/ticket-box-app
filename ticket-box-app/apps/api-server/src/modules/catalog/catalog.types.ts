@@ -48,7 +48,10 @@ export type ConcertDetailDto = Omit<ConcertSummaryDto, "venue" | "ticket_price_r
   artist_bio?: string;
   artist_bio_image_url?: string;
   artists?: ConcertArtistDto[];
+  // SVG tương tác — trang mua vé.
   seat_map_url?: string;
+  // Ảnh PNG/JPEG — trang thông tin concert.
+  seat_map_image_url?: string;
 };
 
 export type SeatZoneDto = {

@@ -258,7 +258,10 @@ model Concert {
   plannedPublishAt DateTime?     @map("planned_publish_at")
   status           ConcertStatus @default(DRAFT)
   coverImageUrl    String?       @map("cover_image_url")
+  // File SVG tương tác của sơ đồ chỗ ngồi — CHỈ hiển thị ở trang mua vé (chọn zone).
   seatMapUrl       String?       @map("seat_map_url")
+  // Ảnh sơ đồ chỗ ngồi (PNG/JPEG) — hiển thị ở trang thông tin concert + đính kèm email mời.
+  seatMapImageUrl  String?       @map("seat_map_image_url")
   // Thư mục Google Drive chứa CSV khách mời VIP của concert (BTC tự quản lý file).
   guestDriveFolderId String?     @map("guest_drive_folder_id")
   createdAt        DateTime      @default(now()) @map("created_at")
@@ -308,8 +311,10 @@ model OrganizerRequest {
   artistBioImageUrl String?           @map("artist_bio_image_url")
   // Ảnh concert/cover tách từ press kit (quy ước: ảnh trang 1); copy sang concert khi approve.
   coverImageUrl    String?            @map("cover_image_url")
-  // Ảnh sơ đồ chỗ ngồi organizer upload khi nộp hồ sơ; copy sang concert khi approve.
+  // File SVG sơ đồ chỗ ngồi organizer upload khi nộp hồ sơ; copy sang concert khi approve.
   seatMapUrl       String?            @map("seat_map_url")
+  // Ảnh sơ đồ (PNG/JPEG) cho trang thông tin concert; copy sang concert khi approve.
+  seatMapImageUrl  String?            @map("seat_map_image_url")
   // Danh sách nghệ sĩ [{name, bio, image_url}] do AI tách từ press kit; copy sang concert khi approve.
   artists          Json?
   ticketTypes      Json           @map("ticket_types") @db.JsonB
@@ -493,7 +498,7 @@ model Order {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId          String      @map("user_id") @db.Uuid
   concertId       String      @map("concert_id") @db.Uuid
-  idempotencyKey  String      @unique @map("idempotency_key") @db.VarChar(128)
+  idempotencyKey  String      @map("idempotency_key") @db.VarChar(128)
   status          OrderStatus @default(HELD)
   totalAmount     Decimal     @default(0) @map("total_amount") @db.Decimal(12, 2)
   currency        String      @default("VND") @db.Char(3)
@@ -514,6 +519,7 @@ model Order {
   @@index([userId, status, createdAt])
   @@index([concertId, status])
   @@index([holdExpiresAt])
+  @@unique([userId, idempotencyKey])
   @@map("orders")
 }
 
@@ -755,6 +761,8 @@ model GuestList {
   phone         String?     @db.VarChar(20)
   code          String?     @db.VarChar(100)
   status        GuestStatus @default(INVITED)
+  // Mốc đã gửi email mời (kèm QR + sơ đồ) — chống gửi trùng khi re-import nightly.
+  inviteEmailSentAt DateTime? @map("invite_email_sent_at")
   checkedInAt   DateTime?   @map("checked_in_at")
   checkedInById String?     @map("checked_in_by") @db.Uuid
   note          String?

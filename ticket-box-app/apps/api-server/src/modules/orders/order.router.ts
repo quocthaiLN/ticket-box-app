@@ -12,6 +12,9 @@ import { validateBody } from '../../shared/middleware/validate.middleware.js';
 import { createOrderSchema } from './order.schema.js';
 import { requireAuth } from '../../shared/middleware/auth.middleware.js';
 import { requireRole } from '../../shared/guards/role.guard.js';
+import {
+  orderUserRateLimit,
+} from '../../shared/middleware/rate-limit.middleware.js';
 
 const router = Router();
 
@@ -27,6 +30,7 @@ router.get(
 router.post(
   '/orders',
   requireAuth,
+  orderUserRateLimit,
   requireRole('AUDIENCE', 'ADMIN'),
   idempotencyMiddleware('orders'),
   validateBody(createOrderSchema, 'INVALID_CHECKOUT_REQUEST'),

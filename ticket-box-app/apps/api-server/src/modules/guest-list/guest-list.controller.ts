@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
+import QRCode from "qrcode";
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "@ticketbox/database";
+import { Errors } from "../../shared/http/problem-details.js";
 import { collection, ok } from "../../shared/http/response.js";
 import { parseImportErrorsQuery, parseGuestScanBody, parseGuestSearchQuery } from "./guest-list.schema.js";
 import { GuestListService } from "./guest-list.service.js";
@@ -94,6 +96,35 @@ export async function scanGuest(req: Request, res: Response, next: NextFunction)
     const body = parseGuestScanBody(req.body);
     res.setHeader("Cache-Control", "no-store");
     res.json(ok(await service.scanGuest(body), req.requestId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Public: tải vé khách mời (ảnh QR mã mời) từ link trong email.
+// Không cần auth — mã mời là bí mật chỉ khách đó biết (đủ dài, unique theo concert).
+export async function downloadGuestInviteTicket(req: Request, res: Response, next: NextFunction) {
+  try {
+    const concertId = typeof req.query.concert_id === "string" ? req.query.concert_id : "";
+    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+    if (!concertId || !code) {
+      throw Errors.fieldValidationError("code", "concert_id and code are required.");
+    }
+
+    const guest = await service.getInviteTicket(concertId, code);
+    if (!guest || !guest.code) {
+      throw Errors.notFound("Guest invite ticket");
+    }
+
+    const png = await QRCode.toBuffer(guest.code, { type: "png", width: 480, margin: 2 });
+    const safeTitle = guest.concert.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="ve-moi-${safeTitle || "concert"}.png"`,
+    );
+    res.send(png);
   } catch (err) {
     next(err);
   }

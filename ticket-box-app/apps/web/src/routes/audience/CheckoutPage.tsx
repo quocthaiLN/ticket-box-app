@@ -9,7 +9,7 @@ import {
   type OrderDetail,
   type PaymentProvider,
 } from "../../services/order.service";
-import { getApiErrorCode } from "../../lib/api-client";
+import { ApiClientError, getApiErrorCode } from "../../lib/api-client";
 import {
   clearPendingCheckout,
   formatCountdown,
@@ -35,6 +35,12 @@ const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
 
 function checkoutErrorMessage(err: unknown, fallback: string): string {
   const code = getApiErrorCode(err);
+  if (code === "RATE_LIMITED") {
+    if (err instanceof ApiClientError && err.retryAfter) {
+      return `Bạn đang thao tác quá nhanh. Vui lòng thử lại sau ${err.retryAfter} giây.`;
+    }
+    return "Bạn đang thao tác quá nhanh. Vui lòng thử lại sau giây lát.";
+  }
   if (code && CHECKOUT_ERROR_MESSAGES[code]) return CHECKOUT_ERROR_MESSAGES[code];
   return err instanceof Error && err.message ? err.message : fallback;
 }
@@ -75,7 +81,20 @@ export function CheckoutPage() {
     if (!pending?.orderId) return;
     setOrder(null);
     let stopped = false;
+    let timeoutId: number | undefined;
+    let pollAttempt = 0;
+
+    const scheduleNextPoll = (delayMs: number) => {
+      if (stopped) return;
+      timeoutId = window.setTimeout(() => {
+        timeoutId = undefined;
+        void poll();
+      }, delayMs);
+    };
+
     const poll = async () => {
+      if (document.hidden) return;
+
       try {
         const detail = await getOrder(pending.orderId!);
         if (stopped) return;
@@ -86,16 +105,36 @@ export function CheckoutPage() {
           setStep("success");
         } else if (detail.status === "CANCELLED" || detail.status === "EXPIRED") {
           setStep("payment");
+        } else {
+          const delays = [3_000, 5_000, 10_000];
+          const delay = delays[Math.min(pollAttempt, delays.length - 1)];
+          pollAttempt += 1;
+          scheduleNextPoll(delay);
         }
-      } catch {
+      } catch (err) {
         // Keep the checkout screen stable; manual retry remains available.
+        const retryAfterMs = err instanceof ApiClientError && err.retryAfter
+          ? err.retryAfter * 1_000
+          : 10_000;
+        scheduleNextPoll(retryAfterMs);
       }
     };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+        timeoutId = undefined;
+        return;
+      }
+      if (timeoutId === undefined) void poll();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void poll();
-    const interval = window.setInterval(poll, 3000);
     return () => {
       stopped = true;
-      window.clearInterval(interval);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [pending?.orderId]);
 

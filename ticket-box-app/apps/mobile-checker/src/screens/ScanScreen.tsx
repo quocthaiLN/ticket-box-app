@@ -147,12 +147,32 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
           }
         );
 
+        const db = await getDatabase();
+        const clientItemId = `local-${Crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+
         if (response.data.result === 'SUCCESS') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setResult({ status: 'SUCCESS', message: 'Soát vé thành công!' });
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, 'synced', 'Soát vé online thành công!')`,
+            [clientItemId, data, qrPayloadHash, config.concertId, config.gateId, now]
+          );
         } else {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           setResult({ status: response.data.result, message: response.data.reason || 'Lỗi soát vé.' });
+          
+          let finalStatus = 'failed';
+          if (response.data.result === 'WRONG_GATE') finalStatus = 'WRONG_GATE';
+          else if (response.data.result === 'ALREADY_CHECKED_IN') finalStatus = 'ALREADY_CHECKED_IN';
+          else if (response.data.result === 'INVALID_TICKET') finalStatus = 'INVALID_TICKET';
+
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`,
+            [clientItemId, data, qrPayloadHash, config.concertId, config.gateId, now, finalStatus, response.data.reason || 'Lỗi soát vé.']
+          );
         }
       }
     } catch (error) {
@@ -234,12 +254,32 @@ export function ScanScreen({ config, mode }: ScanScreenProps) {
           }
         );
 
+        const db = await getDatabase();
+        const clientItemId = `local-${Crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+
         if (response.data.result === 'SUCCESS') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setResult({ status: 'SUCCESS', message: 'Soát vé online thành công!' });
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, 'synced', 'Soát vé online thành công!')`,
+            [clientItemId, code, qrPayloadHash, config.concertId, config.gateId, now]
+          );
         } else {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           setResult({ status: response.data.result, message: response.data.reason || 'Lỗi soát vé.' });
+
+          let finalStatus = 'failed';
+          if (response.data.result === 'WRONG_GATE') finalStatus = 'WRONG_GATE';
+          else if (response.data.result === 'ALREADY_CHECKED_IN') finalStatus = 'ALREADY_CHECKED_IN';
+          else if (response.data.result === 'INVALID_TICKET') finalStatus = 'INVALID_TICKET';
+
+          await db.runAsync(
+            `INSERT INTO offline_queue (client_item_id, type, qr_token, qr_payload_hash, guest_id, phone, concert_id, gate_id, scanned_at, status, message)
+             VALUES (?, 'TICKET', ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`,
+            [clientItemId, code, qrPayloadHash, config.concertId, config.gateId, now, finalStatus, response.data.reason || 'Lỗi soát vé.']
+          );
         }
       }
     } catch (error) {
