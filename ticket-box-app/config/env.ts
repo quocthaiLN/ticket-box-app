@@ -51,6 +51,14 @@ export const env = {
     url: process.env["WEB_URL"] ?? "http://localhost:3001",
   },
 
+  // URL public của api-server — dùng để dựng link tuyệt đối trong email
+  // (vd link tải vé khách mời). Production đặt domain thật.
+  api: {
+    publicUrl:
+      process.env["API_PUBLIC_URL"] ??
+      `http://localhost:${process.env["PORT"] ?? "3000"}`,
+  },
+
   // Auth / JWT
   auth: {
     jwtSecret: process.env["JWT_SECRET"] ?? "ticketbox-local-access-secret",

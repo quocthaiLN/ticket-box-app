@@ -1,13 +1,16 @@
+import { randomBytes } from "node:crypto";
 import { Worker, type Job } from "bullmq";
 import { prisma, Prisma, type GuestImportJob } from "@ticketbox/database";
 import {
   createRedisConnection,
+  enqueueEmail,
   QUEUE_NAMES,
   type GuestImportJobData,
   type GuestImportScanData,
 } from "@ticketbox/queue";
 import { downloadDriveFile } from "@ticketbox/storage";
 import { scanAndEnqueueGuestImports } from "../schedulers/nightly-guest-import.scheduler.js";
+import { buildGuestInviteEmail } from "../shared/guest-invite-email.js";
 
 type CsvRow = {
   rowNumber: number;
@@ -99,6 +102,11 @@ async function processGuestImportJob(
     const guestZoneId = await resolveGuestZoneId(job.concertId);
     const stats = await importRows(job, rows, guestZoneId);
     await syncGuestZoneCapacity(job.concertId, guestZoneId);
+
+    // Gửi email mời (QR mã mời + ảnh sơ đồ) cho khách chưa từng được gửi.
+    // Lỗi gửi lẻ không làm fail job import — email.worker tự retry theo backoff.
+    await sendPendingInviteEmails(job.concertId);
+
     const finalStatus = stats.errorRows > 0 ? "PARTIAL" : "DONE";
 
     await prisma.guestImportJob.update({
@@ -142,6 +150,8 @@ async function importRows(
 
     const guest = validation.guest;
     // Khử trùng theo (concertId, email): import lại email cũ chỉ cập nhật, không tạo trùng.
+    // Mã mời = "vé" của khách (QR check-in): CSV không có code → tự sinh; update không
+    // ghi đè code bằng undefined để không vô hiệu QR đã gửi.
     await prisma.guestList.upsert({
       where: {
         concertId_email: { concertId: job.concertId, email: guest.email },
@@ -149,7 +159,7 @@ async function importRows(
       update: {
         fullName: guest.fullName,
         phone: guest.phone,
-        code: guest.code,
+        ...(guest.code ? { code: guest.code } : {}),
         note: guest.note,
         seatZoneId: guestZoneId,
         importJobId: job.id,
@@ -160,7 +170,7 @@ async function importRows(
         email: guest.email,
         fullName: guest.fullName,
         phone: guest.phone,
-        code: guest.code,
+        code: guest.code ?? generateGuestCode(),
         note: guest.note,
         seatZoneId: guestZoneId,
         importJobId: job.id,
@@ -251,6 +261,77 @@ async function syncGuestZoneCapacity(concertId: string, guestZoneId: string): Pr
     where: { id: guestZoneId },
     data: { capacity: guestCount },
   });
+}
+
+/** Mã mời tự sinh: GUEST-XXXXXXXXXX (unique theo concert nhờ constraint DB). */
+function generateGuestCode(): string {
+  return `GUEST-${randomBytes(5).toString("hex").toUpperCase()}`;
+}
+
+/**
+ * Gửi email mời cho mọi guest INVITED của concert chưa có invite_email_sent_at.
+ * Đánh dấu đã gửi NGAY SAU khi enqueue thành công (email.worker retry phần SMTP)
+ * → re-import/scheduler chạy lại không gửi trùng.
+ */
+export async function sendPendingInviteEmails(concertId: string): Promise<void> {
+  const concert = await prisma.concert.findUnique({
+    where: { id: concertId },
+    select: {
+      title: true,
+      startsAt: true,
+      seatMapImageUrl: true,
+      venue: { select: { name: true, address: true } },
+    },
+  });
+  if (!concert) return;
+
+  const guests = await prisma.guestList.findMany({
+    where: { concertId, status: "INVITED", inviteEmailSentAt: null },
+    select: { id: true, fullName: true, email: true, code: true },
+  });
+  if (guests.length === 0) return;
+
+  let sent = 0;
+  for (const guest of guests) {
+    try {
+      // Guest cũ (trước khi bắt buộc có code) → bổ sung code trước khi gửi QR.
+      let code = guest.code;
+      if (!code) {
+        code = generateGuestCode();
+        await prisma.guestList.update({
+          where: { id: guest.id },
+          data: { code },
+        });
+      }
+
+      const email = await buildGuestInviteEmail(
+        { fullName: guest.fullName, email: guest.email, code },
+        {
+          id: concertId,
+          title: concert.title,
+          venueName: concert.venue.name,
+          venueAddress: concert.venue.address,
+          startsAt: concert.startsAt,
+          seatMapImageUrl: concert.seatMapImageUrl,
+        },
+      );
+      await enqueueEmail(email);
+      await prisma.guestList.update({
+        where: { id: guest.id },
+        data: { inviteEmailSentAt: new Date() },
+      });
+      sent += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[guest-import] invite email failed for guest=${guest.id} (${guest.email}): ${message}`,
+      );
+    }
+  }
+
+  console.log(
+    `[guest-import] invite emails enqueued: ${sent}/${guests.length} (concert=${concertId})`,
+  );
 }
 
 function parseCsv(input: string): CsvRow[] {

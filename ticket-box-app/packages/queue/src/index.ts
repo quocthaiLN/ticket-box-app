@@ -21,6 +21,7 @@ export type {
   GuestImportJobData,
   GuestImportScanData,
   EmailJobData,
+  EmailAttachment,
 } from "./jobs.js";
 export {
   enqueueNotification,
