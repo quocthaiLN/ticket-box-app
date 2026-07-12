@@ -1,14 +1,7 @@
-# Báo cáo chiến lược cache cho danh sách và chi tiết concert
+# Cache cho danh sách và chi tiết concert
 
-## 1. Bài toán cần giải quyết
 
-Trang chủ, trang danh sách concert và trang chi tiết concert là các luồng đọc công khai. Trong giờ mở bán, cùng một dữ liệu có thể bị đọc hàng nghìn lần mỗi giây, trong khi phần lớn thông tin như tên concert, địa điểm, sơ đồ ghế và mô tả nghệ sĩ thay đổi rất ít.
-
-Nếu mỗi request đều truy vấn PostgreSQL, database phải lặp lại cùng một phép đọc và join rất nhiều lần. Điều này tiêu tốn connection pool, CPU, I/O và có thể làm các transaction đặt vé quan trọng bị chậm theo.
-
-Yêu cầu còn lại là dữ liệu tồn kho thay đổi liên tục. Không thể cache số vé còn lại lâu giống thông tin concert, nhưng cũng không nên bắt mọi lượt refresh giao diện đọc trực tiếp database.
-
-## 2. Kết luận về cơ chế hiện tại
+## 1. Kết luận về cơ chế hiện tại
 
 Hệ thống hiện sử dụng đúng mô hình **Cache-aside với Redis**, kết hợp các TTL khác nhau theo mức độ biến động dữ liệu:
 
