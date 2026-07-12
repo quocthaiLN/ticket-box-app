@@ -104,8 +104,8 @@ export const env = {
       process.env["ORDER_HOLD_DURATION_SECONDS"] ?? 900,
     ),
     rateLimitWhitelistEnabled:
-      process.env["ORDER_RATE_LIMIT_WHITELIST_ENABLED"] === "true",
-    rateLimitWhitelist: (process.env["ORDER_RATE_LIMIT_WHITELIST"] ?? "")
+      process.env["RATE_LIMIT_WHITELIST_ENABLED"] === "true",
+    rateLimitWhitelist: (process.env["RATE_LIMIT_WHITELIST"] ?? "")
       .split(",")
       .map((ip) => ip.trim())
       .filter(Boolean),
@@ -155,6 +155,7 @@ export const env = {
     failureThreshold: Number(process.env["VNPAY_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["VNPAY_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["VNPAY_CB_RESET_TIMEOUT"] ?? 30_000),
+    halfOpenSuccessThreshold: Number(process.env["VNPAY_CB_HALF_OPEN_SUCCESS_THRESHOLD"] ?? 5),
     bulkheadLimit: Number(process.env["VNPAY_BULKHEAD_LIMIT"] ?? 20),
   },
 
@@ -180,6 +181,7 @@ export const env = {
     failureThreshold: Number(process.env["MOMO_CB_FAILURE_THRESHOLD"] ?? 5),
     errorThreshold: Number(process.env["MOMO_CB_ERROR_THRESHOLD"] ?? 50),
     resetTimeout: Number(process.env["MOMO_CB_RESET_TIMEOUT"] ?? 30_000),
+    halfOpenSuccessThreshold: Number(process.env["MOMO_CB_HALF_OPEN_SUCCESS_THRESHOLD"] ?? 5),
     bulkheadLimit: Number(process.env["MOMO_BULKHEAD_LIMIT"] ?? 20),
   },
 

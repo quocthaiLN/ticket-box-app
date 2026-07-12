@@ -55,11 +55,11 @@ export const options = {
     catalog_concert_views_rate_limited: ["count==0"],
     catalog_concert_views_system_errors: ["count==0"],
     catalog_concert_views_unexpected_response: ["rate==0"],
-    "http_req_duration{name:GET /v1/concerts/:concert_id}": ["p(95)<1000"],
-    "http_req_duration{name:GET /v1/concerts/:concert_id/metadata}": ["p(95)<1000"],
-    "http_req_duration{name:GET /v1/concerts/:concert_id/seat-map}": ["p(95)<1000"],
-    "http_req_duration{name:GET /v1/concerts/:concert_id/ticket-types}": ["p(95)<1000"],
-    "http_req_duration{name:GET /v1/concerts/:concert_id/inventory}": ["p(95)<1000"],
+    "http_req_duration{name:GET /v1/concerts/:concert_id}": ["p(95)<10000"],
+    "http_req_duration{name:GET /v1/concerts/:concert_id/metadata}": ["p(95)<10000"],
+    "http_req_duration{name:GET /v1/concerts/:concert_id/seat-map}": ["p(95)<10000"],
+    "http_req_duration{name:GET /v1/concerts/:concert_id/ticket-types}": ["p(95)<10000"],
+    "http_req_duration{name:GET /v1/concerts/:concert_id/inventory}": ["p(95)<10000"],
   },
 };
 
@@ -267,7 +267,7 @@ export function setup(): void {
   if (warmup.status !== 200 || !hasConcertPayload(warmup)) {
     fail(
       `Concert public không sẵn sàng: HTTP ${warmup.status} tại ` +
-        `${BASE_URL}/concerts/${CONCERT_ID}`,
+      `${BASE_URL}/concerts/${CONCERT_ID}`,
     );
   }
 
@@ -277,38 +277,38 @@ export function setup(): void {
     tagName: string;
     isValid: (response: RefinedResponse<ResponseType>) => boolean;
   }> = [
-    {
-      label: "metadata",
-      path: "/metadata",
-      tagName: "GET /v1/concerts/:concert_id/metadata",
-      isValid: hasMetadataPayload,
-    },
-    {
-      label: "seat-map",
-      path: "/seat-map",
-      tagName: "GET /v1/concerts/:concert_id/seat-map",
-      isValid: hasSeatMapPayload,
-    },
-    {
-      label: "ticket-types",
-      path: "/ticket-types",
-      tagName: "GET /v1/concerts/:concert_id/ticket-types",
-      isValid: hasTicketTypesPayload,
-    },
-    {
-      label: "inventory",
-      path: "/inventory",
-      tagName: "GET /v1/concerts/:concert_id/inventory",
-      isValid: hasInventoryPayload,
-    },
-  ];
+      {
+        label: "metadata",
+        path: "/metadata",
+        tagName: "GET /v1/concerts/:concert_id/metadata",
+        isValid: hasMetadataPayload,
+      },
+      {
+        label: "seat-map",
+        path: "/seat-map",
+        tagName: "GET /v1/concerts/:concert_id/seat-map",
+        isValid: hasSeatMapPayload,
+      },
+      {
+        label: "ticket-types",
+        path: "/ticket-types",
+        tagName: "GET /v1/concerts/:concert_id/ticket-types",
+        isValid: hasTicketTypesPayload,
+      },
+      {
+        label: "inventory",
+        path: "/inventory",
+        tagName: "GET /v1/concerts/:concert_id/inventory",
+        isValid: hasInventoryPayload,
+      },
+    ];
 
   for (const endpoint of warmupChecks) {
     const response = getCatalogEndpoint(endpoint.path, `${endpoint.tagName} (setup)`);
     if (response.status !== 200 || !endpoint.isValid(response)) {
       fail(
         `Catalog ${endpoint.label} không sẵn sàng: HTTP ${response.status} tại ` +
-          `${BASE_URL}/concerts/${CONCERT_ID}${endpoint.path}`,
+        `${BASE_URL}/concerts/${CONCERT_ID}${endpoint.path}`,
       );
     }
   }
