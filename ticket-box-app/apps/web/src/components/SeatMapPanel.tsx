@@ -1,25 +1,29 @@
 import { X, ZoomIn } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { formatCurrency, type UiSeatZone, type UiTicketType } from "../lib/catalog-ui";
 
 type TooltipState = { x: number; y: number; zoneId: string } | null;
 
+// Trang quyết định loại sơ đồ: svgUrl = SVG tương tác (trang mua vé),
+// imageUrl = ảnh tĩnh (trang thông tin concert). Truyền cả hai → ưu tiên SVG,
+// ảnh làm fallback khi SVG lỗi.
 export function SeatMapPanel({
-  seatMapUrl,
+  svgUrl,
+  imageUrl,
   zones,
   ticketTypes,
   selectedZoneId,
   onSelectZone,
 }: {
-  seatMapUrl?: string;
+  svgUrl?: string;
+  imageUrl?: string;
   zones: UiSeatZone[];
   ticketTypes: UiTicketType[];
   selectedZoneId?: string | null;
   onSelectZone?: (zoneId: string) => void;
 }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const isSvg = Boolean(seatMapUrl && /\.svg(?:$|[?#])/i.test(seatMapUrl));
 
   function zoneSoldOut(zoneId: string) {
     const zoneTickets = ticketTypes.filter((ticketType) => ticketType.seatZoneId === zoneId);
@@ -35,34 +39,39 @@ export function SeatMapPanel({
     return prices.length > 0 ? Math.min(...prices) : null;
   }
 
+  const staticImage = imageUrl ? (
+    <button
+      type="button"
+      onClick={() => setLightboxOpen(true)}
+      className="group relative block w-full overflow-hidden rounded-xl border border-white/10 bg-[#111118]"
+      aria-label="Phóng to sơ đồ chỗ ngồi"
+    >
+      <ImageWithFallback src={imageUrl} alt="Sơ đồ chỗ ngồi" className="max-h-[420px] w-full object-contain" />
+      <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-[#F0EDEB] opacity-80 backdrop-blur transition-opacity group-hover:opacity-100">
+        <ZoomIn className="h-3.5 w-3.5" />
+        Phóng to
+      </span>
+    </button>
+  ) : null;
+
+  const gridFallback = (
+    <ZoneGridFallback zones={zones} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} zoneSoldOut={zoneSoldOut} />
+  );
+
   return (
     <div>
-      {seatMapUrl ? (
-        isSvg ? (
-          <InteractiveSvgSeatMap
-            seatMapUrl={seatMapUrl}
-            zones={zones}
-            ticketTypes={ticketTypes}
-            selectedZoneId={selectedZoneId}
-            onSelectZone={onSelectZone}
-            zoneSoldOut={zoneSoldOut}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(true)}
-            className="group relative block w-full overflow-hidden rounded-xl border border-white/10 bg-[#111118]"
-            aria-label="Phóng to sơ đồ chỗ ngồi"
-          >
-            <ImageWithFallback src={seatMapUrl} alt="Sơ đồ chỗ ngồi" className="max-h-[420px] w-full object-contain" />
-            <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-[#F0EDEB] opacity-80 backdrop-blur transition-opacity group-hover:opacity-100">
-              <ZoomIn className="h-3.5 w-3.5" />
-              Phóng to
-            </span>
-          </button>
-        )
+      {svgUrl ? (
+        <InteractiveSvgSeatMap
+          seatMapUrl={svgUrl}
+          zones={zones}
+          ticketTypes={ticketTypes}
+          selectedZoneId={selectedZoneId}
+          onSelectZone={onSelectZone}
+          zoneSoldOut={zoneSoldOut}
+          fallback={staticImage ?? gridFallback}
+        />
       ) : (
-        <ZoneGridFallback zones={zones} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} zoneSoldOut={zoneSoldOut} />
+        staticImage ?? gridFallback
       )}
 
       {zones.length > 0 && (
@@ -95,8 +104,8 @@ export function SeatMapPanel({
         </div>
       )}
 
-      {lightboxOpen && seatMapUrl && !isSvg && (
-        <SeatMapLightbox seatMapUrl={seatMapUrl} onClose={() => setLightboxOpen(false)} />
+      {lightboxOpen && imageUrl && (
+        <SeatMapLightbox seatMapUrl={imageUrl} onClose={() => setLightboxOpen(false)} />
       )}
     </div>
   );
@@ -109,6 +118,7 @@ function InteractiveSvgSeatMap({
   selectedZoneId,
   onSelectZone,
   zoneSoldOut,
+  fallback,
 }: {
   seatMapUrl: string;
   zones: UiSeatZone[];
@@ -116,6 +126,7 @@ function InteractiveSvgSeatMap({
   selectedZoneId?: string | null;
   onSelectZone?: (zoneId: string) => void;
   zoneSoldOut: (zoneId: string) => boolean;
+  fallback: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svgMarkup, setSvgMarkup] = useState<string | null>(null);
@@ -175,7 +186,7 @@ function InteractiveSvgSeatMap({
   }
 
   if (loadError) {
-    return <ZoneGridFallback zones={zones} selectedZoneId={selectedZoneId} onSelectZone={onSelectZone} zoneSoldOut={zoneSoldOut} />;
+    return <>{fallback}</>;
   }
 
   if (!svgMarkup) {

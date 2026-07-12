@@ -154,6 +154,7 @@ export class CatalogService {
         input.cover_image_url ?? this.assetUrl(input.cover_image_object_key),
       seatMapUrl:
         input.seat_map_url ?? this.assetUrl(input.seat_map_object_key),
+      seatMapImageUrl: input.seat_map_image_url,
       guestDriveFolderId: input.guest_drive_folder_id,
     });
   }
@@ -182,6 +183,7 @@ export class CatalogService {
       seatMapUrl: nullable(
         input.seat_map_url ?? this.assetUrl(input.seat_map_object_key),
       ),
+      seatMapImageUrl: nullable(input.seat_map_image_url),
       guestDriveFolderId: nullable(input.guest_drive_folder_id),
     });
   }

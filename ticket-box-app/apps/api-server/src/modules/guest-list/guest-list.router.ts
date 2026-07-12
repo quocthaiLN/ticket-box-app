@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireRole } from "../../shared/guards/role.guard.js";
 import { requireAuth } from "../../shared/middleware/auth.middleware.js";
 import {
+  downloadGuestInviteTicket,
   getGuestImportJob,
   getGuestImportJobErrors,
   listGuestImportJobs,
@@ -29,3 +30,6 @@ guestListRouter.get("/check-in/guests/search", ...checkerOnly, searchGuests);
 
 // Check-in guest tại cổng VIP.
 guestListRouter.post("/check-in/guests/scans", ...checkerOnly, scanGuest);
+
+// Public: khách tải vé (QR mã mời) từ link trong email — mã mời là bí mật, không cần auth.
+guestListRouter.get("/guest-tickets/download", downloadGuestInviteTicket);

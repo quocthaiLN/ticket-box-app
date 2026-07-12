@@ -104,6 +104,7 @@ async function loadAdminPreview(concertId: string): Promise<UiConcert> {
     artist_bio: metadata.artist_bio,
     artist_bio_image_url: metadata.artist_bio_image_url,
     seat_map_url: metadata.seat_map.svg_url,
+    seat_map_image_url: metadata.seat_map.fallback_image_url,
     venue: metadata.venue,
   };
 
@@ -129,6 +130,7 @@ async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
     status: concert.status,
     cover_image_url: concert.cover_image_url,
     seat_map_url: concert.seat_map_url,
+    seat_map_image_url: concert.seat_map_image_url,
     artists: concert.artists ?? undefined,
     venue: { ...concert.venue, address: "" },
   };
@@ -148,7 +150,7 @@ async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
       sale_end_at: ticketType.sale_end_at,
       status: ticketType.status as "DRAFT" | "ON_SALE" | "SOLD_OUT" | "CLOSED",
     })),
-    seat_map: { svg_url: concert.seat_map_url },
+    seat_map: { svg_url: concert.seat_map_url, fallback_image_url: concert.seat_map_image_url },
     artist_bio: concert.artist_bio,
     artist_bio_image_url: concert.artist_bio_image_url,
   };

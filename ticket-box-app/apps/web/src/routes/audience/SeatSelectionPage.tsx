@@ -186,7 +186,8 @@ export function SeatSelectionPage() {
             <h2 className="mb-1 text-sm font-semibold">Sơ đồ chỗ ngồi</h2>
             <p className="mb-4 text-xs text-[#8585A0]">Bấm vào khu vực trên sơ đồ hoặc chip hạng vé để chọn thêm 1 vé và chuyển nhanh đến hạng vé.</p>
             <SeatMapPanel
-              seatMapUrl={concert.seatMapUrl}
+              svgUrl={concert.seatMapUrl}
+              imageUrl={concert.seatMapImageUrl}
               zones={concert.seatZones}
               ticketTypes={concert.ticketTypes}
               selectedZoneId={selectedZoneId}

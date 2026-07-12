@@ -283,9 +283,9 @@ export function ConcertDetailView({
 
             {activeTab === "map" && (
               <div className="space-y-4">
-                {concert.seatMapUrl ? (
+                {concert.seatMapImageUrl ? (
                   <SeatMapPanel
-                    seatMapUrl={concert.seatMapUrl}
+                    imageUrl={concert.seatMapImageUrl}
                     zones={concert.seatZones}
                     ticketTypes={concert.ticketTypes}
                   />

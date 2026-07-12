@@ -76,6 +76,7 @@ export type OrganizerConcertSummaryDto = {
   planned_publish_at?: string;
   cover_image_url?: string;
   seat_map_url?: string;
+  seat_map_image_url?: string;
   guest_drive_folder_id?: string;
   venue: {
     id: string;
@@ -200,6 +201,7 @@ type UpdateConcertData = Partial<{
   plannedPublishAt: Date | null;
   coverImageUrl: string | null;
   seatMapUrl: string | null;
+  seatMapImageUrl: string | null;
   artistBioImageUrl: string | null;
 }>;
 
@@ -272,6 +274,7 @@ export class OrganizerRepository {
         pressKitUrl: input.press_kit_url,
         artistBioImageUrl: input.artist_bio_image_url,
         seatMapUrl: input.seat_map_url,
+        seatMapImageUrl: input.seat_map_image_url,
         ticketTypes: input.ticket_types as unknown as Prisma.InputJsonValue,
         status: ApprovalStatus.PENDING,
       },
@@ -786,6 +789,7 @@ function mapConcertSummary(
     planned_publish_at: concert.plannedPublishAt?.toISOString(),
     cover_image_url: concert.coverImageUrl ?? undefined,
     seat_map_url: concert.seatMapUrl ?? undefined,
+    seat_map_image_url: concert.seatMapImageUrl ?? undefined,
     guest_drive_folder_id: concert.guestDriveFolderId ?? undefined,
     venue: {
       id: concert.venue.id,
@@ -856,6 +860,7 @@ export function toConcertUpdateData(
       : undefined,
     coverImageUrl: nullable(input.cover_image_url),
     seatMapUrl: nullable(input.seat_map_url),
+    seatMapImageUrl: nullable(input.seat_map_image_url),
     artistBioImageUrl: nullable(input.artist_bio_image_url),
   };
 }

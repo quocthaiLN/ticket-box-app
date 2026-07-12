@@ -58,7 +58,10 @@ export type ConcertDetail = ConcertSummary & {
   artist_bio?: string;
   artist_bio_image_url?: string;
   artists?: ConcertArtist[];
+  // SVG tương tác — chỉ dùng ở trang mua vé.
   seat_map_url?: string;
+  // Ảnh PNG/JPEG — trang thông tin concert.
+  seat_map_image_url?: string;
   venue: Venue;
 };
 

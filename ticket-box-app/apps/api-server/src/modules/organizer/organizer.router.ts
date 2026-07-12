@@ -19,13 +19,21 @@ organizerRouter.post(
   controller.uploadCoverImage,
 );
 
+// Ảnh sơ đồ (PNG/JPEG/WebP/GIF) — hiển thị ở trang thông tin concert.
 organizerRouter.post(
-  "/organizer/uploads/seat-map",
+  "/organizer/uploads/seat-map-image",
   express.raw({
     type: ["image/jpeg", "image/png", "image/webp", "image/gif"],
     limit: "10mb",
   }),
   controller.uploadSeatMapImage,
+);
+
+// File SVG tương tác — chỉ dùng ở trang mua vé.
+organizerRouter.post(
+  "/organizer/uploads/seat-map-svg",
+  express.raw({ type: ["image/svg+xml"], limit: "10mb" }),
+  controller.uploadSeatMapSvg,
 );
 
 organizerRouter.post(

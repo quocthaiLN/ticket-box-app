@@ -123,20 +123,26 @@ export class OrganizerController {
       const upload = await this.service.uploadSeatMapImage(
         currentUserId(res),
         Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        {
-          contentType: req.headers["content-type"],
-          fileName:
-            typeof req.headers["x-file-name"] === "string"
-              ? req.headers["x-file-name"]
-              : undefined,
-        },
+        uploadMeta(req),
       );
-      const origin = `${req.protocol}://${req.get("host")}`;
-      res
-        .status(201)
-        .json(
-          ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId),
-        );
+      res.status(201).json(ok(resolveUploadUrl(req, upload), req.requestId));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  uploadSeatMapSvg = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const upload = await this.service.uploadSeatMapSvg(
+        currentUserId(res),
+        Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        uploadMeta(req),
+      );
+      res.status(201).json(ok(resolveUploadUrl(req, upload), req.requestId));
     } catch (err) {
       next(err);
     }
@@ -151,20 +157,9 @@ export class OrganizerController {
       const upload = await this.service.uploadCoverImage(
         currentUserId(res),
         Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        {
-          contentType: req.headers["content-type"],
-          fileName:
-            typeof req.headers["x-file-name"] === "string"
-              ? req.headers["x-file-name"]
-              : undefined,
-        },
+        uploadMeta(req),
       );
-      const origin = `${req.protocol}://${req.get("host")}`;
-      res
-        .status(201)
-        .json(
-          ok({ ...upload, url: `${origin}${upload.url_path}` }, req.requestId),
-        );
+      res.status(201).json(ok(resolveUploadUrl(req, upload), req.requestId));
     } catch (err) {
       next(err);
     }
@@ -355,6 +350,26 @@ export class OrganizerController {
       next(err);
     }
   };
+}
+
+function uploadMeta(req: Request) {
+  return {
+    contentType: req.headers["content-type"],
+    fileName:
+      typeof req.headers["x-file-name"] === "string"
+        ? req.headers["x-file-name"]
+        : undefined,
+  };
+}
+
+// Supabase trả URL tuyệt đối sẵn; local trả url_path → ghép origin của api-server.
+function resolveUploadUrl(
+  req: Request,
+  upload: { object_key: string; url_path?: string; url?: string },
+) {
+  if (upload.url) return upload;
+  const origin = `${req.protocol}://${req.get("host")}`;
+  return { ...upload, url: `${origin}${upload.url_path}` };
 }
 
 function currentUserId(res: Response) {

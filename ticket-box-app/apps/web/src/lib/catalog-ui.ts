@@ -61,7 +61,10 @@ export type UiConcert = {
   endsAt: string;
   status: ConcertSummary["status"];
   coverImageUrl: string;
+  // SVG tương tác — trang mua vé (SeatSelectionPage).
   seatMapUrl?: string;
+  // Ảnh PNG/JPEG — trang thông tin concert (ConcertDetailPage).
+  seatMapImageUrl?: string;
   genre: string;
   tags: string[];
   venue: UiVenue;
@@ -176,7 +179,8 @@ export function mapDetailConcert(
     endsAt: concert.ends_at,
     status: concert.status,
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
-    seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url ?? metadata.seat_map.fallback_image_url,
+    seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url,
+    seatMapImageUrl: concert.seat_map_image_url ?? metadata.seat_map.fallback_image_url,
     genre: "Live Music",
     tags: [concert.venue.city],
     venue: {

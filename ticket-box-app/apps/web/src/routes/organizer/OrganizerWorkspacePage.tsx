@@ -44,6 +44,7 @@ import {
   listOrganizerOrders,
   setOrganizerConcertDriveFolder,
   uploadOrganizerSeatMapImage,
+  uploadOrganizerSeatMapSvg,
   listOrganizerRequests,
   listOrganizerVenues,
   normalizeTicketTypes,
@@ -963,15 +964,21 @@ function TabbedNewRequestForm({
   // Ảnh concert + ảnh nghệ sĩ không upload riêng nữa — hệ thống tách từ press kit
   // (quy ước: ảnh trang 1 = ảnh concert, ảnh trang sau = ảnh nghệ sĩ).
   const [pressKitFile, setPressKitFile] = useState<File | null>(null);
-  // Ảnh sơ đồ chỗ ngồi — cùng cơ chế: giữ File, upload khi nộp hồ sơ.
-  const [seatMapFile, setSeatMapFile] = useState<File | null>(null);
+  // Sơ đồ chỗ ngồi — cùng cơ chế: giữ File, upload khi nộp hồ sơ.
+  // Ảnh PNG/JPEG hiển thị ở trang thông tin concert; SVG tương tác chỉ ở trang mua vé.
+  const [seatMapImageFile, setSeatMapImageFile] = useState<File | null>(null);
+  const [seatMapSvgFile, setSeatMapSvgFile] = useState<File | null>(null);
 
   function handlePressKitChange(event: ChangeEvent<HTMLInputElement>) {
     setPressKitFile(event.target.files?.[0] ?? null);
   }
 
-  function handleSeatMapFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setSeatMapFile(event.target.files?.[0] ?? null);
+  function handleSeatMapImageFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeatMapImageFile(event.target.files?.[0] ?? null);
+  }
+
+  function handleSeatMapSvgFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSeatMapSvgFile(event.target.files?.[0] ?? null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1020,9 +1027,13 @@ function TabbedNewRequestForm({
       if (pressKitFile) {
         pressKitUrl = (await uploadOrganizerPressKit(pressKitFile)).object_key;
       }
-      let seatMapUrl: string | undefined;
-      if (seatMapFile) {
-        seatMapUrl = (await uploadOrganizerSeatMapImage(seatMapFile)).url;
+      let seatMapImageUrl: string | undefined;
+      if (seatMapImageFile) {
+        seatMapImageUrl = (await uploadOrganizerSeatMapImage(seatMapImageFile)).url;
+      }
+      let seatMapSvgUrl: string | undefined;
+      if (seatMapSvgFile) {
+        seatMapSvgUrl = (await uploadOrganizerSeatMapSvg(seatMapSvgFile)).url;
       }
 
       await onSubmit({
@@ -1036,7 +1047,8 @@ function TabbedNewRequestForm({
         gate_count: Number(form.gateCount),
         checker_count: Number(form.checkerCount),
         press_kit_url: pressKitUrl,
-        seat_map_url: seatMapUrl,
+        seat_map_url: seatMapSvgUrl,
+        seat_map_image_url: seatMapImageUrl,
         ticket_types: ticketTypes,
       });
     } catch (err) {
@@ -1185,20 +1197,36 @@ function TabbedNewRequestForm({
         {activeSection === "zones" && (
           <EditorCard title="Cấu hình zone">
             <div className="mb-4 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
-              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Sơ đồ chỗ ngồi (ảnh)</p>
+              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Ảnh sơ đồ chỗ ngồi (trang thông tin concert)</p>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
                 <Upload className="h-4 w-4" />
-                {seatMapFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" className="hidden" onChange={handleSeatMapFileChange} />
+                {seatMapImageFile ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleSeatMapImageFileChange} />
               </label>
-              {seatMapFile ? (
+              {seatMapImageFile ? (
                 <div className="mt-2 space-y-2">
-                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
-                  <img src={URL.createObjectURL(seatMapFile)} alt="Xem trước sơ đồ chỗ ngồi" className="max-h-56 w-full rounded-lg object-contain" />
-                  <button type="button" onClick={() => setSeatMapFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ ảnh</button>
+                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapImageFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
+                  <img src={URL.createObjectURL(seatMapImageFile)} alt="Xem trước sơ đồ chỗ ngồi" className="max-h-56 w-full rounded-lg object-contain" />
+                  <button type="button" onClick={() => setSeatMapImageFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ ảnh</button>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-[#8585A0]">JPEG/PNG/WebP/GIF ≤ 10MB. Ảnh nên chú thích rõ màu và tên từng hạng vé — khán giả sẽ đối chiếu khi chọn vé.</p>
+                <p className="mt-2 text-xs text-[#8585A0]">JPEG/PNG/WebP/GIF ≤ 10MB. Ảnh nên chú thích rõ màu và tên từng hạng vé — khán giả xem ở trang thông tin concert và trong email mời.</p>
+              )}
+            </div>
+            <div className="mb-4 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-3.5">
+              <p className="mb-2 text-sm font-semibold text-[#F5C842]">Sơ đồ SVG tương tác (trang mua vé)</p>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#F0EDEB] transition-colors hover:bg-white/10">
+                <Upload className="h-4 w-4" />
+                {seatMapSvgFile ? "Đổi file SVG" : "Chọn file SVG"}
+                <input type="file" accept="image/svg+xml,.svg" className="hidden" onChange={handleSeatMapSvgFileChange} />
+              </label>
+              {seatMapSvgFile ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-[#2DBE6C]">✓ {seatMapSvgFile.name} — sẽ tải lên khi nộp hồ sơ.</p>
+                  <button type="button" onClick={() => setSeatMapSvgFile(null)} className="text-xs text-[#E8315B] hover:underline">Gỡ file</button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[#8585A0]">SVG ≤ 10MB, mỗi khu vực đặt id dạng <code>zone-&lt;mã zone&gt;</code> để khán giả bấm chọn khu trực tiếp trên sơ đồ ở trang mua vé.</p>
               )}
             </div>
             <div className="space-y-3">
@@ -1637,6 +1665,7 @@ function OrganizerConcertEditor({
     venueId: concert.venue.id,
     coverImageUrl: concert.cover_image_url ?? "",
     seatMapUrl: concert.seat_map_url ?? "",
+    seatMapImageUrl: concert.seat_map_image_url ?? "",
   });
   const [seatMapUploading, setSeatMapUploading] = useState(false);
   const [seatMapError, setSeatMapError] = useState("");
@@ -1702,10 +1731,10 @@ function OrganizerConcertEditor({
     }
   }
 
-  // Upload xong lưu seat_map_url vào concert luôn (gọi API trực tiếp, không đi qua
-  // nút "Lưu thay đổi" của tab Thông tin cơ bản — luồng đó lọc bỏ chuỗi rỗng nên
-  // không thể dùng để gỡ ảnh).
-  async function handleSeatMapUpload(event: ChangeEvent<HTMLInputElement>) {
+  // Upload xong lưu URL vào concert luôn (gọi API trực tiếp, không đi qua nút
+  // "Lưu thay đổi" của tab Thông tin cơ bản — luồng đó lọc bỏ chuỗi rỗng nên
+  // không thể dùng để gỡ file). Ảnh → seat_map_image_url; SVG → seat_map_url.
+  async function handleSeatMapImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -1713,8 +1742,8 @@ function OrganizerConcertEditor({
     setSeatMapUploading(true);
     try {
       const upload = await uploadOrganizerSeatMapImage(file);
-      await updateOrganizerConcert(concert.id, { seat_map_url: upload.url });
-      setForm((current) => ({ ...current, seatMapUrl: upload.url }));
+      await updateOrganizerConcert(concert.id, { seat_map_image_url: upload.url });
+      setForm((current) => ({ ...current, seatMapImageUrl: upload.url }));
     } catch (err) {
       setSeatMapError(err instanceof Error ? err.message : "Không thể upload ảnh sơ đồ.");
     } finally {
@@ -1722,14 +1751,44 @@ function OrganizerConcertEditor({
     }
   }
 
-  async function handleSeatMapRemove() {
+  async function handleSeatMapImageRemove() {
+    setSeatMapError("");
+    setSeatMapUploading(true);
+    try {
+      await updateOrganizerConcert(concert.id, { seat_map_image_url: null });
+      setForm((current) => ({ ...current, seatMapImageUrl: "" }));
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ ảnh sơ đồ.");
+    } finally {
+      setSeatMapUploading(false);
+    }
+  }
+
+  async function handleSeatMapSvgUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setSeatMapError("");
+    setSeatMapUploading(true);
+    try {
+      const upload = await uploadOrganizerSeatMapSvg(file);
+      await updateOrganizerConcert(concert.id, { seat_map_url: upload.url });
+      setForm((current) => ({ ...current, seatMapUrl: upload.url }));
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : "Không thể upload file SVG sơ đồ.");
+    } finally {
+      setSeatMapUploading(false);
+    }
+  }
+
+  async function handleSeatMapSvgRemove() {
     setSeatMapError("");
     setSeatMapUploading(true);
     try {
       await updateOrganizerConcert(concert.id, { seat_map_url: null });
       setForm((current) => ({ ...current, seatMapUrl: "" }));
     } catch (err) {
-      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ ảnh sơ đồ.");
+      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ file SVG sơ đồ.");
     } finally {
       setSeatMapUploading(false);
     }
@@ -1971,30 +2030,48 @@ function OrganizerConcertEditor({
           <EditorCard title="Cấu hình zone">
             <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
               <div className="mb-1 flex items-center gap-2">
-                <h4 className="text-sm font-semibold text-[#F0EDEB]">Sơ đồ hạng vé (ảnh)</h4>
+                <h4 className="text-sm font-semibold text-[#F0EDEB]">Ảnh sơ đồ chỗ ngồi (trang thông tin concert)</h4>
                 {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
               </div>
               <p className="mb-3 text-xs text-[#8585A0]">
-                Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ.
+                Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ, và được đính kèm trong email mời khách.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
                   <Upload className="h-4 w-4" />
-                  {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapUpload} />
+                  {seatMapUploading ? "Đang xử lý..." : form.seatMapImageUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapImageUpload} />
                 </label>
-                {form.seatMapUrl && (
-                  <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                {form.seatMapImageUrl && (
+                  <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapImageRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
                     Gỡ ảnh
                   </button>
                 )}
               </div>
-              {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
-              {form.seatMapUrl && (
+              {form.seatMapImageUrl && (
                 <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
-                  <img src={form.seatMapUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
+                  <img src={form.seatMapImageUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
                 </div>
               )}
+              <div className="mt-4 border-t border-white/[0.06] pt-4">
+                <h4 className="mb-1 text-sm font-semibold text-[#F0EDEB]">Sơ đồ SVG tương tác (trang mua vé)</h4>
+                <p className="mb-3 text-xs text-[#8585A0]">
+                  SVG với id khu vực dạng <code>zone-&lt;mã zone&gt;</code>; khán giả bấm chọn khu trực tiếp trên sơ đồ ở trang mua vé.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
+                    <Upload className="h-4 w-4" />
+                    {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi file SVG" : "Chọn file SVG"}
+                    <input type="file" accept="image/svg+xml,.svg" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapSvgUpload} />
+                  </label>
+                  {form.seatMapUrl && (
+                    <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapSvgRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                      Gỡ file SVG
+                    </button>
+                  )}
+                </div>
+              </div>
+              {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
             </div>
 
             {zoneError && (
