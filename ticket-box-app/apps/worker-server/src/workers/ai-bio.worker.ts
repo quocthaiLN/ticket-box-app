@@ -8,7 +8,10 @@ import {
 import { invalidateConcertCache } from "@ticketbox/redis";
 import { downloadPressKit } from "@ticketbox/storage";
 import { generateBios, type GeneratedArtist } from "./ai-bio.client.js";
-import { extractAndUploadPressKitImages, type PressKitImages } from "./press-kit-images.js";
+import {
+  extractAndUploadPressKitImages,
+  type PressKitImages,
+} from "./press-kit-images.js";
 
 // Phần tử JSON cột `artists` trên Concert/OrganizerRequest.
 type StoredArtist = {
@@ -60,10 +63,24 @@ async function processAiBioJob(data: AiBioJobData) {
     where: { id: data.job_id },
     include: {
       concert: {
-        select: { id: true, title: true, artistName: true, description: true, coverImageUrl: true, artistBioImageUrl: true },
+        select: {
+          id: true,
+          title: true,
+          artistName: true,
+          description: true,
+          coverImageUrl: true,
+          artistBioImageUrl: true,
+        },
       },
       organizerRequest: {
-        select: { id: true, title: true, artistName: true, description: true, coverImageUrl: true, artistBioImageUrl: true },
+        select: {
+          id: true,
+          title: true,
+          artistName: true,
+          description: true,
+          coverImageUrl: true,
+          artistBioImageUrl: true,
+        },
       },
     },
   });
@@ -92,7 +109,9 @@ async function processAiBioJob(data: AiBioJobData) {
         }
       : null;
   if (!target) {
-    throw new Error(`Bio job ${bioJob.id} không gắn concert lẫn organizer request.`);
+    throw new Error(
+      `Bio job ${bioJob.id} không gắn concert lẫn organizer request.`,
+    );
   }
 
   await markProcessing(bioJob.id, target);
@@ -100,7 +119,9 @@ async function processAiBioJob(data: AiBioJobData) {
   try {
     // Tách nội dung (PDF) + làm sạch văn bản; cho phép truyền source_text để demo nhanh.
     const extractedText = cleanExtractedText(
-      data.source_text ?? bioJob.extractedText ?? (await readSource(bioJob.sourceFileUrl)),
+      data.source_text ??
+        bioJob.extractedText ??
+        (await readSource(bioJob.sourceFileUrl)),
     );
     if (!extractedText) {
       throw new Error("Không tách được nội dung từ file press kit.");
@@ -113,13 +134,25 @@ async function processAiBioJob(data: AiBioJobData) {
     });
 
     const legacyArtistBio = toLegacyArtistBio(artists);
-    await persistDone(bioJob.id, bioJob.requestedById, target, extractedText, artists, legacyArtistBio, concertBio, model);
+    await persistDone(
+      bioJob.id,
+      bioJob.requestedById,
+      target,
+      extractedText,
+      artists,
+      legacyArtistBio,
+      concertBio,
+      model,
+    );
 
     // Quy ước P1 mở rộng: trang 1 = ảnh concert; ảnh trang 2+ gán lần lượt cho
     // từng nghệ sĩ theo thứ tự. Không chặn kết quả bio nếu bước ảnh lỗi.
     if (bioJob.sourceFileUrl) {
       try {
-        const images = await extractAndUploadPressKitImages(bioJob.sourceFileUrl, target.id);
+        const images = await extractAndUploadPressKitImages(
+          bioJob.sourceFileUrl,
+          target.id,
+        );
         await persistImages(target, artists, images);
         console.log("[ai-bio] press kit images", {
           job_id: bioJob.id,
@@ -160,7 +193,10 @@ function toLegacyArtistBio(artists: GeneratedArtist[]): string {
   return artists.map((artist) => `${artist.name} — ${artist.bio}`).join("\n\n");
 }
 
-function toStoredArtists(artists: GeneratedArtist[], imageUrls: string[] = []): StoredArtist[] {
+function toStoredArtists(
+  artists: GeneratedArtist[],
+  imageUrls: string[] = [],
+): StoredArtist[] {
   return artists.map((artist, index) => ({
     name: artist.name,
     bio: artist.bio,
@@ -204,7 +240,6 @@ async function persistDone(
   };
 
   if (target.kind === "concert") {
-    // Luồng cũ: ghi thẳng vào concert + audit + invalidate cache để hiển thị ngay.
     await prisma.$transaction([
       jobUpdate,
       prisma.concert.update({ where: { id: target.id }, data: bioData }),
@@ -220,7 +255,6 @@ async function persistDone(
     ]);
     await invalidateConcertCache(target.id);
   } else {
-    // Luồng hồ sơ: ghi vào request; bio sẽ vào concert lúc admin approve.
     await prisma.$transaction([
       jobUpdate,
       prisma.organizerRequest.update({
@@ -240,12 +274,18 @@ async function persistImages(
   images: PressKitImages,
 ) {
   const data = {
-    ...(images.coverImageUrl && !target.hasCoverImage ? { coverImageUrl: images.coverImageUrl } : {}),
+    ...(images.coverImageUrl && !target.hasCoverImage
+      ? { coverImageUrl: images.coverImageUrl }
+      : {}),
     ...(images.artistImageUrls[0] && !target.hasArtistImage
       ? { artistBioImageUrl: images.artistImageUrls[0] }
       : {}),
     ...(images.artistImageUrls.length > 0
-      ? { artists: artistsJson(toStoredArtists(artists, images.artistImageUrls)) }
+      ? {
+          artists: artistsJson(
+            toStoredArtists(artists, images.artistImageUrls),
+          ),
+        }
       : {}),
   };
   if (Object.keys(data).length === 0) return;
@@ -303,4 +343,3 @@ function cleanExtractedText(value: string | undefined) {
     .trim();
   return cleaned.length >= 20 ? cleaned : undefined;
 }
-

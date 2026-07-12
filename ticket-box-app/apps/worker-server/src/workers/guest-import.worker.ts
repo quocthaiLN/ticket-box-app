@@ -241,7 +241,8 @@ async function resolveGuestZoneId(concertId: string): Promise<string> {
       name: "Khu khách mời",
       description: "Khu vực dành cho khách mời (tự tạo khi nhập guest list).",
       // Sức chứa thật = số khách mời import được, đồng bộ lại sau mỗi lần import.
-      capacity: 0,
+      // DB có constraint capacity > 0 nên khởi tạo tối thiểu 1.
+      capacity: 1,
       sortOrder: 99,
     },
     select: { id: true },
@@ -259,7 +260,7 @@ async function syncGuestZoneCapacity(concertId: string, guestZoneId: string): Pr
   });
   await prisma.seatZone.update({
     where: { id: guestZoneId },
-    data: { capacity: guestCount },
+    data: { capacity: Math.max(guestCount, 1) },
   });
 }
 

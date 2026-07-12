@@ -15,11 +15,11 @@ export async function registerNightlyGuestImportSchedule(
 ): Promise<void> {
   await queue.upsertJobScheduler(
     SCHEDULE_ID,
-    { pattern: "0 0 * * *", tz: TIMEZONE },
+    { pattern: "11 23 * * *", tz: TIMEZONE },
     { name: "scan-drive-folders", data: {} },
   );
   console.log(
-    `[nightly-guest-import] Scheduled at 0h ${TIMEZONE} (cron "0 0 * * *")`,
+    `[nightly-guest-import] Scheduled at 0h ${TIMEZONE} (cron "11 23 * * *")`,
   );
 }
 
