@@ -28,6 +28,9 @@ export type IdempotencyRecord = {
   status: number;
   body: unknown;
   created_at: string;
+  // Optional để các record đã ghi trước khi triển khai fingerprint vẫn đọc được
+  // cho đến khi TTL 24 giờ của chúng hết hạn.
+  fingerprint?: string;
 };
 
 /**

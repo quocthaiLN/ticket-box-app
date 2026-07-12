@@ -1,5 +1,6 @@
 // Check idempotency key in header and replay/cache the response per scope.
 import type { NextFunction, Request, Response } from "express";
+import { createHash } from "node:crypto";
 import {
   getIdempotencyResponse,
   setIdempotencyResponse,
@@ -7,6 +8,27 @@ import {
   releaseIdempotencyClaim,
 } from "@ticketbox/redis";
 import { Errors } from "../http/problem-details.js";
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalize(child)]),
+    );
+  }
+  return value;
+}
+
+function requestFingerprint(req: Request): string {
+  // Dùng path thực (bao gồm order_id) để cùng một key không thể replay response
+  // của resource khác qua một route template giống nhau.
+  const endpoint = `${req.method.toUpperCase()} ${req.baseUrl}${req.path}`;
+  return createHash("sha256")
+    .update(`${endpoint}\n${JSON.stringify(canonicalize(req.body ?? null))}`)
+    .digest("hex");
+}
 
 /**
  * Idempotency middleware factory. `scope` namespaces the Redis key per module
@@ -42,11 +64,16 @@ export function idempotencyMiddleware(scope: string) {
     // Nếu user là khách thì đặt userId là anon
     const userId: string = res.locals.auth?.user_id ?? "anon";
     const scopedKey = `${scope}:${userId}:${key}`;
+    const fingerprint = requestFingerprint(req);
 
     // Nếu đã có Idempotency Key đã tồn tại -> reply cho user
     try {
       const cached = await getIdempotencyResponse(scopedKey);
       if (cached) {
+        if (cached.fingerprint && cached.fingerprint !== fingerprint) {
+          next(Errors.idempotencyKeyReused());
+          return;
+        }
         res.status(cached.status).json(cached.body);
         return;
       }
@@ -71,6 +98,7 @@ export function idempotencyMiddleware(scope: string) {
             status: res.statusCode,
             body,
             created_at: new Date().toISOString(),
+            fingerprint,
           }).finally(releaseClaim);
         } else {
           releaseClaim();

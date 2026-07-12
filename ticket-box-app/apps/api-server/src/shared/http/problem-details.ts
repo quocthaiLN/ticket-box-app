@@ -186,6 +186,15 @@ export const Errors = {
         "A request with the same Idempotency-Key is currently being processed.",
     }),
 
+  idempotencyKeyReused: () =>
+    new ApiError({
+      title: "Idempotency-Key already used",
+      status: 409,
+      code: "IDEMPOTENCY_KEY_REUSED",
+      detail:
+        "This Idempotency-Key was already used for a different endpoint or request payload.",
+    }),
+
   missingIdempotencyKey: () =>
     new ApiError({
       title: "Missing Idempotency-Key",
