@@ -24,6 +24,10 @@ npm run generate:tokens -w @ticketbox/tests
 docker compose run --rm k6 run /tests/order/order.ts
 ```
 
+``` bash
+docker compose run --rm k6 run /tests/order/botspam.ts
+```
+
 ### Bước 4: Đọc số lượng vé sau load test
 
 ```bash
@@ -123,3 +127,7 @@ Ghi chú: chạy lệnh này trên server trong folder `ticket-box-app`, nơi co
 ORDER_RATE_LIMIT_WHITELIST_ENABLED=false
 ORDER_RATE_LIMIT_WHITELIST=127.0.0.1,::1,100.115.10.11,100.115.10.12,100.115.10.13
 ```
+
+
+---
+

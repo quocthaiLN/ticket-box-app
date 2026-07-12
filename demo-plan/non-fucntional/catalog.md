@@ -41,6 +41,11 @@ CATALOG_CONCERT_ID=00000000-0000-0000-0000-000000000202
 docker compose run --rm k6 run /tests/catalog/catalog.ts
 ```
 
+```bash
+docker compose run --rm k6 run /tests/catalog/botspam.ts
+```
+
+
 ### Bước 5: Tắt whitelist
 
 ```env
