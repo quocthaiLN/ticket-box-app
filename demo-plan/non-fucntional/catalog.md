@@ -7,8 +7,8 @@ Mục tiêu: 80.000 request public, chưa đăng nhập, gọi xem chi tiết co
 ### Bước 1: Bật whitelist rate limit trong file `.env`
 
 ```env
-ORDER_RATE_LIMIT_WHITELIST_ENABLED=true
-ORDER_RATE_LIMIT_WHITELIST=127.0.0.1,::1,172.17.0.1
+RATE_LIMIT_WHITELIST_ENABLED=true
+RATE_LIMIT_WHITELIST=127.0.0.1,::1,172.17.0.1
 ```
 
 Whitelist này áp dụng cho cả order load test và catalog public read trong môi trường test.
