@@ -50,9 +50,6 @@ function isLoadTestRateLimitWhitelisted(req: Request): boolean {
 
 /**
  * Tạo middleware rate-limit dùng thuật toán Fixed Window Counter trong Redis.
- *
- * - Nếu Redis không khả dụng: pass-through để không làm sập demo.
- * - Khi vượt ngưỡng: trả 429 với header Retry-After.
  */
 export function rateLimit(opts: TokenBucketOptions) {
   const { name, limit, windowSec, keyFn, skipFn } = opts;
@@ -131,12 +128,20 @@ export function rateLimit(opts: TokenBucketOptions) {
 // Pre-configured policies
 // ---------------------------------------------------------------------------
 
-/** Giới hạn nghiêm: 10 req / 60s cho checkout/order — chống scalper */
-export const orderRateLimit = rateLimit({
-  name: "orders",
-  limit: 10,
+export const orderIpRateLimit = rateLimit({
+  name: "orders-ip",
+  limit: 300,
   windowSec: 60,
   skipFn: (req) => isLoadTestRateLimitWhitelisted(req),
+  keyFn: (req) => `ip:${getTrustedClientIp(req)}`,
+});
+
+export const orderUserRateLimit = rateLimit({
+  name: "orders-user",
+  limit: 30,
+  windowSec: 60,
+  skipFn: (req) => isLoadTestRateLimitWhitelisted(req),
+  keyFn: (_req, res) => `user:${res.locals.auth.user_id as string}`,
 });
 
 /** Giới hạn webhook: 60 req / 60s per IP — chống webhook flood */

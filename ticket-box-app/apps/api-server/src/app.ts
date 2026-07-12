@@ -18,7 +18,7 @@ import { auditRouter } from "./modules/audit/audit.router.js";
 import { errorMiddleware } from "./shared/middleware/error.middleware.js";
 import { requestIdMiddleware } from "./shared/middleware/request-id.middleware.js";
 import {
-  orderRateLimit,
+  orderIpRateLimit,
   webhookRateLimit,
   publicReadRateLimit,
 } from "./shared/middleware/rate-limit.middleware.js";
@@ -35,6 +35,7 @@ export function createApp() {
   app.use(
     cors({
       credentials: true,
+      exposedHeaders: ["Retry-After"],
       origin(origin, callback) {
         if (
           !origin ||
@@ -91,8 +92,8 @@ export function createApp() {
   // ── Guest list ─────────────────────────────────────────────────────────────
   app.use("/v1", guestListRouter);
 
-  // ── Orders — strict rate limit chống scalper ───────────────────────────────
-  app.use("/v1/orders", orderRateLimit);
+  // ── Orders — tầng IP trước auth; tầng user sau auth nằm trong router ───────
+  app.post("/v1/orders", orderIpRateLimit);
   app.use("/v1", orderRouter);
 
   // ── Payments — webhook rate limit ──────────────────────────────────────────

@@ -308,7 +308,14 @@ async function apiRequest<TData>(
 
   if (!response.ok) {
     const { message, code } = await parseErrorResponse(response);
-    throw new ApiClientError(message, code, response.status);
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfter = retryAfterHeader === null ? undefined : Number(retryAfterHeader);
+    throw new ApiClientError(
+      message,
+      code,
+      response.status,
+      Number.isFinite(retryAfter) ? retryAfter : undefined,
+    );
   }
 
   if (response.status === 204) {
@@ -350,6 +357,7 @@ export class ApiClientError extends Error {
     message: string,
     public code?: string,
     public status?: number,
+    public retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiClientError";
