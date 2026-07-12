@@ -123,9 +123,8 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
       setCheckers(checkerData);
       setLoadState("ready");
 
-      const topConcerts = concertData.slice(0, 4);
       const analyticsEntries = await Promise.allSettled(
-        topConcerts.map(async (concert) => [concert.id, await getOrganizerAnalytics(concert.id)] as const),
+        concertData.map(async (concert) => [concert.id, await getOrganizerAnalytics(concert.id)] as const),
       );
       setAnalytics(
         Object.fromEntries(
