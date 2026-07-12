@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" width="100%" height="100%" style="background:#120718;font-family:Arial,sans-serif">
+  <defs><style>.z{stroke:#fff;stroke-opacity:.75;stroke-width:2}.t{fill:#fff;font-weight:700;text-anchor:middle}.s{fill:#fbcfe8;text-anchor:middle}</style></defs>
+  <text x="450" y="42" class="t" font-size="26">EM XINH SAY HI - SEAT MAP</text>
+  <rect x="260" y="80" width="380" height="72" rx="14" fill="#ec4899" class="z"/>
+  <text x="450" y="125" fill="#220516" font-size="24" font-weight="900" text-anchor="middle">STAGE</text>
+  <g id="zone-diamond"><path d="M355 185h190l55 80-150 80-150-80z" fill="#be185d" class="z"/><text x="450" y="270" class="t" font-size="20">DIAMOND</text></g>
+  <g id="zone-vip"><rect x="165" y="290" width="230" height="110" rx="10" fill="#db2777" class="z"/><text x="280" y="354" class="t" font-size="20">VIP</text></g>
+  <g id="zone-fanzone"><rect x="505" y="290" width="230" height="110" rx="10" fill="#9333ea" class="z"/><text x="620" y="354" class="t" font-size="20">FANZONE</text></g>
+  <g id="zone-cat1"><rect x="110" y="440" width="205" height="115" rx="10" fill="#f97316" class="z"/><text x="213" y="505" class="t" font-size="20">CAT 1</text></g>
+  <g id="zone-cat2"><rect x="347" y="440" width="205" height="115" rx="10" fill="#14b8a6" class="z"/><text x="450" y="505" class="t" font-size="20">CAT 2</text></g>
+  <g id="zone-ga"><rect x="585" y="440" width="205" height="115" rx="10" fill="#38bdf8" class="z"/><text x="688" y="505" class="t" font-size="20">GA</text></g>
+  <text x="450" y="625" class="s" font-size="16">Pink stage edition for Em Xinh demo concert</text>
+</svg>

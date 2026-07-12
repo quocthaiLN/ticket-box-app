@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" width="100%" height="100%" style="background:#0b1020;font-family:Arial,sans-serif">
+  <defs>
+    <linearGradient id="stage" x1="0" x2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
+    <style>.z{stroke:#fff;stroke-opacity:.75;stroke-width:2}.t{fill:#fff;font-weight:700;text-anchor:middle}.s{fill:#cbd5e1;text-anchor:middle}</style>
+  </defs>
+  <text x="450" y="42" class="t" font-size="26">ANH TRAI SAY HI - SEAT MAP</text>
+  <path d="M260 80h380l-45 70H305z" fill="url(#stage)"/>
+  <text x="450" y="125" fill="#08111f" font-size="24" font-weight="900" text-anchor="middle">STAGE</text>
+  <g id="zone-sky"><rect x="330" y="170" width="240" height="70" rx="10" fill="#7c3aed" class="z"/><text x="450" y="212" class="t" font-size="20">SKY LOUNGE</text></g>
+  <g id="zone-vip1"><rect x="170" y="260" width="170" height="110" rx="10" fill="#2563eb" class="z"/><text x="255" y="323" class="t" font-size="20">VIP 1</text></g>
+  <g id="zone-vip2"><rect x="365" y="260" width="170" height="110" rx="10" fill="#0ea5e9" class="z"/><text x="450" y="323" class="t" font-size="20">VIP 2</text></g>
+  <g id="zone-fanzone"><rect x="560" y="260" width="170" height="110" rx="10" fill="#db2777" class="z"/><text x="645" y="323" class="t" font-size="20">FANZONE</text></g>
+  <g id="zone-ga1"><rect x="110" y="410" width="155" height="115" rx="10" fill="#16a34a" class="z"/><text x="188" y="475" class="t" font-size="20">GA 1</text></g>
+  <g id="zone-ga2"><rect x="285" y="410" width="155" height="115" rx="10" fill="#22c55e" class="z"/><text x="363" y="475" class="t" font-size="20">GA 2</text></g>
+  <g id="zone-ga3"><rect x="460" y="410" width="155" height="115" rx="10" fill="#84cc16" class="z"/><text x="538" y="475" class="t" font-size="20">GA 3</text></g>
+  <g id="zone-ga4"><rect x="635" y="410" width="155" height="115" rx="10" fill="#eab308" class="z"/><text x="713" y="475" class="t" font-size="20">GA 4</text></g>
+  <text x="450" y="610" class="s" font-size="16">Demo layout for TicketBox seed data</text>
+</svg>

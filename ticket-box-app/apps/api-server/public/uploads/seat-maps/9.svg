@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" width="100%" height="100%" style="background:#100b0b;font-family:Arial,sans-serif">
+  <defs><style>.z{stroke:#fff;stroke-opacity:.75;stroke-width:2}.t{fill:#fff;font-weight:700;text-anchor:middle}.s{fill:#fecaca;text-anchor:middle}</style></defs>
+  <text x="450" y="42" class="t" font-size="25">ANH TRAI VUOT NGAN CHONG GAI - SEAT MAP</text>
+  <path d="M230 80h440v70H230z" fill="#b91c1c" class="z"/>
+  <text x="450" y="125" fill="#fff7ed" font-size="24" font-weight="900" text-anchor="middle">STAGE</text>
+  <g id="zone-xvip"><rect x="340" y="175" width="220" height="75" rx="10" fill="#7f1d1d" class="z"/><text x="450" y="220" class="t" font-size="20">X-VIP</text></g>
+  <g id="zone-dinh-noc"><rect x="145" y="280" width="180" height="100" rx="10" fill="#dc2626" class="z"/><text x="235" y="338" class="t" font-size="18">DINH NOC</text></g>
+  <g id="zone-kich-tran"><rect x="360" y="280" width="180" height="100" rx="10" fill="#ea580c" class="z"/><text x="450" y="338" class="t" font-size="18">KICH TRAN</text></g>
+  <g id="zone-thanh-xuan"><rect x="575" y="280" width="180" height="100" rx="10" fill="#ca8a04" class="z"/><text x="665" y="338" class="t" font-size="18">THANH XUAN</text></g>
+  <g id="zone-hoa-luc"><rect x="105" y="430" width="155" height="110" rx="10" fill="#991b1b" class="z"/><text x="183" y="492" class="t" font-size="18">HOA LUC</text></g>
+  <g id="zone-gai-con"><rect x="285" y="430" width="155" height="110" rx="10" fill="#be123c" class="z"/><text x="363" y="492" class="t" font-size="18">GAI CON</text></g>
+  <g id="zone-da-sac"><rect x="465" y="430" width="155" height="110" rx="10" fill="#f59e0b" class="z"/><text x="543" y="492" class="t" font-size="18">DA SAC</text></g>
+  <g id="zone-tam-khien"><rect x="645" y="430" width="155" height="110" rx="10" fill="#f97316" class="z"/><text x="723" y="492" class="t" font-size="18">TAM KHIEN</text></g>
+  <text x="450" y="625" class="s" font-size="16">Fire themed demo layout for Yeah1 concert</text>
+</svg>
