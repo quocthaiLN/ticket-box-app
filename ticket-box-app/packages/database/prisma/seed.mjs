@@ -428,7 +428,7 @@ async function seedUsers() {
     ["checkerSecretOne", "checker-secret-1@ticketbox.test", "Checker Đêm Diễn Bí Mật 1", "+84900000005", "CHECKER"],
     ["checkerSecretTwo", "checker-secret-2@ticketbox.test", "Checker Đêm Diễn Bí Mật 2", "+84900000006", "CHECKER"],
     ["yeah1Organizer", "yeah1@gmail.com", "Yeah1 / 1Production", "+84900000008", "ORGANIZER"],
-    ["datVietVacOrganizer", "DatVietVAC@gmail.com", "DatVietVAC / Vie Channel", "+84900000009", "ORGANIZER"],
+    ["datVietVacOrganizer", "datvietvac@gmail.com", "DatVietVAC / Vie Channel", "+84900000009", "ORGANIZER"],
   ];
 
   // Bcrypt hash thật (12 rounds, khớp hashPassword của api-server) để demo login được.
@@ -454,6 +454,15 @@ async function seedUsers() {
 async function cleanupDemoOnlyNoise() {
   await prisma.user.deleteMany({
     where: { email: { startsWith: "loadtest", endsWith: "@ticketbox.test" } },
+  });
+
+  await prisma.user.deleteMany({
+    where: {
+      role: "AUDIENCE",
+      id: { not: userIds.audience },
+      orders: { none: {} },
+      tickets: { none: {} },
+    },
   });
 
   await prisma.user.deleteMany({

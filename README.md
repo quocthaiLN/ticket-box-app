@@ -171,21 +171,23 @@ npm run db:migrate
 npm run db:seed:demo
 ```
 
-`npm run db:seed` is also available and points to the same clean demo profile. The demo seed creates the standardized dataset for grading:
+`npm run db:seed` is also available and points to the same demo profile. The demo seed creates the standardized dataset.
 
-- 9 main demo users with shared password `Password@123`.
-- Organizer `yeah1@gmail.com` owns `Anh Trai Vượt Ngàn Chông Gai` and `Chị Đẹp Đạp Gió Rẽ Sóng`.
-- Organizer `DatVietVAC@gmail.com` owns `Anh Trai Say Hi` and `Em Xinh Say Hi`.
-- 10 concerts total: 9 published and 1 draft.
-- The 4 main concerts above have cover images, seat maps, ticket types/zones, and sold quantity over 70%.
-- Load-test users are not included in the default demo seed.
+Common password: `Password@123`.
 
-For an existing local database with old seed data, reset local data first only when you do not need to keep it:
+Organizer dashboard revenue is calculated from real `orders`, `order_items`, `payments`, and `tickets`, not from `ticket_types.sold_quantity`. In the demo seed, only `organizer@gmail.com` has seeded confirmed orders/tickets: `audience@gmail.com` owns 3 tickets for that organizer's concerts.
 
-```bash
-npx prisma migrate reset --schema=packages/database/prisma/schema.prisma --force
-npm run db:seed:demo
-```
+| Role | Email | Note |
+| --- | --- | --- |
+| Admin | `admin@gmail.com` | Active |
+| Audience | `audience@gmail.com` | Active |
+| Organizer | `organizer@gmail.com` | Active  |
+| Organizer 2 | `organizer2@gmail.com` | Active |
+| Organizer Yeah1 | `yeah1@gmail.com` | Active, Own `Anh Trai Vượt Ngàn Chông Gai` and `Chị Đẹp Đạp Gió Rẽ Sóng` |
+| Organizer DatVietVAC | `datvietvac@gmail.com` | Own `Anh Trai Say Hi` and `Em Xinh Say Hi` |
+| Checker | `checker@gmail.com` | Active |
+| Checker secret 1 | `checker-secret-1@ticketbox.test` | Active |
+| Checker secret 2 | `checker-secret-2@ticketbox.test` | Active |
 
 Use `npm run db:seed:loadtest` only when you intentionally need extra users for load testing.
 
